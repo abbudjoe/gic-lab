@@ -99,19 +99,18 @@
     "src/giclab/plans.py",
     "src/giclab/registry.py",
     "src/giclab/sitegen.py",
+    "src/giclab/validation.py",
     "Makefile",
     ".github/workflows/ci.yml"
   ],
   "findings": [],
-  "historical_module_allowlist": [
-    "src/giclab/validation.py"
-  ],
-  "repository_commit": "c6f0d7af1f10b2b8b110d8225b2c54c1d2709fbd",
-  "repository_tree": "04926d20fd7743a1f3433b3fb1cb9b27e23582d1",
+  "historical_module_allowlist": [],
+  "repository_commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+  "repository_tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "c77ef799055e708334cf03a9624069e6f177d467f3cdc3a499f2cbb0a10e9df0"
+  "semantic_sha256": "ed2cd8ada5d74cc56d4bbc48cf38956d9611cdfc55ab97bc5c0c36ea72197102"
 }

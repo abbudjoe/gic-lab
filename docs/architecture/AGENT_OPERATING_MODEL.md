@@ -65,9 +65,13 @@ State-capsule, selected composition, mandatory shadow, agent-check, and receipt
 generation consume that same typed target. The target projection binds its source,
 goal-record digest, historical and successor state, selected contract and plan, and
 command-package digest. Receipt generation writes one new package-specific root at
-`control/receipts/packages/<version-lower>/`, refuses symlinks, escape, partial roots,
-and sealed-root overwrite, and binds every artifact path relative to that one root.
-The retained V16 root remains immutable historical/current evidence.
+`control/receipts/packages/<version-lower>/`, builds and validates the complete tree
+in a same-parent staging directory, syncs it, and publishes it with one atomic
+no-replace directory commit. Symlinks and escapes fail; an unsealed exact final root
+is atomically quarantined at its deterministic recovery path; and a sealed root is
+immutable. Every binding path is relative to that one root. The retained V16 root is
+current evidence only while the goal selects V16 and remains independently valid
+historical evidence after a successor becomes current.
 
 The shared Category 3 controller owns this sequence:
 
@@ -83,11 +87,18 @@ identity → composition → validated capsule and receipt binding → local sta
 minted only by exact validators. Preparation loads one binding document, validates
 every referenced file byte and semantic hash, proves one commit/tree, contract,
 package, complete scenario set, aggregate cross-binding, exact shared-source set,
-and false authority/science flags, then performs deterministic staging checks. The
-capsule's historical-or-successor runtime state and every post-composition shadow
-receipt must agree with that selected contract and command package. The happy path
-must also carry nonzero reconciled fake accounting and zero projected real cost. It
-does not accept caller proof booleans or hash-shaped receipt tuples.
+and false authority/science flags, then performs deterministic staging checks. Each
+sealed root contains the exact goal bytes used to select it. Historical validation
+proves those bytes against the root's bound commit, resolves `not-created` or
+`package-bound-not-authorized` against the sealed registry receipt's exact version
+set, and validates bound package and shared-source bytes without substituting the
+working-tree goal. Repository validation enumerates the legacy root and every
+`control/receipts/packages/<version>` seal; all roots must pass historical validation,
+and exactly one must additionally equal the current goal-derived target. Every
+post-composition shadow receipt must agree with its root's selected contract and
+command package. The happy path must also carry nonzero reconciled fake accounting
+and zero projected real cost. It does not accept caller proof booleans or hash-shaped
+receipt tuples.
 
 The controller is the single control flow for the shadow and future live effect
 channels. Its production-wrapper assembly calls the retained metadata, provider

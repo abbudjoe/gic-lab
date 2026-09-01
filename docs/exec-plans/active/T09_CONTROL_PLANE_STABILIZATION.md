@@ -260,7 +260,7 @@ review path because the governing operator contract prohibits subagents.
 
 ### PR #13 exact-head review repair
 
-Assembly status: **in-progress**
+Assembly status: **implemented and locally focused — final gates pending**
 
 Review `5078551304` examined commit
 `ccb5ee0fc454111a976c6de951d798a630a537b9`, tree
@@ -273,18 +273,18 @@ capsule to distinguish technical incidents from external governance.
 
 | ID | Required outcome | Planned evidence | Status |
 |---|---|---|---|
-| RC-01 | Historical targets resolve from exact goal bytes bound to each receipt's immutable control commit/tree | Bound-goal hash/target/package tests | not-started |
-| RC-02 | Every sealed V16 and package-specific receipt root is enumerated and fully validated | Multi-root inventory and drift/removal tests | not-started |
-| RC-03 | Only the active root must additionally equal the current goal-selected target | V17-current/V16-historical compatibility tests | not-started |
-| RC-04 | Receipt publication uses one complete-tree no-replace commit and never exposes an unrecoverable partial final root | Nine-boundary interruption/concurrency matrix | not-started |
-| RC-05 | Successful equivalent receipt publications remain byte-identical | Two-root deterministic generation test | not-started |
-| RC-06 | Active lint rejects direct, attributed, and aliased versioned provider-contract constants | Direct-constant AST matrix and zero-finding repository receipt | not-started |
-| RC-07 | Capsule separates unresolved technical incidents from external governance gates | Goal/schema/capsule consistency tests | not-started |
-| RC-08 | Resolved incidents cannot be current blockers; incident history remains append-only | Incident/capsule mutation regressions | not-started |
-| RC-09 | Synthetic V17 traverses every shared aggregate path while retained V16 validates historically | Full temporary successor/root proof | not-started |
-| RC-10 | All proof, target, and publication preconditions remain before secret/provider/condition effects | Zero-call focused assertions | not-started |
-| RC-11 | V17/package-only boundary, no-live-authority, no-science, and no-tracked-V17 invariants remain exact | Shared-source byte map, Git path scan, EXP-0001 tree identity | not-started |
-| RC-12 | Focused/full/parity/static/privacy/site and exact-head GitHub gates pass; PR remains draft/unmerged | Required command set, PR metadata, Actions result | not-started |
+| RC-01 | Historical targets resolve from exact goal bytes bound to each receipt's immutable control commit/tree | Bound-goal hash/target/package tests | met |
+| RC-02 | Every sealed V16 and package-specific receipt root is enumerated and fully validated | Multi-root inventory and drift/removal tests | met |
+| RC-03 | Only the active root must additionally equal the current goal-selected target | V17-current/V16-historical compatibility tests | met |
+| RC-04 | Receipt publication uses one complete-tree no-replace commit and never exposes an unrecoverable partial final root | Nine-boundary interruption/concurrency matrix | met |
+| RC-05 | Successful equivalent receipt publications remain byte-identical | Two-root deterministic generation test | met |
+| RC-06 | Active lint rejects direct, attributed, and aliased versioned provider-contract constants | Direct-constant AST matrix and zero-finding repository receipt | met |
+| RC-07 | Capsule separates unresolved technical incidents from external governance gates | Goal/schema/capsule consistency tests | met |
+| RC-08 | Resolved incidents cannot be current blockers; incident history remains append-only | Incident/capsule mutation regressions | met |
+| RC-09 | Synthetic V17 traverses every shared aggregate path while retained V16 validates historically | Full temporary successor/root proof | met |
+| RC-10 | All proof, target, and publication preconditions remain before secret/provider/condition effects | Zero-call focused assertions | met |
+| RC-11 | V17/package-only boundary, no-live-authority, no-science, and no-tracked-V17 invariants remain exact | Shared-source byte map, Git path scan, EXP-0001 tree identity | met |
+| RC-12 | Focused/full/parity/static/privacy/site and exact-head GitHub gates pass; PR remains draft/unmerged | Required command set, PR metadata, Actions result | in-progress |
 
 Implementation mapping: target/proof and repository enumeration changes map to
 RC-01 through RC-03 and RC-09; CLI publication maps to RC-04 and RC-05; AST lint

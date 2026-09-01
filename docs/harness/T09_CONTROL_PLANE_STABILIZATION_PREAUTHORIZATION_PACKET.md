@@ -39,9 +39,9 @@ Only after reviewed merge may a separate PR generate a fresh successor runtime
 package. Both its externally supplied authorization overlay and frozen run manifest
 must include the complete object defined by
 `schemas/t09-control-receipt-bindings.schema.json`: exact control-plane commit/tree,
-registry and lint receipts, composition, capsule, production-coupled happy path, all
-fifteen failure scenarios, aggregate agent-check receipt, exact shared-source binding,
-and incident receipt.
+the exact bound goal snapshot, registry and lint receipts, composition, capsule,
+production-coupled happy path, all fifteen failure scenarios, aggregate agent-check
+receipt, exact shared-source binding, and incident receipt.
 
 Validation must additionally prove that the capsule's historical-or-successor
 runtime state selects the same provider contract, that every scenario reaching
@@ -49,6 +49,13 @@ package resolution names the same command-package digest, and that the happy pat
 contains nonzero reconciled fake model/browser accounting with zero projected real
 cost. A lifecycle-omission receipt is the sole package-identity exception because it
 must stop before package resolution.
+
+Every sealed root is a historical proof. Its goal snapshot must match its bound
+control commit, its package state must resolve against its sealed registry version
+set, and its package/source bytes must remain valid. Repository validation enumerates
+the retained legacy V16 root and every package root and fully validates all of them.
+Only the one root used for current preparation must additionally equal the current
+goal-derived target. A later V17 selection must not invalidate or hide V16 proof.
 
 Those validated documents make preparation auditable but do not grant authority. A
 future live turn must supply exact current-turn authorization and separately reviewed

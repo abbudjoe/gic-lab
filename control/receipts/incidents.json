@@ -10,9 +10,10 @@
       "regression_nodes": [
         "tests/control/test_target_selection.py::test_current_goal_selects_exact_v16_target",
         "tests/control/test_target_selection.py::test_synthetic_package_bound_successor_selects_v17_without_shared_edits",
-        "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation"
+        "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation",
+        "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
       ],
-      "regression_output": "...                                                                      [100%]",
+      "regression_output": "....                                                                     [100%]",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -31,8 +32,8 @@
       "status": "resolved"
     }
   ],
-  "repository_commit": "c6f0d7af1f10b2b8b110d8225b2c54c1d2709fbd",
-  "repository_tree": "04926d20fd7743a1f3433b3fb1cb9b27e23582d1",
+  "repository_commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+  "repository_tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28",
   "schema_version": "1.0.0",
-  "semantic_sha256": "77f0a65d13f19c8dcbef54b8af5b88b86dc442bd41ecea4b2aaaecb959b29dfa"
+  "semantic_sha256": "86e80b333f16dbce7a952b276d4248fc08822269db3deb74d01c2902b61635a2"
 }

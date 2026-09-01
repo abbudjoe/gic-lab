@@ -541,3 +541,110 @@ Exact root-cause inventory:
 The authoritative RC-01 through RC-12 evidence checklist and implementation mapping
 are recorded in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. No RC
 item may become `met` until its focused evidence and the final exact-head gates pass.
+
+### Review-repair implementation and focused evidence
+
+Historical proof validation now has two explicit entry points. The ordinary
+`validate_control_receipt_set()` validates a root only against immutable state bound
+inside that root: `bound-goal-record.yaml`, the binding's exact control commit/tree,
+the sealed registry receipt's exact registered-version set, package artifact bytes,
+all constituent receipt bytes and semantic hashes, the complete scenario matrix, and
+the exact shared-source binding at that commit. It does not consult the working-tree
+goal for compatibility. `validate_current_control_receipt_set()` first establishes
+that historical proof and then separately requires equality with the current
+goal-derived target and current shared-source bytes. Category 3, generation, and the
+one active repository root use the latter; retained roots use the former.
+
+Repository validation enumerates `control/receipts/` plus every sealed
+`control/receipts/packages/v<integer>/` root. It rejects a missing legacy root,
+unsealed/unsafe package roots, duplicate version seals, version/path contradictions,
+missing or added-conflicting artifacts, byte/semantic drift, invalid source ancestry,
+and any state in which other than exactly one root is current-compatible. The first
+simultaneous synthetic run exposed that V16 `not-created` was still testing V17
+absence against the expanded working registry. Commit
+`7d7fc964e883fb6ec593d14c57b5f8d4e146ec52`, tree
+`1530c61f0bbf1429fa64a55f5dfcdc41e30add28`, corrected the primitive by resolving
+historical absence/presence against each root's sealed registry receipt. The rerun
+passed all 11 historical/current-root tests, including a current synthetic V17 root
+and retained fully validated V16 root in the same temporary repository.
+
+Receipt publication now prepares and validates one complete same-parent staging tree,
+fsyncs every file and directory, fsyncs the parent, and commits the directory with
+one native no-replace operation (`renamex_np(RENAME_EXCL)` on macOS or
+`renameat2(RENAME_NOREPLACE)` on Linux). The final path is never created child by
+child. A complete identical concurrent winner is accepted without replacement; a
+concurrent or pre-existing unsealed root is atomically preserved at the deterministic
+`.v<version>-unowned-partial-recovery` path before retry; and a sealed root is
+immutable. The 11-case publication suite covers failure before publication, after the
+first child, halfway through preparation, immediately before commit, immediately
+after commit, post-publication validation, complete and partial concurrent creators,
+an existing seal, an existing unowned partial root, and byte-identical equivalent
+successes. Every failure leaves the final root absent or complete/sealed/byte-valid;
+normal retry is not permanently blocked.
+
+The AST lint detects `^V[1-9][0-9]*_PROVIDER_CONTRACT$` through direct imports,
+aliases, loaded names, module attributes, assignments, returns, and calls throughout
+active control modules. Central registry declarations pass. There is no historical
+module allowlist: the tracked receipt reports an empty allowlist, and only exact
+historical assertions with line-scoped annotations may use a constant. An annotation
+cannot exempt assignment-based selection. All 23 lint tests pass and the repository
+receipt has zero findings across 101 scanned files.
+
+The goal and capsule now separate `blocking_incident: null`, the next technical
+subgoal, and a typed external governance gate requiring independent exact-head review
+and explicit merge authorization. A declared incident must exist and validate; a
+resolved incident cannot be the current blocker; an unresolved incident remains
+permitted. The recommended action consults external governance and remains truthful
+both before merge and after merge pending a separately authorized V17 goal update.
+Capsule, incident, and proof-forgery focused tests preserve false repository authority,
+Category 3, live authorization, and scientific interpretation.
+
+The implementation commits before receipt publication are:
+
+```text
+primary four-finding implementation commit: 55fc82f0e56a42890c76bbb13ce0a301eaed9b56
+primary implementation tree: f68314de3dfe779c6d14e9eddffb4f095f341a9b
+historical-registry closure commit: 7d7fc964e883fb6ec593d14c57b5f8d4e146ec52
+final immutable implementation tree: 1530c61f0bbf1429fa64a55f5dfcdc41e30add28
+```
+
+The corrected clean ancestor generated 25 V16 files, including the bound goal
+snapshot, and the exact generated tree was projected into the retained legacy root.
+The temporary package-V16 root and its obsolete first-generation stash were removed;
+no package-V17 root was created.
+
+```text
+binding file SHA-256: f3007917cd0d1a521225136e077578b16d3785a8b0f625befedaf61f25df7a3b
+binding semantic SHA-256: d90907feaa2cbe3ddbedbfe307c247fb0742b7238d8c5df8bdb490d382c81ea0
+bound goal bytes: 2222
+bound goal SHA-256: 81fbc17fd66de0d5b5010bb1ff93e8868dd4ec0be59cb8e146b3171b19f5d7f6
+source-binding file SHA-256: a850cfce493ec9712caf6d8b41f0fe4493ba8388d2e0f4ef7d2b35577ce80eff
+source-binding semantic SHA-256: 99e96addaf59b11cc2e7615cdc217959b2b67945a92d3909caadcbcaa514e61f
+agent-check file SHA-256: 69d701e21fcb5745acb91a15ed98efc5908b843cee4f726505566487d5b1b2fa
+agent-check semantic SHA-256: 57ab3d7257e15d4142f7a8276166aac73bf28a0c6dfd8568ca8755d62bd8ac6c
+state-capsule file SHA-256: 06dc572c3432e56897f1637f1c6adba99d5ed7bb1f19a1cf646ee7590a22d65b
+state-capsule semantic SHA-256: eaf2a628e3bfb258728ca3c7304023718b19f1709be14e325d8f3f0dff151e98
+V16 composition file SHA-256: e6aba2bb32660ced0a924b4656ab9f41837a69bf7cb9b8cce040507580dffaeb
+V16 composition semantic SHA-256: 165f859a953a0bb4f1e407ad75b2effaa5348a7a03c63dfc4e5a72cdfedfd5c1
+```
+
+The fixed-target incident remains resolved and append-only. It is 2,186 bytes with
+file SHA-256 `c7cf0d3f2b3c84e13a7f7877657535284d91cc7fac7a5b6e51c41729b5513681`
+and unchanged immutable-facts SHA-256
+`8de67dfbe99733d6f0bf7322b7fcda7cc975619b713948d414d5ba0689743408`.
+Its four exact regression nodes pass.
+
+Focused ordering assertions remain:
+
+```text
+real secret reads: 0
+metadata requests: 0
+provider calls: 0
+condition reservations: 0
+```
+
+At this checkpoint RC-01 through RC-11 are met. `make validate`, the 48-test
+publication/lint/capsule/incident batch, the 21-test target/error/aggregate batch, and
+the 11-test simultaneous historical/current-root batch pass. RC-12 remains
+in-progress until the full/parity/static/privacy/site gates, exact descendant commit,
+draft-PR update, and exact-head GitHub Actions complete.

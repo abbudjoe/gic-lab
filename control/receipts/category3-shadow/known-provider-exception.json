@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "8b5b0c53e76e70886eff7bffec74026452e8f459a28fc394c64b07a0f712dbe7"
+      "subject": "008b084758ee6f8613bbf9eca67e8bafe9d7e3ba61a627b6e253a32b16567529"
     },
     {
       "adapter": "provider",
@@ -161,7 +161,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "fecf96fa652648a03f83a6234835ed1b3b6f7148fb7f15e0a7c82367d9f826f2",
+  "composition_sha256": "165f859a953a0bb4f1e407ad75b2effaa5348a7a03c63dfc4e5a72cdfedfd5c1",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -468,8 +468,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "c6f0d7af1f10b2b8b110d8225b2c54c1d2709fbd",
-  "repository_tree": "04926d20fd7743a1f3433b3fb1cb9b27e23582d1",
+  "repository_commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+  "repository_tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28",
   "scenario": "known-provider-exception",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -480,7 +480,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "deeb811edc49cb61d23ec3b7a3543d28641bbda1e036d482d8c0ac48580c570d",
+  "semantic_sha256": "ca8aa6df4081d757b60ced8ad54365949b774afba1b7ab5f18a35d738d8f63ff",
   "shadow_only": true,
   "stop_reason": "model-call accounting stopped condition: RuntimeError",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

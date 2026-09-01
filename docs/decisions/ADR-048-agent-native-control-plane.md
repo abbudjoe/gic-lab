@@ -43,9 +43,19 @@ resolver reads the machine goal, enforces an exact consecutive successor and one
 the two non-authorizing package states, validates the selected package's exact plan
 and command bytes, and accepts an explicit version only when it equals the
 goal-derived target. State capsule, composition, shadow, agent-check, and receipt
-refresh share this resolver. A package-specific receipt root is write-once and all
-binding paths are relative to it; the legacy V16 root remains readable and cannot be
-silently overwritten by the generator.
+refresh share this resolver. A package-specific receipt root is assembled, validated,
+and synced under one same-parent staging directory, then published through one atomic
+no-replace directory commit. All binding paths are relative to that root. Unsealed
+conflicts are preserved at one deterministic recovery path; sealed roots, including
+the legacy V16 root, cannot be overwritten.
+
+Bind one exact goal snapshot into every sealed root. Historical receipt validation
+uses that snapshot, the root's sealed registry version set, its immutable control
+commit/tree, package bytes, and shared-source binding. It never substitutes the
+working-tree goal or today's expanded registry. Repository validation enumerates all
+sealed roots and validates each historically; a separately named current-target
+validator requires equality with the one goal-derived active target before Category 3
+preparation.
 
 ## Consequences
 
@@ -57,9 +67,10 @@ raw export, finalization, cleanup, and ambiguous outcomes, without treating fake
 output as science.
 
 The capability registry becomes intentionally explicit. Historical identity and
-schema compatibility checks may still name exact versions, but must be narrowly
-annotated or housed in the historical validation module. Current-turn authorization
-remains external even when every deterministic check passes.
+schema compatibility checks may still name exact versions, but only assertions or
+adjudications with narrow line-scoped historical annotations are exempt. No active
+module receives a blanket lint allowlist. Current-turn authorization remains external
+even when every deterministic check passes.
 
 ## Follow-up boundary
 
