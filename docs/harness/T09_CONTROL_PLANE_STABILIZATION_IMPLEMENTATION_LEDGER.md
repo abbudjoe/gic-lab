@@ -249,7 +249,7 @@ The six required determinations are:
 
 ## PR 1.1 successor-target repair assembly
 
-Status: **in-progress**
+Status: **complete — draft review required**
 
 Target contract: one frozen `SelectedRuntimeTarget` resolved from
 `control/goals/EXP-0001.yaml` or an exact goal-compatible explicit selector before
@@ -407,8 +407,9 @@ Focused evidence so far:
 
 No V17 path exists in the working tree, no experiment artifact changed, no live
 secret/provider/cloud/scientific operation ran, and all authority/science flags
-remain false. CT-03 through CT-20 are met after the non-circular current-V16 rebind
-recorded below; CT-21 and CT-22 await final gates and the draft PR.
+remain false. At this checkpoint, CT-03 through CT-20 were met after the
+non-circular current-V16 rebind recorded below; CT-21 and CT-22 still awaited final
+gates and the draft PR.
 
 ### PR 1.1 non-circular current-V16 receipt rebind
 
@@ -436,4 +437,68 @@ V16 composition semantic SHA-256: fecf96fa652648a03f83a6234835ed1b3b6f7148fb7f15
 The binding and all 24 transitive receipt files validate against that ancestor.
 Proof-forgery, capsule, and non-subprocess incident focus reports 38 passed and one
 intentional incident-regression node deselected; `make validate` passes. CT-17 is
-met. CT-21 and CT-22 remain pending final gates and draft-PR CI.
+met. At this receipt-rebind checkpoint, CT-21 and CT-22 remained pending final gates
+and draft-PR CI.
+
+### PR 1.1 final gates and direct review
+
+The exact repaired candidate `4c3d82e0dd7f6f8e3163f9219c6e9e1904e3b7c7`
+passed the complete local `make ci-check` in 953.17 seconds against exact base
+`d0aff8a47e92013773d9d05b2cd90fb741658b03`. Base-relative pytest reports base
+1,998 passed / 27 failed and head 2,031 passed / 23 failed after five symmetric
+private-node deselections. There are zero newly failing nodes, zero missing base
+collected nodes, zero missing base failures, zero invalid outcome transitions, zero
+xfails/xpasses, and four inherited nodes newly passing. Raw full pytest reports
+2,031 passed, 23 unchanged inherited failures, and five inherited skips in 710.89
+seconds. No control test contains a skip/skipif/xfail marker.
+
+```text
+make format: passed; 201 files unchanged
+make lint: passed; Ruff clean
+make typecheck: passed; strict mypy clean over 82 source files
+make validate: passed
+make agent-check: passed in 70.20 seconds
+make test: 2,031 passed; 23 inherited failures; 5 inherited skips
+make site: 16 pages rendered; validation passed in 64.02 seconds
+git diff --check: passed
+make ci-check: passed in 953.17 seconds
+```
+
+Draft PR #13 is open at `https://github.com/abbudjoe/gic-lab/pull/13` against
+`phase-1/sira-pilot-autonomous-r2`. It is draft, open, and has no auto-merge request.
+GitHub Actions run `33504105523`, job `99843964275`, passed the exact candidate head
+in 23m51s. This documentation-only closeout descendant must pass the same exact-head
+local and GitHub gates before final handoff; no bound shared source changes in this
+descendant.
+
+Direct Sol/max self-review answers:
+
+1. **Can PR 2 select V17 without editing shared aggregate control code?** Yes. The
+   synthetic package changes only temporary goal/package data plus the in-memory
+   equivalent of one central registration; every `REQUIRED_SHARED_SOURCES` byte is
+   unchanged while registry, composition, shadow, capsule, agent-check, refresh, and
+   binding validation select V17.
+2. **Do state-capsule, shadow, agent-check, and receipt generation select the same
+   target?** Yes. All consume one validated `SelectedRuntimeTarget`; current and
+   synthetic aggregate tests cross-bind its version, plan, command digest, goal
+   digest, and composition semantic digest.
+3. **Can a caller select an incompatible historical or future contract?** No. An
+   explicit selector must exactly equal the goal-derived selection. V15 fails in the
+   current state, V16 fails after the synthetic successor is package-bound, and V17
+   succeeds only in that package-bound state.
+4. **Can an existing sealed receipt root be overwritten?** No. Exact package roots
+   are reserved without replacement; sealed, partial, symlinked, absolute, escaped,
+   and incompatible roots fail. The legacy V16 root is readable but is not a CLI
+   overwrite target.
+5. **Does target resolution occur before every effect boundary?** Yes. Aggregate CLI
+   handlers resolve before composition/adapters, and malformed goal/package cases
+   retain zero secret reads, metadata requests, provider calls, and condition
+   reservations.
+6. **Does adding V17 require only central declaration, package data,
+   package-specific effects, and package-specific receipts?** Yes. The synthetic
+   full path proves the shared controller/proof/production/aggregate/selection files
+   require no byte change. Any future need to change them returns to a separate
+   Category 1 repair.
+
+All CT-01 through CT-22 outcomes are met. The terminal state remains draft review
+required: no merge or auto-merge is authorized.

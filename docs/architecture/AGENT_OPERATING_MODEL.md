@@ -122,6 +122,7 @@ and this foundation itself creates no successor package identity.
 That package-only PR must not change `agent_check.py`, `cli.py`, `category3.py`,
 `production.py`, `proofs.py`, `composition.py`, `consumers.py`,
 `registry_validation.py`, `shadow.py`, `state_capsule.py`, `target.py`, the shared
-controller state machine, or the validated-proof architecture. If a successor
-requires any such shared change, package generation stops and a separate Category 1
-control-plane repair is required.
+controller state machine, or the validated-proof architecture. The package-only
+allowlist also excludes `version_lint.py`, `Makefile`, and `.github/workflows/ci.yml`;
+none is a V17 package-data surface. If a successor requires any such shared change,
+package generation stops and a separate Category 1 control-plane repair is required.

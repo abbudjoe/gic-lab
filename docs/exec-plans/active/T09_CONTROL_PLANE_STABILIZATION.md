@@ -190,7 +190,7 @@ successful while any required item is partial, blocked, or not-started.
 
 ## PR 1.1 successor-target repair
 
-Assembly status: **in-progress**
+Assembly status: **complete — draft review required**
 
 The operator-supplied `T09 PR 1.1 — Make the Agent Control Target
 Successor-Driven` contract governs the post-merge Category 1 repair. The exact base
@@ -244,8 +244,8 @@ review path because the governing operator contract prohibits subagents.
 | CT-18 | PR 2 boundary is explicit and enforceable | Architecture/packet/ledger text plus source-byte test | met |
 | CT-19 | No tracked V17 artifact exists | Git path scan | met |
 | CT-20 | Science and authority boundaries unchanged | Hash, capsule, proof, privacy, and false-flag tests | met |
-| CT-21 | Full/parity/static/privacy/site gates pass | Required final command set | not-started |
-| CT-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/run metadata | not-started |
+| CT-21 | Full/parity/static/privacy/site gates pass | Required final command set | met |
+| CT-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/run metadata | met |
 
 ### PR 1.1 implementation mapping
 

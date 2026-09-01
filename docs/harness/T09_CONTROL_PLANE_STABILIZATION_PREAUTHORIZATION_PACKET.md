@@ -77,6 +77,9 @@ src/giclab/control/registry_validation.py
 src/giclab/control/shadow.py
 src/giclab/control/state_capsule.py
 src/giclab/control/target.py
+src/giclab/control/version_lint.py
+Makefile
+.github/workflows/ci.yml
 the shared controller state machine
 the validated-proof architecture
 ```

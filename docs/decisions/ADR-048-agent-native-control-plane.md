@@ -70,6 +70,7 @@ externally validated authority grant, and seal V17 receipts. It must not change
 `agent_check.py`, `cli.py`, `category3.py`, `production.py`, `proofs.py`,
 `composition.py`, `consumers.py`, `registry_validation.py`, `shadow.py`,
 `state_capsule.py`, `target.py`, the shared controller, or validated-proof
-architecture. It also must not introduce a second controller, infer authority from
-Git, or reuse the stopped V16 metadata/authorization reference. Needing a prohibited
-shared change returns the work to a separate Category 1 repair.
+architecture. The package-only allowlist excludes `version_lint.py`, `Makefile`, and
+`.github/workflows/ci.yml` as well. It also must not introduce a second controller,
+infer authority from Git, or reuse the stopped V16 metadata/authorization reference.
+Needing a prohibited shared change returns the work to a separate Category 1 repair.
