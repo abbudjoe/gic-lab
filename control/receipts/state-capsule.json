@@ -8,24 +8,24 @@
   "available_actions": [
     "inspect-public-repository-state",
     "run-local-control-gates",
-    "review-stabilization-pr"
+    "review-control-target-selection-pr"
   ],
-  "blocking_incident": "INC-T09-V16-LIFECYCLE-REGISTRY",
+  "blocking_incident": "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
   "control_plane": {
     "active_version_lint_valid": true,
     "composition_valid": true,
     "failure_matrix_valid": true,
     "registry_complete": true,
-    "revision": "T09-control-plane-stabilization",
+    "revision": "T09-control-target-selection",
     "shadow_happy_path": true,
-    "status": "candidate-stabilization-branch"
+    "status": "candidate-control-target-repair-branch"
   },
   "cost": {
     "cumulative_t09_usd": "36.36170860803283125",
     "stabilization_openai_usd": "0.00",
     "stabilization_provider_usd": "0.00"
   },
-  "current_subgoal": "stabilize the shared T09 control plane before V17 generation",
+  "current_subgoal": "remove fixed target selection before package-only V17 generation",
   "evidence": {
     "science_unchanged": true,
     "shadow_classification": "non-scientific-control-output",
@@ -42,12 +42,13 @@
     "control/goals/EXP-0001.yaml",
     "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+    "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
   ],
-  "recommended_action": "after reviewed merge, generate a fresh V17 package in PR 2",
+  "recommended_action": "remove fixed target selection before package-only V17 generation",
   "repository": {
-    "commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
-    "tree": "7fda7a4f8c77aa24f207b860d819040e4680c290"
+    "commit": "c6f0d7af1f10b2b8b110d8225b2c54c1d2709fbd",
+    "tree": "04926d20fd7743a1f3433b3fb1cb9b27e23582d1"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -61,14 +62,33 @@
     "next_package": "V17",
     "next_status": "not-created"
   },
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "science": {
     "interpretation_allowed": false,
     "interpretation_boundary": "no shadow or infrastructure output is a scientific result",
     "scientific_contract_id": "EXP-0001",
     "status": "unchanged"
   },
-  "semantic_sha256": "4aa391f3f33a8796b1bbdbdfac2153a0a28d7ab9b1171f032e81756091d47eee",
+  "selected_runtime_target": {
+    "authority": {
+      "live_authorization": false,
+      "repository_state_grants_authority": false,
+      "scientific_interpretation_allowed": false
+    },
+    "goal_record_path": "control/goals/EXP-0001.yaml",
+    "goal_record_sha256": "59b8f4e2aacd795db5bda02a54786c6cf5bf3c5a0a95228827352af349f178e0",
+    "historical_contract_version": "V16",
+    "schema_version": "1.0.0",
+    "selected_command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+    "selected_package_status": "consumed-prelaunch-failure",
+    "selected_plan_id": "PLAN-EXP0001-PILOT-V16",
+    "selected_provider_contract_version": "V16",
+    "semantic_sha256": "3ba8075fbb264d06a58830783d56b3ae91cfd85316c74ac7e52a8e56a2e48297",
+    "source": "goal-record",
+    "successor_contract_version": "V17",
+    "successor_status": "not-created"
+  },
+  "semantic_sha256": "474bb95a27777f421c9219828b4799c80ea16d9539717ba658de541a753916f5",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",

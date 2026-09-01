@@ -240,7 +240,7 @@ review path because the governing operator contract prohibits subagents.
 | CT-14 | Synthetic successor requires no shared aggregate-control edits | Before/after shared-source byte map | met |
 | CT-15 | All target failures precede effect boundaries | Zero-call counters and ordering tests | met |
 | CT-16 | Incident linked to passing regressions | Incident validator and exact node IDs | met |
-| CT-17 | Current V16 receipts remain valid or are correctly rebound | Immutable ancestor and binding validation | not-started |
+| CT-17 | Current V16 receipts remain valid or are correctly rebound | Immutable ancestor and binding validation | met |
 | CT-18 | PR 2 boundary is explicit and enforceable | Architecture/packet/ledger text plus source-byte test | met |
 | CT-19 | No tracked V17 artifact exists | Git path scan | met |
 | CT-20 | Science and authority boundaries unchanged | Hash, capsule, proof, privacy, and false-flag tests | met |

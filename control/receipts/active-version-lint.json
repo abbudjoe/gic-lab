@@ -35,6 +35,7 @@
     "src/giclab/control/scenarios.py",
     "src/giclab/control/shadow.py",
     "src/giclab/control/state_capsule.py",
+    "src/giclab/control/target.py",
     "src/giclab/control/version_lint.py",
     "src/giclab/harness/__init__.py",
     "src/giclab/harness/adapters/__init__.py",
@@ -97,18 +98,20 @@
     "src/giclab/harness/task_source.py",
     "src/giclab/plans.py",
     "src/giclab/registry.py",
-    "src/giclab/sitegen.py"
+    "src/giclab/sitegen.py",
+    "Makefile",
+    ".github/workflows/ci.yml"
   ],
   "findings": [],
   "historical_module_allowlist": [
     "src/giclab/validation.py"
   ],
-  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
-  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
+  "repository_commit": "c6f0d7af1f10b2b8b110d8225b2c54c1d2709fbd",
+  "repository_tree": "04926d20fd7743a1f3433b3fb1cb9b27e23582d1",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "23232f847f5848f5247988c4de74dbb5c6ae777fb66279d6d386d8d4d3c6a185"
+  "semantic_sha256": "c77ef799055e708334cf03a9624069e6f177d467f3cdc3a499f2cbb0a10e9df0"
 }
