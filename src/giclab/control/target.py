@@ -383,6 +383,7 @@ def resolve_selected_runtime_target(
         goal_sha256=goal_sha256,
         explicit_provider_contract=explicit_provider_contract,
         bound_package_commit=None,
+        bound_registered_contract_versions=None,
     )
 
 
@@ -392,6 +393,7 @@ def resolve_selected_runtime_target_from_goal_bytes(
     *,
     explicit_provider_contract: str | None = None,
     bound_package_commit: str,
+    bound_registered_contract_versions: frozenset[str],
 ) -> SelectedRuntimeTarget:
     """Resolve a historical target from exact bound goal and package bytes."""
 
@@ -403,6 +405,7 @@ def resolve_selected_runtime_target_from_goal_bytes(
         goal_sha256=goal_sha256,
         explicit_provider_contract=explicit_provider_contract,
         bound_package_commit=bound_package_commit,
+        bound_registered_contract_versions=bound_registered_contract_versions,
     )
 
 
@@ -413,6 +416,7 @@ def _resolve_selected_runtime_target(
     goal_sha256: str,
     explicit_provider_contract: str | None,
     bound_package_commit: str | None,
+    bound_registered_contract_versions: frozenset[str] | None,
 ) -> SelectedRuntimeTarget:
     runtime = _required_mapping(goal, "runtime_package")
     science = _required_mapping(goal, "science")
@@ -442,17 +446,33 @@ def _resolve_selected_runtime_target(
         raise TargetSelectionError("goal historical_status is malformed")
 
     registry = provider_contracts.PROVIDER_CONTRACTS
+    if bound_registered_contract_versions is None:
+        registered_contract_versions = frozenset(registry)
+    else:
+        if not bound_registered_contract_versions or any(
+            _VERSION.fullmatch(version) is None for version in bound_registered_contract_versions
+        ):
+            raise TargetSelectionError("bound provider-contract registry is malformed")
+        registered_contract_versions = bound_registered_contract_versions
     historical_contract = registry.get(historical)
-    if historical_contract is None or historical_contract.version != historical:
+    if (
+        historical not in registered_contract_versions
+        or historical_contract is None
+        or historical_contract.version != historical
+    ):
         raise TargetSelectionError("goal historical_package is not exactly registered")
     successor_contract = registry.get(successor)
     if status == "not-created":
-        if successor_contract is not None:
+        if successor in registered_contract_versions:
             raise TargetSelectionError("goal says successor is not-created but it is registered")
         selected_contract = historical_contract
         selected_status = historical_status
     else:
-        if successor_contract is None or successor_contract.version != successor:
+        if (
+            successor not in registered_contract_versions
+            or successor_contract is None
+            or successor_contract.version != successor
+        ):
             raise TargetSelectionError("package-bound successor is not exactly registered")
         selected_contract = successor_contract
         selected_status = status
@@ -532,6 +552,7 @@ def validate_bound_selected_runtime_target_document(
     *,
     goal_bytes: bytes,
     bound_package_commit: str,
+    bound_registered_contract_versions: frozenset[str],
 ) -> SelectedRuntimeTarget:
     """Validate a serialized target against its receipt-bound historical goal."""
 
@@ -549,6 +570,7 @@ def validate_bound_selected_runtime_target_document(
         goal_bytes,
         explicit_provider_contract=explicit,
         bound_package_commit=bound_package_commit,
+        bound_registered_contract_versions=bound_registered_contract_versions,
     )
     if target.to_document() != dict(document):
         raise TargetSelectionError("serialized target differs from bound goal/package state")

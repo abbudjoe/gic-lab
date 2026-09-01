@@ -297,6 +297,31 @@ def _load_bound_bytes(
     return path, encoded
 
 
+def _bound_registry_versions(document: Mapping[str, object]) -> frozenset[str]:
+    """Recover the exact registered version set witnessed by one sealed receipt."""
+
+    entries = document.get("contracts")
+    expected_count = document.get("contract_count")
+    if (
+        document.get("complete") is not True
+        or not isinstance(entries, list)
+        or type(expected_count) is not int
+        or expected_count != len(entries)
+    ):
+        raise ControlProofError("bound registry receipt is incomplete")
+    versions: list[str] = []
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("complete") is not True:
+            raise ControlProofError("bound registry receipt has an incomplete contract")
+        version = entry.get("version")
+        if not isinstance(version, str) or re.fullmatch(r"V[1-9][0-9]*", version) is None:
+            raise ControlProofError("bound registry receipt has a malformed contract version")
+        versions.append(version)
+    if len(set(versions)) != len(versions):
+        raise ControlProofError("bound registry receipt repeats a contract version")
+    return frozenset(versions)
+
+
 def _git_tree(repository: Path, commit: str) -> str:
     if _HEX40.fullmatch(commit) is None:
         raise ControlProofError("control commit is malformed")
@@ -810,12 +835,21 @@ def _validate_control_receipt_set(
         raise ControlProofError("binding goal snapshot path drifted")
     if _git_blob(root, commit, GOAL_RECORD) != goal_bytes:
         raise ControlProofError("binding goal snapshot differs from its control commit")
+    registry_reference = artifacts.get("registry_receipt")
+    if not isinstance(registry_reference, dict):
+        raise ControlProofError("binding lacks artifact: registry_receipt")
+    _registry_path, bound_registry, _registry_semantic = _load_bound_json(
+        approved,
+        registry_reference,
+    )
+    bound_registered_contract_versions = _bound_registry_versions(bound_registry)
     try:
         selected_target = validate_bound_selected_runtime_target_document(
             root,
             selected,
             goal_bytes=goal_bytes,
             bound_package_commit=commit,
+            bound_registered_contract_versions=bound_registered_contract_versions,
         )
     except TargetSelectionError as exc:
         raise ControlProofError(f"binding selected-runtime target is invalid: {exc}") from exc
