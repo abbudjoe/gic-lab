@@ -1,5 +1,5 @@
 {
-  "base_commit": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4",
+  "base_commit": "d0aff8a47e92013773d9d05b2cd90fb741658b03",
   "files": [
     {
       "bytes": 6812,
@@ -22,24 +22,24 @@
       "sha256": "70448b566556835cd3e774367a3e8ce7db8ba2102b46452ed43163dbedcf5b2d"
     },
     {
-      "bytes": 7464,
+      "bytes": 8529,
       "path": "src/giclab/control/agent_check.py",
-      "sha256": "9555e97ba31b29b075ccbe57561546926099ecaf6f578472bc083da1ba482ee9"
+      "sha256": "f418d6c178e59fa10f57180bf21efec3e0ec99a603f035f5e1ee651741059337"
     },
     {
-      "bytes": 36298,
+      "bytes": 36314,
       "path": "src/giclab/control/category3.py",
-      "sha256": "50ec6ef80b16261f3a7afec2d786903f126c562d18b8f11f5f4c4dca6c3e5002"
+      "sha256": "bb3179212bf228c31f41923d6fff189f2935acebd61fac652ab1678a7f367ac6"
     },
     {
-      "bytes": 18458,
+      "bytes": 30454,
       "path": "src/giclab/control/cli.py",
-      "sha256": "5fa843d9b54877a9dc908c89c659637f06695d6fb32460c8811a7e382a61da0e"
+      "sha256": "536fadce82051c10b065622b957a963ada3cb982b0b672205104990953e54879"
     },
     {
-      "bytes": 14001,
+      "bytes": 14162,
       "path": "src/giclab/control/composition.py",
-      "sha256": "62b8e80fda23f7a109ccf60fb743ed04473b9b1662ad86ea049e593153f82784"
+      "sha256": "ea2f5ea3bae9a0a0dd241bc8a08255e84775c006f7d1bd3c59c733635726473d"
     },
     {
       "bytes": 15898,
@@ -62,14 +62,14 @@
       "sha256": "83c76923367295c44068981f2e5bd63c206a71940d0eea4e900a3e05621aba06"
     },
     {
-      "bytes": 42566,
+      "bytes": 54859,
       "path": "src/giclab/control/proofs.py",
-      "sha256": "e9d9402a4b86af9dc060e5766f9ead9ee578b5bbc501347a9bae3c9ce4f06ae8"
+      "sha256": "d3fe0f1428f7a88051451ece91aaa706813c446fa81b0a01cf0f00e82012cd28"
     },
     {
-      "bytes": 17362,
+      "bytes": 17629,
       "path": "src/giclab/control/registry_validation.py",
-      "sha256": "be5684a7781e9752caed632fbdfa9c712cc5881358108bbb681c8aaeaa05ecd3"
+      "sha256": "4a455c4faf78996838e8e5081bb0872e6a10e2a8ad2bff5db0afac72317733a1"
     },
     {
       "bytes": 729,
@@ -82,14 +82,19 @@
       "sha256": "ff36494304312a9219386c579d9198f9098b288f6dbf58c3be0ecbc9f9ed7b67"
     },
     {
-      "bytes": 5304,
+      "bytes": 7688,
       "path": "src/giclab/control/state_capsule.py",
-      "sha256": "67a240f1843104aa06f8454244d64aff96c5ca6450413ce7a04b14902fd189d8"
+      "sha256": "4b089db036551019667d3af624be97ed36c68337630b33c4d17a505f6688ead5"
     },
     {
-      "bytes": 7250,
+      "bytes": 23185,
+      "path": "src/giclab/control/target.py",
+      "sha256": "e390672a4c049f13b0beae55c9e9afc4dd931b377ee558654fdfa9e908736863"
+    },
+    {
+      "bytes": 12285,
       "path": "src/giclab/control/version_lint.py",
-      "sha256": "ce41f1689cdc2dc207836a4cd99d37572f0b412a4bdde512462f6d18b65c0332"
+      "sha256": "2e1417b3936485bdfb201c75c32d48811f190c46469a38661f5b5db1b3f5ed26"
     },
     {
       "bytes": 13269,
@@ -137,9 +142,9 @@
       "sha256": "eb61bae128609ecc4d89f9e9392f647a008841387f22c4b3dd8f02402372086f"
     },
     {
-      "bytes": 61813,
+      "bytes": 63321,
       "path": "src/giclab/harness/t09_provider_contracts.py",
-      "sha256": "562f7ca25bd026af65e841054d1f4c962a7915061f0c79973c7edde048868071"
+      "sha256": "8356870290fefa6ee680ca6d8d5a080b146fcd5215eb1ad0fbc47b62d401c07f"
     },
     {
       "bytes": 150214,
@@ -152,9 +157,9 @@
       "sha256": "b71b8c979529e8530e9157069b3e765f649ee0349d8c6233d4244b98e3f658ad"
     },
     {
-      "bytes": 187091,
+      "bytes": 183398,
       "path": "src/giclab/validation.py",
-      "sha256": "21bd449909811265e54717d9767ec6138b53c7089e9dc5e9e1616a7aaf529b29"
+      "sha256": "2e5d4e830a5c8550b5059579cba23d1824bc2f71962285b845dd8e63a29f187c"
     }
   ],
   "historical_package_changed": false,
@@ -162,7 +167,7 @@
   "schema_version": "1.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "1394f548b43233eb0c9aefa4a86e5341d140d7ba98700b42a82cfec5643f77ff",
-  "source_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
-  "source_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290"
+  "semantic_sha256": "99e96addaf59b11cc2e7615cdc217959b2b67945a92d3909caadcbcaa514e61f",
+  "source_commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+  "source_tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28"
 }

@@ -29,7 +29,12 @@
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"}
+      "items": {
+        "anyOf": [
+          {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"},
+          {"enum": ["Makefile", ".github/workflows/ci.yml"]}
+        ]
+      }
     },
     "historical_module_allowlist": {
       "type": "array",

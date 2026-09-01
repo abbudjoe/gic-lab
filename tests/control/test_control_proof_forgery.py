@@ -14,6 +14,7 @@ from giclab.control.category3 import Category3Request, execute_category3_transac
 from giclab.control.production import ProductionCategory3World, build_production_shadow_assembly
 from giclab.control.proofs import (
     REPOSITORY_SLUG,
+    ControlProofError,
     ControlProofReference,
     ValidatedControlReceiptSet,
     ValidatedDeterministicStaging,
@@ -84,7 +85,7 @@ def _reference(proof_root: Path) -> ControlProofReference:
     encoded = path.read_bytes()
     binding = json.loads(encoded)
     revision = binding.get("control_plane_revision", {})
-    selected = binding.get("selected_contract", {})
+    selected = binding.get("selected_runtime_target", {})
     return ControlProofReference(
         approved_root=proof_root,
         binding_path=path,
@@ -93,10 +94,13 @@ def _reference(proof_root: Path) -> ControlProofReference:
         expected_control_tree=revision.get("tree", "0" * 40),
         expected_repository_slug=binding.get("repository_slug", REPOSITORY_SLUG),
         expected_provider_contract_version=selected.get(
-            "provider_contract_version", V16_PROVIDER_CONTRACT.version
+            "selected_provider_contract_version", V16_PROVIDER_CONTRACT.version
         ),
-        expected_plan_id=selected.get("plan_id", V16_PROVIDER_CONTRACT.plan_id),
-        expected_command_package_sha256=selected.get("command_package_sha256", "0" * 64),
+        expected_plan_id=selected.get("selected_plan_id", V16_PROVIDER_CONTRACT.plan_id),
+        expected_command_package_sha256=selected.get("selected_command_package_sha256", "0" * 64),
+        expected_target_source=selected.get("source", "goal-record"),
+        expected_goal_record_sha256=selected.get("goal_record_sha256", "0" * 64),
+        expected_target_semantic_sha256=selected.get("semantic_sha256", "0" * 64),
     )
 
 
@@ -236,9 +240,9 @@ def test_wrong_provider_contract_is_rejected(tmp_path: Path) -> None:
     proof_root = _copy_proofs(tmp_path)
     binding_path = _binding_path(proof_root)
     binding = _read(binding_path)
-    selected = binding["selected_contract"]
-    selected["provider_contract_version"] = "V15"
-    selected["plan_id"] = "PLAN-EXP0001-PILOT-V15"
+    selected = binding["selected_runtime_target"]
+    selected["selected_provider_contract_version"] = "V15"
+    selected["selected_plan_id"] = "PLAN-EXP0001-PILOT-V15"
     _seal(binding_path, binding)
     _execute_forgery(proof_root)
 
@@ -247,7 +251,7 @@ def test_wrong_command_package_is_rejected(tmp_path: Path) -> None:
     proof_root = _copy_proofs(tmp_path)
     binding_path = _binding_path(proof_root)
     binding = _read(binding_path)
-    binding["selected_contract"]["command_package_sha256"] = "c" * 64
+    binding["selected_runtime_target"]["selected_command_package_sha256"] = "c" * 64
     _seal(binding_path, binding)
     _execute_forgery(proof_root)
 
@@ -381,6 +385,39 @@ def test_capsule_with_private_path_marker_is_rejected(tmp_path: Path) -> None:
     _execute_forgery(proof_root)
 
 
+def test_capsule_cannot_name_a_resolved_incident_as_current_blocker(
+    tmp_path: Path,
+) -> None:
+    proof_root = _copy_proofs(tmp_path)
+    _replace_artifact(
+        proof_root,
+        binding_key="state_capsule",
+        document_path=proof_root / "state-capsule.json",
+        mutate=lambda document: document.__setitem__(
+            "blocking_incident",
+            "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+        ),
+    )
+    _execute_forgery(proof_root)
+
+
+def test_capsule_governance_gate_cannot_grant_repository_authority(
+    tmp_path: Path,
+) -> None:
+    proof_root = _copy_proofs(tmp_path)
+
+    def mutate(document: dict[str, Any]) -> None:
+        document["external_governance_gate"]["repository_state_grants_authority"] = True
+
+    _replace_artifact(
+        proof_root,
+        binding_key="state_capsule",
+        document_path=proof_root / "state-capsule.json",
+        mutate=mutate,
+    )
+    _execute_forgery(proof_root)
+
+
 def test_capsule_for_another_runtime_contract_is_rejected(tmp_path: Path) -> None:
     proof_root = _copy_proofs(tmp_path)
 
@@ -420,14 +457,14 @@ def test_capsule_validator_accepts_exact_bound_successor_package() -> None:
     capsule.pop("semantic_sha256")
     capsule["semantic_sha256"] = _canonical_sha256(capsule)
     identity = capsule["repository"]
-    proof = validate_state_capsule_document(
-        ROOT,
-        capsule,
-        expected_commit=identity["commit"],
-        expected_tree=identity["tree"],
-        selected_provider_contract_version="V17",
-    )
-    assert proof.runtime_package["next_package"] == "V17"
+    with pytest.raises(ControlProofError, match="runtime target"):
+        validate_state_capsule_document(
+            ROOT,
+            capsule,
+            expected_commit=identity["commit"],
+            expected_tree=identity["tree"],
+            selected_provider_contract_version="V17",
+        )
 
 
 def test_shadow_receipt_for_another_command_package_is_rejected(tmp_path: Path) -> None:

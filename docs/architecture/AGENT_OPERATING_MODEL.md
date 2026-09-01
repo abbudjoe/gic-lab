@@ -50,6 +50,29 @@ replacement policy, source/privacy roles, budgets, evidence identities,
 authorization schema, and control-receipt binding schema. Neither phase accepts an
 effect adapter.
 
+Every aggregate control entry point first resolves one frozen
+`SelectedRuntimeTarget` from `control/goals/EXP-0001.yaml`. The goal must name a
+registered historical package, its exact numerical successor, and either
+`not-created` or `package-bound-not-authorized`. The first state selects the
+historical package and requires that the successor is absent from the registry; the
+second selects the exactly registered successor and validates its plan, profile,
+execution contract, and centrally declared command-package digest. An explicit
+`--provider-contract` is accepted only when it equals that goal-derived selection.
+There is no default/current/latest registry lookup, and neither selection path grants
+authority.
+
+State-capsule, selected composition, mandatory shadow, agent-check, and receipt
+generation consume that same typed target. The target projection binds its source,
+goal-record digest, historical and successor state, selected contract and plan, and
+command-package digest. Receipt generation writes one new package-specific root at
+`control/receipts/packages/<version-lower>/`, builds and validates the complete tree
+in a same-parent staging directory, syncs it, and publishes it with one atomic
+no-replace directory commit. Symlinks and escapes fail; an unsealed exact final root
+is atomically quarantined at its deterministic recovery path; and a sealed root is
+immutable. Every binding path is relative to that one root. The retained V16 root is
+current evidence only while the goal selects V16 and remains independently valid
+historical evidence after a successor becomes current.
+
 The shared Category 3 controller owns this sequence:
 
 ```text
@@ -64,11 +87,18 @@ identity → composition → validated capsule and receipt binding → local sta
 minted only by exact validators. Preparation loads one binding document, validates
 every referenced file byte and semantic hash, proves one commit/tree, contract,
 package, complete scenario set, aggregate cross-binding, exact shared-source set,
-and false authority/science flags, then performs deterministic staging checks. The
-capsule's historical-or-successor runtime state and every post-composition shadow
-receipt must agree with that selected contract and command package. The happy path
-must also carry nonzero reconciled fake accounting and zero projected real cost. It
-does not accept caller proof booleans or hash-shaped receipt tuples.
+and false authority/science flags, then performs deterministic staging checks. Each
+sealed root contains the exact goal bytes used to select it. Historical validation
+proves those bytes against the root's bound commit, resolves `not-created` or
+`package-bound-not-authorized` against the sealed registry receipt's exact version
+set, and validates bound package and shared-source bytes without substituting the
+working-tree goal. Repository validation enumerates the legacy root and every
+`control/receipts/packages/<version>` seal; all roots must pass historical validation,
+and exactly one must additionally equal the current goal-derived target. Every
+post-composition shadow receipt must agree with its root's selected contract and
+command package. The happy path must also carry nonzero reconciled fake accounting
+and zero projected real cost. It does not accept caller proof booleans or hash-shaped
+receipt tuples.
 
 The controller is the single control flow for the shadow and future live effect
 channels. Its production-wrapper assembly calls the retained metadata, provider
@@ -93,5 +123,17 @@ registry matrix. A future live package must bind the exact document required by
 and frozen manifest. Binding valid control evidence does not create live authority.
 
 The next PR may mechanically generate a fresh package from these receipts after this
-foundation is reviewed and merged. It must not reuse consumed V16 authority, and the
-foundation itself creates no successor package identity.
+foundation is reviewed and merged. It may add one central declarative V17 contract,
+move the goal to `package-bound-not-authorized`, add V17 plan/profile/contracts/
+conditions/schemas, add package-specific live `LowLevelEffects` and an externally
+validated package-specific `EffectAuthorityGrant`, add a V17 receipt root and
+binding, and update V17 documents/tests. It must not reuse consumed V16 authority,
+and this foundation itself creates no successor package identity.
+
+That package-only PR must not change `agent_check.py`, `cli.py`, `category3.py`,
+`production.py`, `proofs.py`, `composition.py`, `consumers.py`,
+`registry_validation.py`, `shadow.py`, `state_capsule.py`, `target.py`, the shared
+controller state machine, or the validated-proof architecture. The package-only
+allowlist also excludes `version_lint.py`, `Makefile`, and `.github/workflows/ci.yml`;
+none is a V17 package-data surface. If a successor requires any such shared change,
+package generation stops and a separate Category 1 control-plane repair is required.

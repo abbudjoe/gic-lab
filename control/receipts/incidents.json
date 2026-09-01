@@ -1,7 +1,22 @@
 {
   "complete": true,
-  "incident_count": 1,
+  "incident_count": 2,
   "incidents": [
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+      "path": "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
+      "regression_nodes": [
+        "tests/control/test_target_selection.py::test_current_goal_selects_exact_v16_target",
+        "tests/control/test_target_selection.py::test_synthetic_package_bound_successor_selects_v17_without_shared_edits",
+        "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation",
+        "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
+      ],
+      "regression_output": "....                                                                     [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
     {
       "complete": true,
       "errors": [],
@@ -17,8 +32,8 @@
       "status": "resolved"
     }
   ],
-  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
-  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
+  "repository_commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+  "repository_tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28",
   "schema_version": "1.0.0",
-  "semantic_sha256": "49374367f27da3a9c43a82a95490fb7e49a57faf704e1c5332a2f1c9c9121484"
+  "semantic_sha256": "86e80b333f16dbce7a952b276d4248fc08822269db3deb74d01c2902b61635a2"
 }

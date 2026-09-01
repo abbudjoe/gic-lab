@@ -1,0 +1,61 @@
+{
+  "affected_abstraction": [
+    "aggregate-control/target-selection"
+  ],
+  "authority_consumed": "none",
+  "cost_usd": "0.00",
+  "coverage": [
+    "target-resolution",
+    "shadow-execution"
+  ],
+  "earliest_detectable_stage": "package-only-boundary-audit",
+  "failed_invariant": "a successor package must not require shared aggregate-control source edits",
+  "immutable_facts": {
+    "active_fixed_targets": [
+      "agent-check",
+      "verified-state-capsule",
+      "receipt-refresh",
+      "mandatory-shadow",
+      "composition-receipt-filename",
+      "make-category3-shadow"
+    ],
+    "authority_consumed": "none",
+    "cost_usd": "0.00",
+    "live_environment_required": false,
+    "root_cause": "agent-check, CLI, and Make targets selected V16 explicitly",
+    "stage": "post-stabilization-package-boundary-review"
+  },
+  "immutable_facts_sha256": "8de67dfbe99733d6f0bf7322b7fcda7cc975619b713948d414d5ba0689743408",
+  "incident_id": "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "d0aff8a47e92013773d9d05b2cd90fb741658b03",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_target_selection.py::test_current_goal_selects_exact_v16_target"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_target_selection.py::test_synthetic_package_bound_successor_selects_v17_without_shared_edits"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
+    }
+  ],
+  "repair": "goal-compatible-selected-runtime-target-resolver",
+  "root_cause": "agent-check, CLI, and Make targets selected V16 explicitly",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "not-run",
+  "stage": "post-stabilization-package-boundary-review",
+  "status": "resolved"
+}

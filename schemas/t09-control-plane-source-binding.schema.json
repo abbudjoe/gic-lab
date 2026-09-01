@@ -18,7 +18,7 @@
   ],
   "properties": {
     "schema_version": {"const": "1.0.0"},
-    "base_commit": {"const": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"},
+    "base_commit": {"const": "d0aff8a47e92013773d9d05b2cd90fb741658b03"},
     "source_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "source_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "scope": {"const": "shared-control-plane-only"},

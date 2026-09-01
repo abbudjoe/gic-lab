@@ -8,28 +8,33 @@
   "available_actions": [
     "inspect-public-repository-state",
     "run-local-control-gates",
-    "review-stabilization-pr"
+    "review-control-target-selection-pr"
   ],
-  "blocking_incident": "INC-T09-V16-LIFECYCLE-REGISTRY",
+  "blocking_incident": null,
   "control_plane": {
     "active_version_lint_valid": true,
     "composition_valid": true,
     "failure_matrix_valid": true,
     "registry_complete": true,
-    "revision": "T09-control-plane-stabilization",
+    "revision": "T09-control-target-selection",
     "shadow_happy_path": true,
-    "status": "candidate-stabilization-branch"
+    "status": "implementation-complete-external-governance"
   },
   "cost": {
     "cumulative_t09_usd": "36.36170860803283125",
     "stabilization_openai_usd": "0.00",
     "stabilization_provider_usd": "0.00"
   },
-  "current_subgoal": "stabilize the shared T09 control plane before V17 generation",
+  "current_subgoal": "advance the completed target-selection repair through external review/merge, then generate package-only V17",
   "evidence": {
     "science_unchanged": true,
     "shadow_classification": "non-scientific-control-output",
     "state": "control-plane-only"
+  },
+  "external_governance_gate": {
+    "kind": "independent-exact-head-review-and-explicit-merge-authorization",
+    "repository_state_grants_authority": false,
+    "state": "consult-external-state"
   },
   "generated_at": "1970-01-01T00:00:00Z",
   "generated_at_policy": "deterministic-fixed",
@@ -38,16 +43,18 @@
     "live_resources_observed_in_this_work": false,
     "scientific_interpretation": false
   },
+  "next_technical_subgoal": "generate-package-only-v17-after-governance",
   "provenance": [
     "control/goals/EXP-0001.yaml",
     "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+    "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
   ],
-  "recommended_action": "after reviewed merge, generate a fresh V17 package in PR 2",
+  "recommended_action": "consult external governance state; if review/merge is pending, complete that gate; if merged, begin the separately authorized package-only V17 task",
   "repository": {
-    "commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
-    "tree": "7fda7a4f8c77aa24f207b860d819040e4680c290"
+    "commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+    "tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -61,14 +68,33 @@
     "next_package": "V17",
     "next_status": "not-created"
   },
-  "schema_version": "1.0.0",
+  "schema_version": "3.0.0",
   "science": {
     "interpretation_allowed": false,
     "interpretation_boundary": "no shadow or infrastructure output is a scientific result",
     "scientific_contract_id": "EXP-0001",
     "status": "unchanged"
   },
-  "semantic_sha256": "4aa391f3f33a8796b1bbdbdfac2153a0a28d7ab9b1171f032e81756091d47eee",
+  "selected_runtime_target": {
+    "authority": {
+      "live_authorization": false,
+      "repository_state_grants_authority": false,
+      "scientific_interpretation_allowed": false
+    },
+    "goal_record_path": "control/goals/EXP-0001.yaml",
+    "goal_record_sha256": "81fbc17fd66de0d5b5010bb1ff93e8868dd4ec0be59cb8e146b3171b19f5d7f6",
+    "historical_contract_version": "V16",
+    "schema_version": "1.0.0",
+    "selected_command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+    "selected_package_status": "consumed-prelaunch-failure",
+    "selected_plan_id": "PLAN-EXP0001-PILOT-V16",
+    "selected_provider_contract_version": "V16",
+    "semantic_sha256": "5aaae3ed94d6aa7f64690eb4ab9efa7d949c3a29659e5d6193646c7139be8a8e",
+    "source": "goal-record",
+    "successor_contract_version": "V17",
+    "successor_status": "not-created"
+  },
+  "semantic_sha256": "eaf2a628e3bfb258728ca3c7304023718b19f1709be14e325d8f3f0dff151e98",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",

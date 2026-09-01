@@ -563,20 +563,23 @@ def test_tracked_control_receipts_are_complete_and_cross_bound() -> None:
 def test_tracked_control_receipt_mutation_fails_closed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original_load_json = validation.load_json
-    target = ROOT / "control/receipts/agent-check.json"
+    original_read_bytes = Path.read_bytes
+    target = (ROOT / "control/receipts/agent-check.json").resolve()
 
-    def mutated_load_json(path: Path) -> dict[str, Any]:
-        document = original_load_json(path)
-        if path == target:
-            document = deepcopy(document)
-            document["complete"] = False
-        return document
+    def mutated_read_bytes(path: Path) -> bytes:
+        encoded = original_read_bytes(path)
+        if path.resolve() == target:
+            return encoded + b" "
+        return encoded
 
-    monkeypatch.setattr(validation, "load_json", mutated_load_json)
+    monkeypatch.setattr(Path, "read_bytes", mutated_read_bytes)
     errors = validate_tracked_control_receipts(ROOT)
-    assert "control/receipts/agent-check.json: semantic hash drifted" in errors
-    assert "tracked aggregate agent-check receipt is incomplete" in errors
+    assert any(
+        error.endswith(
+            "historical control receipt root is invalid: bound file bytes changed: agent-check.json"
+        )
+        for error in errors
+    )
 
 
 def test_downstream_finalizer_history_closure_is_exact_and_tamper_evident(

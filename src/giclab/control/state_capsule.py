@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import stat
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,11 +14,17 @@ import yaml
 from jsonschema import Draft202012Validator
 
 from giclab.control.category3 import repository_identity
+from giclab.control.incidents import validate_incident_document
+from giclab.control.target import (
+    GOAL_RECORD,
+    SelectedRuntimeTarget,
+    resolve_selected_runtime_target,
+    validate_selected_runtime_target,
+)
 from giclab.registry import load_json
 
-STATE_CAPSULE_SCHEMA_VERSION: Final = "1.0.0"
+STATE_CAPSULE_SCHEMA_VERSION: Final = "3.0.0"
 DETERMINISTIC_GENERATED_AT: Final = "1970-01-01T00:00:00Z"
-GOAL_RECORD: Final = "control/goals/EXP-0001.yaml"
 STATE_CAPSULE_SCHEMA: Final = "schemas/agent-state-capsule.schema.json"
 
 
@@ -68,6 +75,42 @@ def _public_safe(value: object, *, repository: Path) -> None:
             _public_safe(child, repository=repository)
 
 
+def validate_goal_incident_consistency(
+    repository: Path,
+    goal: Mapping[str, object],
+) -> None:
+    """Keep technical blockers distinct from external governance state."""
+
+    root = repository.resolve(strict=True)
+    blocker = goal.get("blocking_incident")
+    if blocker is not None:
+        if not isinstance(blocker, str) or not blocker:
+            raise StateCapsuleError("goal blocking incident is malformed")
+        path = root / "control/incidents" / f"{blocker}.json"
+        try:
+            metadata = path.stat(follow_symlinks=False)
+            document = load_json(path)
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            raise StateCapsuleError("declared blocking incident is unavailable") from exc
+        if path.is_symlink() or not stat.S_ISREG(metadata.st_mode):
+            raise StateCapsuleError("declared blocking incident is not a regular file")
+        if document.get("incident_id") != blocker:
+            raise StateCapsuleError("declared blocking incident identity drifted")
+        errors = validate_incident_document(root, document)
+        if errors:
+            raise StateCapsuleError(f"declared blocking incident is invalid: {errors[0]}")
+        if document.get("status") == "resolved":
+            raise StateCapsuleError("resolved incident cannot be the current technical blocker")
+
+    governance = goal.get("external_governance_gate")
+    if governance != {
+        "kind": "independent-exact-head-review-and-explicit-merge-authorization",
+        "state": "consult-external-state",
+        "repository_state_grants_authority": False,
+    }:
+        raise StateCapsuleError("external governance gate is malformed or grants authority")
+
+
 def generate_state_capsule(
     repository: Path,
     *,
@@ -76,13 +119,20 @@ def generate_state_capsule(
     version_lint_valid: bool,
     shadow_happy_path: bool,
     failure_matrix_valid: bool,
+    target: SelectedRuntimeTarget | None = None,
     deterministic: bool = True,
     generated_at: str | None = None,
 ) -> dict[str, object]:
     """Project machine-readable goal state and current control evidence."""
 
     root = repository.resolve(strict=True)
+    selected_target = (
+        resolve_selected_runtime_target(root)
+        if target is None
+        else validate_selected_runtime_target(root, target)
+    )
     goal = _load_goal(root)
+    validate_goal_incident_consistency(root, goal)
     commit, tree = repository_identity(root)
     if deterministic:
         timestamp = generated_at or DETERMINISTIC_GENERATED_AT
@@ -97,6 +147,7 @@ def generate_state_capsule(
         "repository": {"commit": commit, "tree": tree},
         "terminal_goal": goal.get("terminal_goal"),
         "current_subgoal": goal.get("current_subgoal"),
+        "next_technical_subgoal": goal.get("next_technical_subgoal"),
         "science": _required_mapping(goal, "science"),
         "control_plane": {
             **_required_mapping(goal, "control_plane"),
@@ -107,11 +158,13 @@ def generate_state_capsule(
             "failure_matrix_valid": failure_matrix_valid,
         },
         "runtime_package": _required_mapping(goal, "runtime_package"),
+        "selected_runtime_target": selected_target.to_document(),
         "authority": _required_mapping(goal, "authority"),
         "resources": _required_mapping(goal, "resources"),
         "evidence": _required_mapping(goal, "evidence"),
         "cost": _required_mapping(goal, "cost"),
         "blocking_incident": goal.get("blocking_incident"),
+        "external_governance_gate": _required_mapping(goal, "external_governance_gate"),
         "available_actions": _required_strings(goal, "available_actions"),
         "recommended_action": goal.get("recommended_action"),
         "provenance": [GOAL_RECORD, *_required_strings(goal, "provenance")],

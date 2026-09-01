@@ -188,9 +188,125 @@ successful while any required item is partial, blocked, or not-started.
   contract violation rather than a fallback.
 - No blocker is currently known.
 
+## PR 1.1 successor-target repair
+
+Assembly status: **complete — draft review required**
+
+The operator-supplied `T09 PR 1.1 — Make the Agent Control Target
+Successor-Driven` contract governs the post-merge Category 1 repair. The exact base
+is merge commit `d0aff8a47e92013773d9d05b2cd90fb741658b03`, tree
+`a6801e99d8e6ed204bbfa49ca1f3f17ad8b793ec`, with ordered parents
+`450a10a51eda4c428f20b27d6b4aafc4f94d80f4` and
+`ccab5f1255f5a397ce14f1ebec7d96068bda91bc`. The required control contract is one
+frozen, goal-compatible selected-runtime target used by every aggregate command.
+There is no current/latest/default contract and selection never grants authority.
+
+```text
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+```
+
+### PR 1.1 scope and boundaries
+
+In scope are the target resolver, aggregate target plumbing, safe versioned receipt
+roots, active-selection lint, one control-design incident, synthetic successor
+fixtures, non-circular V16 receipt rebinding, reviewed projections, and CT-01 through
+CT-22 below.
+
+Out of scope are tracked V17 package artifacts, `AUTONOMOUS-0010`, live effects or
+authority, real secret/provider/cloud/scientific execution, V16 replay, merge,
+auto-merge, force-push, and delegation. Direct Sol/max self-review is the required
+review path because the governing operator contract prohibits subagents.
+
+### PR 1.1 definition of done
+
+| ID | Required outcome | Planned evidence | Status |
+|---|---|---|---|
+| CT-01 | Exact base and merged PR 1 history preserved | Git/GitHub identity and clean-worktree checks | met |
+| CT-02 | All active fixed V16 selections inventoried | Classified implementation-ledger inventory | met |
+| CT-03 | One typed goal-compatible target resolver exists | Target unit tests and source review | met |
+| CT-04 | Current goal resolves V16 | Target receipt and aggregate CLI tests | met |
+| CT-05 | Synthetic package-bound successor resolves V17 | Temporary-repository synthetic package test | met |
+| CT-06 | Agent check contains no fixed package target | Source lint and V16/V17 aggregate tests | met |
+| CT-07 | CLI aggregate commands contain no fixed package target | Parser/command integration tests | met |
+| CT-08 | Make/CI defaults contain no fixed package target | Make/workflow inspection and direct targets | met |
+| CT-09 | Receipt generation supports safe versioned roots | Output-root and generated-binding tests | met |
+| CT-10 | Existing sealed root cannot be overwritten | Sealed-root regression | met |
+| CT-11 | Binding validator accepts package-specific roots | Temporary-root binding validation | met |
+| CT-12 | Active-version lint catches fixed contract selection | AST lint regressions and zero-finding receipt | met |
+| CT-13 | Synthetic successor completes registry/composition/shadow/agent-check | Full synthetic successor path | met |
+| CT-14 | Synthetic successor requires no shared aggregate-control edits | Before/after shared-source byte map | met |
+| CT-15 | All target failures precede effect boundaries | Zero-call counters and ordering tests | met |
+| CT-16 | Incident linked to passing regressions | Incident validator and exact node IDs | met |
+| CT-17 | Current V16 receipts remain valid or are correctly rebound | Immutable ancestor and binding validation | met |
+| CT-18 | PR 2 boundary is explicit and enforceable | Architecture/packet/ledger text plus source-byte test | met |
+| CT-19 | No tracked V17 artifact exists | Git path scan | met |
+| CT-20 | Science and authority boundaries unchanged | Hash, capsule, proof, privacy, and false-flag tests | met |
+| CT-21 | Full/parity/static/privacy/site gates pass | Required final command set | met |
+| CT-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/run metadata | met |
+
+### PR 1.1 implementation mapping
+
+- Target parsing, package validation, goal compatibility, and explicit selection map
+  to CT-03 through CT-05 and CT-15.
+- Agent-check, CLI, Make/CI, versioned receipt roots, binding validation, and lint map
+  to CT-06 through CT-12 and CT-17.
+- The synthetic successor fixture and unchanged-source proof map to CT-13, CT-14,
+  CT-18, and CT-19.
+- The incident, authority/science preservation, full gates, and draft PR handoff map
+  to CT-01, CT-02, CT-16, and CT-20 through CT-22.
+
+### PR #13 exact-head review repair
+
+Assembly status: **implemented and locally validated — parity and exact-head GitHub gates pending**
+
+Review `5078551304` examined commit
+`ccb5ee0fc454111a976c6de951d798a630a537b9`, tree
+`4a5c617e3746cf3148b2d4dc85764e49d2096288`, against the unchanged exact base and
+reopened the receipt-history, publication, lint, capsule, preservation, and final
+review gates. The governing repair contract requires historical proofs to remain
+valid after a successor becomes current, complete-tree publication to be atomic and
+recoverable, the original versioned-constant selector form to be linted, and the
+capsule to distinguish technical incidents from external governance.
+
+| ID | Required outcome | Planned evidence | Status |
+|---|---|---|---|
+| RC-01 | Historical targets resolve from exact goal bytes bound to each receipt's immutable control commit/tree | Bound-goal hash/target/package tests | met |
+| RC-02 | Every sealed V16 and package-specific receipt root is enumerated and fully validated | Multi-root inventory and drift/removal tests | met |
+| RC-03 | Only the active root must additionally equal the current goal-selected target | V17-current/V16-historical compatibility tests | met |
+| RC-04 | Receipt publication uses one complete-tree no-replace commit and never exposes an unrecoverable partial final root | Nine-boundary interruption/concurrency matrix | met |
+| RC-05 | Successful equivalent receipt publications remain byte-identical | Two-root deterministic generation test | met |
+| RC-06 | Active lint rejects direct, attributed, and aliased versioned provider-contract constants | Direct-constant AST matrix and zero-finding repository receipt | met |
+| RC-07 | Capsule separates unresolved technical incidents from external governance gates | Goal/schema/capsule consistency tests | met |
+| RC-08 | Resolved incidents cannot be current blockers; incident history remains append-only | Incident/capsule mutation regressions | met |
+| RC-09 | Synthetic V17 traverses every shared aggregate path while retained V16 validates historically | Full temporary successor/root proof | met |
+| RC-10 | All proof, target, and publication preconditions remain before secret/provider/condition effects | Zero-call focused assertions | met |
+| RC-11 | V17/package-only boundary, no-live-authority, no-science, and no-tracked-V17 invariants remain exact | Shared-source byte map, Git path scan, EXP-0001 tree identity | met |
+| RC-12 | Focused/full/parity/static/privacy/site and exact-head GitHub gates pass; PR remains draft/unmerged | Required command set, PR metadata, Actions result | in-progress |
+
+Implementation mapping: target/proof and repository enumeration changes map to
+RC-01 through RC-03 and RC-09; CLI publication maps to RC-04 and RC-05; AST lint
+maps to RC-06; goal/capsule/incident validation maps to RC-07 and RC-08; ordering,
+preservation, receipt rebinding, and final review map to RC-09 through RC-12. The
+operator prohibits delegation, so direct Sol/max source/spec review replaces the
+assembly workflow's subagent review.
+
+Local final-gate evidence on 2026-09-01: the complete focused repair batch passed
+176/176 nodes without skips or xfails; the raw suite reported 2,067 passed, the same
+23 inherited failures, and the same five inherited private-fixture skips; Ruff,
+strict mypy, repository validation, goal-derived V16 agent-check, pinned-Quarto site
+render/validation, and `git diff --check` passed. Base-relative parity, the draft PR
+update, and exact-head GitHub Actions remain the only RC-12 work.
+
+The first exact parity attempt rejected one renamed pre-existing capsule node despite
+zero newly failing nodes. Its historical node ID is restored with the strengthened
+review-repair assertions; a fresh exact-head parity run remains required.
+
 ## Next permitted phase
 
-Update existing draft PR #12 with the completed review repair, obtain exact-head
-GitHub Actions and independent ChatGPT rereview, and stop without merge. PR 2 remains
-package-only; auto-merge stays disabled, and no merge or V17 creation is permitted
-here.
+Complete this PR 1.1 assembly on `codex/t09-control-target-selection`, open one draft
+PR against `phase-1/sira-pilot-autonomous-r2`, obtain exact-head GitHub Actions, and
+stop without merge. A later PR 2 may be package-only within the explicit boundary;
+this work must not create V17 package artifacts or authority.

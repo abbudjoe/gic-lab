@@ -8,7 +8,7 @@
   "cleanup_family": "empirical-prefix",
   "command_package_family": "autonomous",
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "control_binding_schema_sha256": "38e2c53d47d20ecea991727c991b3d7a865fe9cae238dcdc76616b43fb7a01da",
+  "control_binding_schema_sha256": "2ec766e4e5b5c11b03d721f09737b145a6da0c7a980fee9ddf0993dde1a8735a",
   "downstream_source_contract_sha256": "2056be71c23cad502d67b48e9632904c6703b1b45f3c715fdf04f9147111e3a6",
   "evidence_identity_sha256": "7103c2a33857806d0090aa6fbda04f94d9b239c0f7209f51a625cd2c69a25cae",
   "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
@@ -19,17 +19,18 @@
     "75f13841991b80fc3b8c0a2cf3148dc46e898dfad9bce4987f2681fc3d7e7c72"
   ],
   "privacy_contract_sha256": "8348ae008a039ebb9db6e151e55195de62353945d1f08796b953dbf6bc0d3369",
-  "provider_contract_sha256": "9019f101aa9d66430fdf990d40091756c5b4c9a7ff48cc1a09962326431e2939",
+  "provider_contract_sha256": "bdea690d78f3673db5495985f220a142c02656af3b88a2f069138f8ec20a78a2",
   "provider_contract_version": "V16",
   "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
   "ready_for_authenticated_preflight": false,
   "ready_for_shadow": true,
-  "registry_receipt_sha256": "9a098076c01f8494a7e53865eb4ee1ca50d42c90d0d6dfe4f3c534b7cc746eb0",
+  "registry_receipt_sha256": "7df27198ab8c166ac6f25dc69acdfd6b78d66f5d99dd30ecaf8d3397bc1f9778",
   "replacement_policy": "bounded-preflight",
-  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
-  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
+  "repository_commit": "7d7fc964e883fb6ec593d14c57b5f8d4e146ec52",
+  "repository_tree": "1530c61f0bbf1429fa64a55f5dfcdc41e30add28",
   "schema_version": "1.0.0",
-  "semantic_sha256": "4c432e5e11dac3fd98e7336de194be8634931899604f68c000408ff9bcfd4b08",
+  "semantic_sha256": "165f859a953a0bb4f1e407ad75b2effaa5348a7a03c63dfc4e5a72cdfedfd5c1",
   "static_composition_valid": true,
-  "version_lint_receipt_sha256": "23232f847f5848f5247988c4de74dbb5c6ae777fb66279d6d386d8d4d3c6a185"
+  "target_schema_sha256": "0337c5fdc1d1c87b3700575dd1261fdb91c1d847ccd7f53f69a59e4333eb32b1",
+  "version_lint_receipt_sha256": "ed2cd8ada5d74cc56d4bbc48cf38956d9611cdfc55ab97bc5c0c36ea72197102"
 }

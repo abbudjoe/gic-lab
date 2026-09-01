@@ -18,9 +18,9 @@ from giclab.control.consumers import (
     resolve_control_consumers,
 )
 from giclab.control.contracts import project_contract_capabilities
+from giclab.harness import t09_provider_contracts as provider_contracts
 from giclab.harness.t09_pragmatic_provider import CampaignLifecycle, load_campaign_lifecycle
 from giclab.harness.t09_provider_contracts import (
-    PROVIDER_CONTRACTS,
     CommandPackageFamily,
     ProviderSelectorPolicy,
     T09ProviderContract,
@@ -144,6 +144,7 @@ def resolve_registered_command_package(
         contract,
         contract.command_manifest_path,
         expected_plan_id=contract.plan_id,
+        expected_sha256=contract.expected_command_manifest_sha256,
     )
     document = _json_document(encoded, context="registered command manifest")
     manifests = document.get("manifests")
@@ -419,7 +420,7 @@ def _validate_one_contract(
 def validate_registry_completeness(
     repository: Path,
     *,
-    contracts: Mapping[str, T09ProviderContract] = PROVIDER_CONTRACTS,
+    contracts: Mapping[str, T09ProviderContract] | None = None,
     lifecycle_loader: LifecycleLoader = load_campaign_lifecycle,
     disabled_consumers: frozenset[str] = frozenset(),
     control_consumers: Mapping[str, ContractConsumer] = CONTROL_CONSUMERS,
@@ -427,6 +428,9 @@ def validate_registry_completeness(
     """Return one deterministic, public-safe per-contract consumer matrix."""
 
     root = repository.resolve(strict=True)
+    selected_contracts = (
+        contracts if contracts is not None else provider_contracts.PROVIDER_CONTRACTS
+    )
     entries = [
         _validate_one_contract(
             root,
@@ -435,7 +439,9 @@ def validate_registry_completeness(
             disabled_consumers=disabled_consumers,
             control_consumers=control_consumers,
         )
-        for _version, contract in sorted(contracts.items(), key=lambda item: int(item[0][1:]))
+        for _version, contract in sorted(
+            selected_contracts.items(), key=lambda item: int(item[0][1:])
+        )
     ]
     errors: list[str] = []
     for entry in entries:
@@ -454,7 +460,7 @@ def validate_registry_completeness(
         "contract_count": len(entries),
         "contracts": entries,
         "errors": errors,
-        "complete": not errors and len(entries) == len(contracts),
+        "complete": not errors and len(entries) == len(selected_contracts),
     }
     receipt["semantic_sha256"] = _canonical_sha256(receipt)
     return receipt

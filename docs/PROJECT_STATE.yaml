@@ -32,8 +32,12 @@ t09_v16_stopped_checkpoint:
   incident: INC-T09-V16-LIFECYCLE-REGISTRY
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 t09_control_plane_stabilization_workstream:
-  status: in-progress
-  branch: codex/t09-control-plane-stabilization
+  status: implementation-complete-independent-rereview-required
+  branch: codex/t09-control-target-selection
+  selected_runtime_target_source: goal-record
+  selected_runtime_package: V16
+  selected_runtime_plan: PLAN-EXP0001-PILOT-V16
+  successor_status: not-created
   semantic_contract_registry_complete: true
   offline_composition_valid: true
   shadow_happy_path_valid: true
@@ -42,7 +46,7 @@ t09_control_plane_stabilization_workstream:
   scientific_interpretation_allowed: false
   next_runtime_package: not-created
   next_runtime_package_identity: V17
-  next_permitted_action: review-and-merge-stabilization-before-fresh-package-generation
+  next_permitted_action: independent-exact-head-rereview-and-explicit-merge-authorization
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized

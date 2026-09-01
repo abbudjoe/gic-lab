@@ -43,7 +43,7 @@ control-compose:
 	$(UV_RUN) giclab-control compose --repository . --all-registered
 
 category3-shadow:
-	$(UV_RUN) giclab-control shadow --repository . --provider-contract V16 --all-required
+	$(UV_RUN) giclab-control shadow --repository . --all-required
 
 incident-check:
 	$(UV_RUN) giclab-control incident-check --repository .
