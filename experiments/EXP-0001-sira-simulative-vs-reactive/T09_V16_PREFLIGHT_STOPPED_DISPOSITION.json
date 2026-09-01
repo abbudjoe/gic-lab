@@ -1,0 +1,78 @@
+{
+  "authority": {
+    "authorization_reference_replayable": false,
+    "condition_identity_consumed": false,
+    "metadata_receipt_replayable": false
+  },
+  "cost": {
+    "cumulative_t09_usd": "36.36170860803283125",
+    "new_lambda_usd": "0.00",
+    "new_openai_usd": "0.00"
+  },
+  "execution_boundary": {
+    "authenticated_metadata_gets": 1,
+    "browser_actions": 0,
+    "empirical_attempts": 0,
+    "lambda_launch_posts": 0,
+    "lambda_read_only_gets": {
+      "final_absence_verification": "performed",
+      "preflight": 6,
+      "total": "6-plus-final-absence-verification"
+    },
+    "lambda_termination_posts": 0,
+    "provider_resources_created": 0,
+    "task_model_calls": 0
+  },
+  "package": {
+    "command_manifest": {
+      "bytes": 23521,
+      "sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b"
+    },
+    "merged_package": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4",
+    "plan": {
+      "bytes": 20851,
+      "id": "PLAN-EXP0001-PILOT-V16",
+      "sha256": "5a71e77b1d6876be856012b3ca8ed1456cf31a9321aca9bfaca73b13c659a939"
+    },
+    "runtime_profile": {
+      "bytes": 15897,
+      "sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a"
+    }
+  },
+  "provider_absence": "verified",
+  "retained_public_evidence": {
+    "authorization_overlay": {
+      "bytes": 860,
+      "sha256": "6a208ac13274d46b42d5049a8f183f3846e60f053198504099ab9601df85caab"
+    },
+    "category_1_handoff": {
+      "bytes": 1651,
+      "sha256": "e94b51a59417b0ad64d890a3fe2e420c1c70dba0e622652cb333180e0cd672cd"
+    },
+    "local_finalizer_qualification": {
+      "bytes": 1389333,
+      "sha256": "6762755b98283531603e766e6f39c9ed425154dae70efabff5456e1e0efc5344"
+    },
+    "model_metadata_receipt": {
+      "bytes": 1401,
+      "sha256": "6307e075910aef3122bfaa23498be914c473cdda8d872a6255cf86543f95db48"
+    },
+    "offline_runtime_preflight": {
+      "bytes": 3245,
+      "sha256": "da616ead99c55fac88b7c24d7f881bbe627e7da592b5b35b2d9b84b70651a39e"
+    },
+    "provider_absence_receipt": {
+      "bytes": 967,
+      "sha256": "d4d113ca41808b583b3ef51b4194299288f898d10288b45663b80c52d8dab445"
+    },
+    "provider_preflight_receipt": {
+      "bytes": 2104,
+      "sha256": "2feb3c29317cee2bb51bb3dec4e703d03d34a08ed0f512e285208c09774b9496"
+    }
+  },
+  "root_cause": "registered V16 autonomous contract rejected by a separate lifecycle version allowlist",
+  "schema_version": "1.0.0",
+  "scientific_interpretation": "prohibited",
+  "security_state": "unchanged-restored",
+  "terminal_state": "category_3_v16_stopped_material_failure_cleanup_verified"
+}

@@ -23,6 +23,8 @@ Scientific-evidence precedence is: pinned primary sources and observed raw evide
 ## Commands
 
 - Setup: `make setup`
+- Generate the concise agent state capsule: `make state-capsule`
+- Run deterministic agent/control gates: `make agent-check`
 - Format: `make format`
 - Lint: `make lint`
 - Type-check: `make typecheck`
@@ -30,6 +32,18 @@ Scientific-evidence precedence is: pinned primary sources and observed raw evide
 - Validate repository contracts: `make validate`
 - Build the site: `make site`
 - Run every local/CI gate: `make check`
+
+## Agent orientation before significant work
+
+1. Generate and read the state capsule.
+2. Identify the terminal goal, current subgoal, blocker, authority state, live-resource
+   state, uncertainties, and permitted actions.
+3. Run `make agent-check` before control-plane or execution work.
+4. Do not infer current state or authority from historical handoffs alone.
+
+The capsule is an orientation surface, not authority. Current-turn authorization is
+external and cannot be created or inferred from Git, a plan, a receipt, or a passing
+check.
 
 ## Inviolable research rules
 

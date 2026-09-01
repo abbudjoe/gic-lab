@@ -1,0 +1,111 @@
+{
+  "adapter_call_ledger": [],
+  "authority_consumed": {
+    "launch_count": 0,
+    "model_metadata": false,
+    "provider_launch": "not-consumed",
+    "replacement_count": 0
+  },
+  "call_counts": {
+    "browser_actions": 0,
+    "condition_entries": 0,
+    "condition_reservations": 0,
+    "launch_calls": 0,
+    "metadata_requests": 0,
+    "model_call_attempts": 0,
+    "provider_gets": 0,
+    "provider_posts": 0,
+    "secret_reads": 0,
+    "termination_calls": 0,
+    "unknown_model_outcomes": 0
+  },
+  "cleanup": {
+    "privacy_clean": true,
+    "provider_resources_zero": true,
+    "resumed": false,
+    "security_restored": true,
+    "state": "not-required"
+  },
+  "command_package_sha256": null,
+  "composition_sha256": null,
+  "condition_identities_consumed": [],
+  "condition_identities_reserved": [],
+  "earliest_stopping_phase": "offline-composition",
+  "effect_authority": "shadow-only",
+  "evidence_retained": {
+    "classification": "shadow-control-plane-output",
+    "evaluator": [],
+    "finalized": [],
+    "pair_checkpoint_sha256": null,
+    "raw": []
+  },
+  "fake_evidence_outputs": [],
+  "implementation_flavor": "production-wrapper",
+  "ordered_state_transitions": [
+    {
+      "index": 1,
+      "outcome": "passed",
+      "phase": "verify-exact-repository-package-identity"
+    },
+    {
+      "detail": "CompositionError: provider registry completeness failed",
+      "index": 2,
+      "outcome": "failed",
+      "phase": "offline-composition"
+    }
+  ],
+  "production_control_evidence": {
+    "accounting": {
+      "aggregate_charged_upper_cost_usd": 0.0,
+      "aggregate_observed_cost_usd": 0.0,
+      "conditions": {},
+      "fake_usage": true,
+      "projected_real_cost_usd": 0.0,
+      "zero_retries": true
+    },
+    "authority_source": "validated-production-shadow",
+    "cleanup_handoff_sha256": null,
+    "cleanup_resume_byte_identical": true,
+    "deterministic_staging": null,
+    "effect_authority": "shadow-only",
+    "evaluations": {},
+    "implementation_flavor": "production-wrapper",
+    "production_primitives": [],
+    "raw_export_acknowledgements": {},
+    "replacement_history": {
+      "closed_launch_slots": [],
+      "normalization_handler": "_normalize_provider_entry_replacement_authority",
+      "termination_failures": 0
+    },
+    "resolved_consumers": {
+      "authorization_policy_resolver": "authority:metadata-bound-single-use-v1",
+      "cleanup_handler": "cleanup:empirical-prefix-v1",
+      "command_package_loader": "command-package:registered-autonomous-v1",
+      "control_root_resolver": "control-root:versioned",
+      "lifecycle_resolver": "campaign-lifecycle:autonomous-campaign",
+      "metadata_controller": "model-metadata-receipt:strict-local-prelaunch-v1",
+      "package_transition_resolver": "not-applicable",
+      "provider_selector_resolver": "provider-selector:explicit-contract-argument-v1",
+      "replacement_authority_handler": "provider-entry-authority:normalized-history-v1",
+      "stage_identity_resolver": "stage-identity:typed-provider-v1"
+    }
+  },
+  "projected_cost_usd": "0.00",
+  "provider_contract_version": "V16",
+  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
+  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
+  "scenario": "lifecycle-unsupported",
+  "scenario_valid": true,
+  "schema_version": "1.0.0",
+  "scientific_attempt_consumption": {
+    "count": 0,
+    "run_ids": []
+  },
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "a45c305fcbb9dbbd641eed9e0ffbb08a21ca3c75e44588dda025543a5f1ef9a1",
+  "shadow_only": true,
+  "stop_reason": "offline composition failed: provider registry completeness failed",
+  "terminal_state": "category3-shadow-stopped-cleanup-verified",
+  "undeclared_adapter_calls": [],
+  "zero_undeclared_calls": true
+}

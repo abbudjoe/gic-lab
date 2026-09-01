@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-control-plane-source-binding.schema.json",
+  "title": "T09 shared control-plane source binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "base_commit",
+    "source_commit",
+    "source_tree",
+    "scope",
+    "scientific_contract_changed",
+    "historical_package_changed",
+    "live_execution_performed",
+    "files",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "base_commit": {"const": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4"},
+    "source_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "source_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "scope": {"const": "shared-control-plane-only"},
+    "scientific_contract_changed": {"const": false},
+    "historical_package_changed": {"const": false},
+    "live_execution_performed": {"const": false},
+    "files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^(?:src/giclab/|containers/sira-smoke/pragmatic/)[A-Za-z0-9_./-]+\\.py$"},
+          "bytes": {"type": "integer", "minimum": 1},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    },
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

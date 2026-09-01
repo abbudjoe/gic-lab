@@ -1,0 +1,24 @@
+{
+  "complete": true,
+  "incident_count": 1,
+  "incidents": [
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-V16-LIFECYCLE-REGISTRY",
+      "path": "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+      "regression_nodes": [
+        "tests/control/test_production_coupling.py::test_registered_active_contract_reaches_production_adapter_assembly",
+        "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access",
+        "tests/control/test_category3_shadow.py::test_lifecycle_omission_stops_before_every_external_boundary"
+      ],
+      "regression_output": "...                                                                      [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    }
+  ],
+  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
+  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
+  "schema_version": "1.0.0",
+  "semantic_sha256": "49374367f27da3a9c43a82a95490fb7e49a57faf704e1c5332a2f1c9c9121484"
+}

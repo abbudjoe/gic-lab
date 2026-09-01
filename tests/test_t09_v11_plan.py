@@ -386,7 +386,7 @@ def test_v10_plan_remains_exact_immutable_historical_operational_evidence() -> N
 
 
 def test_v11_cleanup_authority_precedes_post_identity_package_transition() -> None:
-    source = inspect.getsource(provider.launch_campaign)
+    source = inspect.getsource(provider._launch_campaign_impl)
     exact_id = source.index("instance_id = instance_ids[0]")
     cleanup_initialize = source.index("_initial_preflight_cleanup_state(", exact_id)
     package_transition = source.index("CleanupLifecycleStage.PACKAGE_TRANSITION", exact_id)

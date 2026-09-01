@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-category3-shadow-receipt.schema.json",
+  "title": "T09 deterministic Category 3 shadow receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "scenario",
+    "implementation_flavor",
+    "effect_authority",
+    "provider_contract_version",
+    "repository_commit",
+    "repository_tree",
+    "composition_sha256",
+    "command_package_sha256",
+    "ordered_state_transitions",
+    "adapter_call_ledger",
+    "call_counts",
+    "authority_consumed",
+    "condition_identities_reserved",
+    "condition_identities_consumed",
+    "scientific_attempt_consumption",
+    "fake_evidence_outputs",
+    "evidence_retained",
+    "cleanup",
+    "earliest_stopping_phase",
+    "stop_reason",
+    "terminal_state",
+    "projected_cost_usd",
+    "undeclared_adapter_calls",
+    "zero_undeclared_calls",
+    "shadow_only",
+    "scientific_interpretation_allowed",
+    "production_control_evidence",
+    "scenario_valid",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "scenario": {"type": "string", "minLength": 1},
+    "implementation_flavor": {"const": "production-wrapper"},
+    "effect_authority": {"const": "shadow-only"},
+    "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
+    "repository_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "repository_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "composition_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "command_package_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "ordered_state_transitions": {
+      "type": "array",
+      "minItems": 2,
+      "items": {"$ref": "#/$defs/transition"}
+    },
+    "adapter_call_ledger": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/call"}
+    },
+    "call_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "secret_reads",
+        "metadata_requests",
+        "provider_gets",
+        "provider_posts",
+        "launch_calls",
+        "termination_calls",
+        "condition_reservations",
+        "condition_entries",
+        "model_call_attempts",
+        "browser_actions",
+        "unknown_model_outcomes"
+      ],
+      "properties": {
+        "secret_reads": {"type": "integer", "minimum": 0},
+        "metadata_requests": {"type": "integer", "minimum": 0},
+        "provider_gets": {"type": "integer", "minimum": 0},
+        "provider_posts": {"type": "integer", "minimum": 0},
+        "launch_calls": {"type": "integer", "minimum": 0},
+        "termination_calls": {"type": "integer", "minimum": 0},
+        "condition_reservations": {"type": "integer", "minimum": 0},
+        "condition_entries": {"type": "integer", "minimum": 0},
+        "model_call_attempts": {"type": "integer", "minimum": 0},
+        "browser_actions": {"type": "integer", "minimum": 0},
+        "unknown_model_outcomes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "authority_consumed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model_metadata", "provider_launch", "launch_count", "replacement_count"],
+      "properties": {
+        "model_metadata": {"type": "boolean"},
+        "provider_launch": {"enum": ["not-consumed", "consumed", "ambiguous-consumed"]},
+        "launch_count": {"type": "integer", "minimum": 0},
+        "replacement_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "condition_identities_reserved": {"$ref": "#/$defs/stringArray"},
+    "condition_identities_consumed": {"$ref": "#/$defs/stringArray"},
+    "scientific_attempt_consumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "run_ids"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0, "maximum": 4},
+        "run_ids": {"$ref": "#/$defs/stringArray"}
+      }
+    },
+    "fake_evidence_outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run_id", "kind", "sha256", "shadow_only"],
+        "properties": {
+          "run_id": {"type": "string"},
+          "kind": {"enum": ["raw", "finalized", "evaluator-control-output"]},
+          "sha256": {"$ref": "#/$defs/sha256"},
+          "shadow_only": {"const": true}
+        }
+      }
+    },
+    "evidence_retained": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw", "finalized", "evaluator", "pair_checkpoint_sha256", "classification"],
+      "properties": {
+        "raw": {"$ref": "#/$defs/stringArray"},
+        "finalized": {"$ref": "#/$defs/stringArray"},
+        "evaluator": {"$ref": "#/$defs/stringArray"},
+        "pair_checkpoint_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "classification": {"const": "shadow-control-plane-output"}
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "resumed", "provider_resources_zero", "security_restored", "privacy_clean"],
+      "properties": {
+        "state": {"enum": ["not-required", "not-started", "in-progress", "resumable", "complete", "unresolved"]},
+        "resumed": {"type": "boolean"},
+        "provider_resources_zero": {"type": ["boolean", "null"]},
+        "security_restored": {"type": "boolean"},
+        "privacy_clean": {"type": "boolean"}
+      }
+    },
+    "earliest_stopping_phase": {"type": ["string", "null"]},
+    "stop_reason": {"type": ["string", "null"]},
+    "terminal_state": {
+      "enum": [
+        "category3-shadow-complete-clean",
+        "category3-shadow-stopped-cleanup-unresolved",
+        "category3-shadow-stopped-privacy-blocked",
+        "category3-shadow-stopped-cleanup-verified"
+      ]
+    },
+    "projected_cost_usd": {"const": "0.00"},
+    "undeclared_adapter_calls": {"$ref": "#/$defs/stringArray"},
+    "zero_undeclared_calls": {"const": true},
+    "shadow_only": {"const": true},
+    "scientific_interpretation_allowed": {"const": false},
+    "production_control_evidence": {
+      "type": "object",
+      "required": [
+        "implementation_flavor",
+        "effect_authority",
+        "production_primitives",
+        "resolved_consumers",
+        "accounting",
+        "evaluations",
+        "deterministic_staging",
+        "replacement_history",
+        "raw_export_acknowledgements",
+        "cleanup_handoff_sha256",
+        "cleanup_resume_byte_identical"
+      ],
+      "properties": {
+        "implementation_flavor": {"const": "production-wrapper"},
+        "effect_authority": {"const": "shadow-only"},
+        "production_primitives": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "resolved_consumers": {"type": "object"},
+        "accounting": {"type": "object"},
+        "evaluations": {"type": "object"},
+        "deterministic_staging": {"type": ["object", "null"]},
+        "replacement_history": {"type": "object"},
+        "raw_export_acknowledgements": {"type": "object"},
+        "cleanup_handoff_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "cleanup_resume_byte_identical": {"type": "boolean"}
+      }
+    },
+    "scenario_valid": {"const": true},
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "stringArray": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "transition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "phase", "outcome"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 1},
+        "phase": {"type": "string", "minLength": 1},
+        "outcome": {"type": "string", "minLength": 1},
+        "detail": {"type": "string"}
+      }
+    },
+    "call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "adapter", "operation", "subject", "outcome"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 1},
+        "adapter": {"type": "string"},
+        "operation": {"type": "string"},
+        "subject": {"type": "string"},
+        "outcome": {"type": "string"}
+      }
+    }
+  }
+}

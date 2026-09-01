@@ -21,6 +21,7 @@ from giclab.validation import (
     validate_plan_lifecycle,
     validate_project_state,
     validate_site_output,
+    validate_tracked_control_receipts,
     validate_transition_record,
 )
 
@@ -235,6 +236,20 @@ def test_plan_lifecycle_requires_exactly_one_active_plan(tmp_path: Path) -> None
         )
     errors = validate_plan_lifecycle(tmp_path)
     assert any("exactly one active execution plan" in error for error in errors)
+
+
+def test_plan_lifecycle_allows_subordinate_active_workstream(tmp_path: Path) -> None:
+    active = tmp_path / "docs/exec-plans/active"
+    active.mkdir(parents=True)
+    (active / "PHASE.md").write_text(
+        "# Phase 1 — Authority\n\nStatus: **in-progress**\n",
+        encoding="utf-8",
+    )
+    (active / "WORKSTREAM.md").write_text(
+        "# Phase 1 — Bounded work\n\nStatus: **in-progress**\n\nPlan role: **workstream**\n",
+        encoding="utf-8",
+    )
+    assert validate_plan_lifecycle(tmp_path) == []
 
 
 def test_completed_plan_must_be_successful(tmp_path: Path) -> None:
@@ -539,6 +554,29 @@ def test_project_state_rejects_authoritative_plan_path_escape(tmp_path: Path) ->
 
 def test_repository_contract_passes() -> None:
     assert run_all() == []
+
+
+def test_tracked_control_receipts_are_complete_and_cross_bound() -> None:
+    assert validate_tracked_control_receipts(ROOT) == []
+
+
+def test_tracked_control_receipt_mutation_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_load_json = validation.load_json
+    target = ROOT / "control/receipts/agent-check.json"
+
+    def mutated_load_json(path: Path) -> dict[str, Any]:
+        document = original_load_json(path)
+        if path == target:
+            document = deepcopy(document)
+            document["complete"] = False
+        return document
+
+    monkeypatch.setattr(validation, "load_json", mutated_load_json)
+    errors = validate_tracked_control_receipts(ROOT)
+    assert "control/receipts/agent-check.json: semantic hash drifted" in errors
+    assert "tracked aggregate agent-check receipt is incomplete" in errors
 
 
 def test_downstream_finalizer_history_closure_is_exact_and_tamper_evident(

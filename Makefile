@@ -1,7 +1,7 @@
 QUARTO ?= $(if $(wildcard .tools/quarto-1.9.38/bin/quarto),.tools/quarto-1.9.38/bin/quarto,quarto)
 UV_RUN := uv run --no-sync
 
-.PHONY: setup sync lock-check format lint typecheck test validate site check-python check ci-check
+.PHONY: setup sync lock-check format lint typecheck test validate site state-capsule registry-check control-compose category3-shadow incident-check agent-check check-python check ci-check
 
 setup: sync
 
@@ -33,11 +33,29 @@ site:
 	$(QUARTO) render notebook
 	$(UV_RUN) giclab-validate site
 
-check-python: lock-check sync lint typecheck test validate
+state-capsule:
+	$(UV_RUN) giclab-control state-capsule --repository . --deterministic
+
+registry-check:
+	$(UV_RUN) giclab-control registry-check --repository .
+
+control-compose:
+	$(UV_RUN) giclab-control compose --repository . --all-registered
+
+category3-shadow:
+	$(UV_RUN) giclab-control shadow --repository . --provider-contract V16 --all-required
+
+incident-check:
+	$(UV_RUN) giclab-control incident-check --repository .
+
+agent-check:
+	$(UV_RUN) giclab-control agent-check --repository .
+
+check-python: lock-check sync lint typecheck agent-check test validate
 
 check: check-python site
 
-ci-check: lock-check sync lint typecheck validate site
+ci-check: lock-check sync lint typecheck agent-check validate site
 	test -n "$(BASE_SHA)"
 	test -n "$(HEAD_SHA)"
 	$(UV_RUN) python -m giclab.ci_pytest_parity --repository . --base-sha "$(BASE_SHA)" --head-sha "$(HEAD_SHA)"

@@ -9,7 +9,11 @@ import os
 from pathlib import Path
 from typing import cast
 
-from giclab.harness.t09_provider_contracts import provider_contract
+from giclab.harness.t09_provider_contracts import (
+    MetadataPolicy,
+    ProviderSelectorPolicy,
+    provider_contract,
+)
 from giclab.harness.t09_sira_pilot import (
     T09PilotError,
     command_argv_sha256,
@@ -104,7 +108,8 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
                 "model_metadata_receipt_required": True,
                 "model_metadata_receipt_replay_allowed": False,
             }
-            if contract.provider_contract_version in {"V12", "V13", "V14", "V15", "V16"}
+            if contract_identity.capabilities.metadata_policy
+            is MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT
             else {}
         ),
         "schema_version": "0.1.0",
@@ -126,7 +131,7 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
         "manifests": manifests,
         "pair_diffs": pair_diffs,
     }
-    if contract_identity.version in {"V13", "V14", "V15", "V16"}:
+    if contract_identity.capabilities.provider_selector_policy is ProviderSelectorPolicy.EXPLICIT:
         rendered["local_finalizer_qualification_selector"] = {
             "argument": "--provider-contract",
             "value": contract_identity.version,

@@ -1,0 +1,53 @@
+{
+  "affected_abstraction": [
+    "registry/lifecycle-dispatch"
+  ],
+  "authority_consumed": {
+    "metadata": true,
+    "provider_launch": false
+  },
+  "cost_usd": "0.00",
+  "coverage": [
+    "offline-composition",
+    "shadow-execution"
+  ],
+  "earliest_detectable_stage": "offline-composition",
+  "failed_invariant": "every registered autonomous provider contract must load the shared campaign lifecycle",
+  "immutable_facts": {
+    "authenticated_metadata_gets": 1,
+    "empirical_attempts": 0,
+    "lambda_launch_posts": 0,
+    "provider_resources_created": 0,
+    "stage": "provider-preflight-before-secret-loading",
+    "terminal_state": "category_3_v16_stopped_material_failure_cleanup_verified"
+  },
+  "immutable_facts_sha256": "2e878c3edd4ea3a8ee5f44577d16ae17a12a97b5e0a8a1e8623c07b526a02ee5",
+  "incident_id": "INC-T09-V16-LIFECYCLE-REGISTRY",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "450a10a51eda4c428f20b27d6b4aafc4f94d80f4",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_production_coupling.py::test_registered_active_contract_reaches_production_adapter_assembly"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_category3_shadow.py::test_lifecycle_omission_stops_before_every_external_boundary"
+    }
+  ],
+  "repair": "semantic-capability-dispatch",
+  "root_cause": "V16 was registered and packageable but rejected by a separate lifecycle version allowlist ending at V15",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "not-run",
+  "stage": "provider-preflight-before-secret-loading",
+  "status": "resolved"
+}

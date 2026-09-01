@@ -32,6 +32,8 @@ jobs:
         uses: quarto-dev/quarto-actions/setup@8a96df13519ee81fd526f2dfca5962811136661b # v2
         with:
           version: 1.9.38
+      - name: Run deterministic agent and control-plane gate
+        run: make setup agent-check
       - name: Run exact-base PR parity gate
         if: github.event_name == 'pull_request'
         run: make ci-check BASE_SHA="${{ github.event.pull_request.base.sha }}" HEAD_SHA="${{ github.event.pull_request.head.sha }}"

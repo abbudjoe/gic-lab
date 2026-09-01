@@ -27,6 +27,8 @@ from pathlib import Path
 from typing import Final, Protocol, cast
 
 from giclab.harness.t09_provider_contracts import (
+    MetadataPolicy,
+    T09ContractCapabilities,
     T09ProviderContractError,
     provider_contract,
 )
@@ -44,6 +46,9 @@ class ModelMetadataReceiptValidationPolicy(StrEnum):
 
 
 class ModelMetadataContract(Protocol):
+    @property
+    def capabilities(self) -> T09ContractCapabilities: ...
+
     @property
     def version(self) -> str: ...
 
@@ -88,8 +93,6 @@ MODEL_METADATA_TERMINAL_STATE: Final = "model-metadata-verified"
 MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS: Final = 1_800.0
 MODEL_METADATA_MAX_AGE_SECONDS: Final = MODEL_METADATA_PRELAUNCH_FRESHNESS_SECONDS
 MODEL_METADATA_MAX_PRIVATE_BYTES: Final = 65_536
-MODEL_METADATA_CONTRACT_VERSIONS: Final = frozenset({"V12", "V13", "V14", "V15", "V16"})
-
 MODEL_METADATA_RECEIPT_FIELDS: Final = frozenset(
     {
         "schema_version",
@@ -476,7 +479,7 @@ def _validate_overlay(
     _reject_sensitive_fields(overlay)
     if (
         overlay.get("schema_version") != MODEL_METADATA_SCHEMA_VERSION
-        or contract.version not in MODEL_METADATA_CONTRACT_VERSIONS
+        or contract.capabilities.metadata_policy is not MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT
         or overlay.get("provider_contract_version") != contract.version
         or overlay.get("repository_commit") != package_commit
         or overlay.get("repository_tree") != package_tree
@@ -796,7 +799,7 @@ def create_model_metadata_receipt(
     except T09ProviderContractError as exc:
         raise ModelMetadataReceiptError("receipt provider contract is unsupported") from exc
     if (
-        contract.version not in MODEL_METADATA_CONTRACT_VERSIONS
+        contract.capabilities.metadata_policy is not MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT
         or plan_id != contract.plan_id
         or host_run_id != contract.host_run_id
         or not isinstance(contract.authorization_prefix, str)
@@ -942,7 +945,7 @@ def _validate_receipt_document(
         "pagination_count": 0,
         "terminal_state": MODEL_METADATA_TERMINAL_STATE,
     }
-    if contract.version not in MODEL_METADATA_CONTRACT_VERSIONS or any(
+    if contract.capabilities.metadata_policy is not MetadataPolicy.LOCAL_PRELAUNCH_RECEIPT or any(
         document.get(key) != value for key, value in fixed.items()
     ):
         raise ModelMetadataReceiptError("receipt fixed semantics drifted")

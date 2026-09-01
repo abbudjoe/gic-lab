@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-control-receipt-bindings.schema.json",
+  "title": "T09 validated control-proof binding document",
+  "description": "Binds exact control evidence and package identity. This document never grants live authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_slug",
+    "base_commit",
+    "control_plane_revision",
+    "selected_contract",
+    "artifacts",
+    "authority",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "repository_slug": {"const": "abbudjoe/gic-lab"},
+    "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "control_plane_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree"],
+      "properties": {
+        "commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+        "tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"}
+      }
+    },
+    "selected_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_contract_version", "plan_id", "command_package_sha256"],
+      "properties": {
+        "provider_contract_version": {"type": "string", "pattern": "^V[0-9]+$"},
+        "plan_id": {"type": "string", "minLength": 1},
+        "command_package_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registry_receipt",
+        "active_version_lint_receipt",
+        "composition_receipt",
+        "state_capsule",
+        "shadow_happy_path",
+        "shadow_failures",
+        "agent_check_receipt",
+        "source_binding_receipt",
+        "incident_receipt"
+      ],
+      "properties": {
+        "registry_receipt": {"$ref": "#/$defs/artifact"},
+        "active_version_lint_receipt": {"$ref": "#/$defs/artifact"},
+        "composition_receipt": {"$ref": "#/$defs/artifact"},
+        "state_capsule": {"$ref": "#/$defs/artifact"},
+        "shadow_happy_path": {"$ref": "#/$defs/artifact"},
+        "shadow_failures": {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/artifact"},
+          "minProperties": 1
+        },
+        "agent_check_receipt": {"$ref": "#/$defs/artifact"},
+        "source_binding_receipt": {"$ref": "#/$defs/artifact"},
+        "incident_receipt": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "live_authorization",
+        "scientific_interpretation_allowed",
+        "repository_state_grants_authority"
+      ],
+      "properties": {
+        "live_authorization": {"const": false},
+        "scientific_interpretation_allowed": {"const": false},
+        "repository_state_grants_authority": {"const": false}
+      }
+    },
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "file_sha256", "semantic_sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.json$"},
+        "bytes": {"type": "integer", "minimum": 2},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

@@ -1,6 +1,20 @@
 # Execution Plans
 
-Significant work in this repository must be governed by a self-contained execution plan. The plan is the local control plane for scope, definition of done (DoD), evidence, decisions, and handoff state.
+Significant work in this repository must be governed by a self-contained execution
+plan. The machine-readable goal state, semantic contract registry,
+capability/authority state, and transaction receipts form the executable local
+control plane. The human execution plan is its reviewed projection: it explains
+scope, definition of done (DoD), evidence, decisions, and next authority without
+duplicating runtime feature dispatch or independently redefining machine-readable
+state.
+
+Plans remain mandatory for significant work. If plan prose conflicts with a typed
+contract, observed receipt, or external current-turn authority state, the plan must
+be corrected; it does not override those surfaces.
+
+Exactly one active plan has phase authority. A concurrent bounded implementation may
+use `Plan role: **workstream**`; it remains subordinate to the authoritative phase
+plan and cannot change project permissions, science, or phase state.
 
 ## Required plan sections
 

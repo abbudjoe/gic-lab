@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-agent-check-receipt.schema.json",
+  "title": "T09 aggregate agent check receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_commit",
+    "repository_tree",
+    "checks",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "repository_commit": {"$ref": "#/$defs/git"},
+    "repository_tree": {"$ref": "#/$defs/git"},
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_version_lint",
+        "registry_completeness",
+        "incident_completeness",
+        "offline_composition",
+        "category3_shadow",
+        "state_capsule",
+        "source_binding"
+      ],
+      "properties": {
+        "active_version_lint": {"$ref": "#/$defs/check"},
+        "registry_completeness": {"$ref": "#/$defs/check"},
+        "incident_completeness": {"$ref": "#/$defs/check"},
+        "offline_composition": {"type": "object"},
+        "category3_shadow": {"type": "object"},
+        "state_capsule": {"$ref": "#/$defs/check"},
+        "source_binding": {"$ref": "#/$defs/check"}
+      }
+    },
+    "complete": {"type": "boolean"},
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "check": {
+      "type": "object",
+      "required": ["complete", "semantic_sha256"],
+      "properties": {
+        "complete": {"type": "boolean"},
+        "semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

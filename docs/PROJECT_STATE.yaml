@@ -11,6 +11,38 @@ authorized_run_profile: null
 current_execution_control:
   path: experiments/EXP-0001-sira-simulative-vs-reactive/T09_AUTONOMOUS_RETRY2_V9_TERMINAL_CONTROL.json
   sha256: fe163011a02094586ae97cc569331699cb57135be8fdd71d19d730d5f7afd068
+agent_state_capsule:
+  generator: src/giclab/control/state_capsule.py
+  schema: schemas/agent-state-capsule.schema.json
+  goal_record: control/goals/EXP-0001.yaml
+  required_before_significant_work: true
+  project_state_role: historical-and-human-projection
+t09_v16_stopped_checkpoint:
+  task: T09-AUTONOMOUS-V16-PREFLIGHT
+  terminal_state: category_3_v16_stopped_material_failure_cleanup_verified
+  plan_id: PLAN-EXP0001-PILOT-V16
+  merged_package: 450a10a51eda4c428f20b27d6b4aafc4f94d80f4
+  authenticated_metadata_gets: 1
+  lambda_launch_posts: 0
+  provider_resources_created: 0
+  empirical_attempts: 0
+  scientific_interpretation_allowed: false
+  current_turn_execution_authorized: false
+  provider_absence_verified_from_retained_evidence: true
+  incident: INC-T09-V16-LIFECYCLE-REGISTRY
+  evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
+t09_control_plane_stabilization_workstream:
+  status: in-progress
+  branch: codex/t09-control-plane-stabilization
+  semantic_contract_registry_complete: true
+  offline_composition_valid: true
+  shadow_happy_path_valid: true
+  required_failure_matrix_valid: true
+  live_authorization: false
+  scientific_interpretation_allowed: false
+  next_runtime_package: not-created
+  next_runtime_package_identity: V17
+  next_permitted_action: review-and-merge-stabilization-before-fresh-package-generation
 planned_execution_substrate: null
 historical_execution_substrate:
   decision_state: bounded-smoke-v3-ready-unauthorized
@@ -443,4 +475,4 @@ t09_autonomous_retry2_v9_checkpoint:
   scientific_result_claimed: false
   experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: '2026-08-27'
+last_updated: '2026-08-31'

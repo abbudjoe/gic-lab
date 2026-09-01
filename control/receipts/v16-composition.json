@@ -1,0 +1,35 @@
+{
+  "authorization_schema_sha256": "8b61a8f7e572abfd5ed6347998c2829af0f114c6b7ca457e81e8691c5574a70a",
+  "blockers": [
+    "current-turn-live-authority-is-external-and-not-present",
+    "historical-v16-prelaunch-authority-is-consumed"
+  ],
+  "budget_envelope_sha256": "a8e844f81b59578fb1493c975912320d414c99e85f17f3b56ecc94009874a66f",
+  "cleanup_family": "empirical-prefix",
+  "command_package_family": "autonomous",
+  "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+  "control_binding_schema_sha256": "38e2c53d47d20ecea991727c991b3d7a865fe9cae238dcdc76616b43fb7a01da",
+  "downstream_source_contract_sha256": "2056be71c23cad502d67b48e9632904c6703b1b45f3c715fdf04f9147111e3a6",
+  "evidence_identity_sha256": "7103c2a33857806d0090aa6fbda04f94d9b239c0f7209f51a625cd2c69a25cae",
+  "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+  "lifecycle_sha256": "f4ab34f7f8d86057e570e7a81271ca45a1c8b32ffaa803579c7b6e9d12727a04",
+  "metadata_policy": "local-prelaunch-receipt",
+  "pair_diff_sha256s": [
+    "d9ce275328eae0d9795881bfd5b73d184bd4994592a418a8aaf681df09ff5713",
+    "75f13841991b80fc3b8c0a2cf3148dc46e898dfad9bce4987f2681fc3d7e7c72"
+  ],
+  "privacy_contract_sha256": "8348ae008a039ebb9db6e151e55195de62353945d1f08796b953dbf6bc0d3369",
+  "provider_contract_sha256": "9019f101aa9d66430fdf990d40091756c5b4c9a7ff48cc1a09962326431e2939",
+  "provider_contract_version": "V16",
+  "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+  "ready_for_authenticated_preflight": false,
+  "ready_for_shadow": true,
+  "registry_receipt_sha256": "9a098076c01f8494a7e53865eb4ee1ca50d42c90d0d6dfe4f3c534b7cc746eb0",
+  "replacement_policy": "bounded-preflight",
+  "repository_commit": "efd34ee5e468e474b163e351b8bcd5be97d1f768",
+  "repository_tree": "7fda7a4f8c77aa24f207b860d819040e4680c290",
+  "schema_version": "1.0.0",
+  "semantic_sha256": "4c432e5e11dac3fd98e7336de194be8634931899604f68c000408ff9bcfd4b08",
+  "static_composition_valid": true,
+  "version_lint_receipt_sha256": "23232f847f5848f5247988c4de74dbb5c6ae777fb66279d6d386d8d4d3c6a185"
+}
