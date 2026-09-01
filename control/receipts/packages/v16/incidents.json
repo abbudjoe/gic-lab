@@ -1,0 +1,58 @@
+{
+  "complete": true,
+  "incident_count": 3,
+  "incidents": [
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+      "path": "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
+      "regression_nodes": [
+        "tests/control/test_target_selection.py::test_current_goal_selects_exact_v16_target",
+        "tests/control/test_target_selection.py::test_synthetic_package_bound_successor_selects_v17_without_shared_edits",
+        "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation",
+        "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
+      ],
+      "regression_output": "....                                                                     [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
+      "path": "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json",
+      "regression_nodes": [
+        "tests/control/test_live_effect_conformance.py::test_live_shaped_package_effect_conformance_is_schema_valid",
+        "tests/control/test_live_effect_conformance.py::test_anti_shadow_lint_inventory_and_mutations",
+        "tests/control/test_effect_runtime_seams.py::test_noncanonical_parser_credential_reaches_injected_channel_and_is_destroyed",
+        "tests/control/test_effect_runtime_seams.py::test_plan_and_condition_budgets_reject_drift_and_cross_substitution",
+        "tests/control/test_package_effect_loader.py::test_exact_package_effect_factory_loads_and_builds_production_assembly",
+        "tests/control/test_package_effect_loader.py::test_live_grant_rejects_every_changed_authorization_binding",
+        "tests/control/test_production_coupling.py::test_post_export_raw_mutation_stops_before_effect_finalizer",
+        "tests/control/test_production_coupling.py::test_effect_produced_answer_changes_retained_evaluator_output"
+      ],
+      "regression_output": ".................                                                        [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-V16-LIFECYCLE-REGISTRY",
+      "path": "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+      "regression_nodes": [
+        "tests/control/test_production_coupling.py::test_registered_active_contract_reaches_production_adapter_assembly",
+        "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access",
+        "tests/control/test_category3_shadow.py::test_lifecycle_omission_stops_before_every_external_boundary"
+      ],
+      "regression_output": "...                                                                      [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    }
+  ],
+  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
+  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "schema_version": "1.0.0",
+  "semantic_sha256": "1edfd8bf93250992afbd5374f17df891077a57bcf5ee4423687b6fc4643f23b9"
+}

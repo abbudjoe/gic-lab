@@ -1,0 +1,239 @@
+{
+  "actual_v17_artifacts_created": false,
+  "actual_v17_artifacts_present": false,
+  "complete": true,
+  "control_implementation_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
+  "control_implementation_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "effect_protocol_version": "1.0.0",
+  "live_authority_created": false,
+  "network_provider_cloud_browser_science_effects": 0,
+  "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "2a001bb775fbf7e8755f23b1f1ed4f70bb083ac2c65cdfd7f3f180f3d6c1500a",
+  "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
+  "shared_source_byte_map_unchanged": true,
+  "temporary_package": {
+    "authorization_context_semantic_sha256": "eca9affab5da636a2fa21afe48f081c5fde2a4c59faf371ae101ba519255796c",
+    "browser_accounting": {
+      "multiple_actions_per_condition": true,
+      "total_actions": 8
+    },
+    "cleanup": {
+      "privacy_clean": true,
+      "provider_resources_zero": true,
+      "resumed": false,
+      "security_restored": true,
+      "state": "complete"
+    },
+    "clock": {
+      "domains_separate": true,
+      "injected": true,
+      "monotonic_sample_count": 177,
+      "sleep_calls": [
+        0.25,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        5.0
+      ],
+      "wall_sample_count": 54
+    },
+    "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+    "condition_traces": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 3,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      },
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 5,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default",
+          "policy",
+          "world_model"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      },
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 3,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      },
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 5,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default",
+          "policy",
+          "world_model"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      }
+    },
+    "controller_terminal_state": "category3-live-complete-clean",
+    "effect_implementation": {
+      "bytes": 888,
+      "factory_entry_point": "build_package_effects",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
+      "protocol_version": "1.0.0",
+      "sha256": "1e7ff01bde5c21c83c6ba4fb49c62422b42ce81679f3420bb40e309e6d2fb411"
+    },
+    "host_transaction": {
+      "dynamic_frozen_manifest": true,
+      "preflight_qualification_freeze_receipts_validated": true,
+      "retained_provider_entry_consumed": true,
+      "tracked_package_staged_and_acknowledged": true
+    },
+    "metadata": {
+      "credential_material_retained": false,
+      "noncanonical_runtime_credential_reached_channel": true,
+      "request_count": 1,
+      "zero_pagination": true,
+      "zero_redirect": true,
+      "zero_retry": true
+    },
+    "model_call_accounting": {
+      "roles_are_multi_role": true,
+      "stable_unique_call_ids": true,
+      "terminal_states_complete": true,
+      "total_calls": 16,
+      "zero_retries": true
+    },
+    "package_budget": {
+      "aggregate_caps": {
+        "max_browser_actions": 120,
+        "max_cached_input_tokens": 4000000,
+        "max_cost_usd": 40.0,
+        "max_input_tokens": 4000000,
+        "max_model_call_attempts": 4620,
+        "max_output_bytes": 2147483648,
+        "max_output_tokens": 4000000,
+        "max_total_tokens": 4000000,
+        "max_wall_seconds": 14400
+      },
+      "attempt_order": [
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+      ],
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "condition_caps": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        }
+      },
+      "condition_plan_sha256s": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "8c0b447b794853e9f69fe9fc665cde632e3c4d0aa9a99a4346d46f345aaf20bf",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "30515859c919b5dd62a821b57efeb39135760c059ee9a05fbe1c6d54b269ca1c",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "6a3bc1f4775bc27dcb8aaa19770ce43a72e03da0a7466a8eba978121a2d6170d",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "081af4f0f0477f529b06df136a72042dd792508af33adb3a34bf31d7e3959378"
+      },
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "model_revision": "gpt-4o-2024-11-20",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "service_tier": "default",
+      "zero_retry": true
+    },
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "projected_real_cost_usd": "0.00",
+    "provider_contract_version": "V16",
+    "raw_finalizer_evaluator_chain": {
+      "attempt_count": 4,
+      "effect_answer_reached_finalized_session": true,
+      "evaluator_consumed_finalized_sessions": true,
+      "finalizer_consumed_raw_manifests": true,
+      "raw_files_hash_validated": true
+    },
+    "repository_state_grants_authority": false,
+    "scientific_interpretation_allowed": false,
+    "temporary_conformance_grant_only": true,
+    "temporary_repository_commit": "c0b8c18a6bd71298e5edfd7d5baa828e316ca5b6",
+    "temporary_repository_tree": "064808e1409b96878e29b9a2279e0ce960042eff",
+    "typed_failure_accounting": {
+      "ambiguous-task-model-send": {
+        "model_call_attempts": 1,
+        "terminal_state": "sent_outcome_unknown",
+        "unknown_outcomes": 1,
+        "zero_retries": true
+      },
+      "known-provider-exception": {
+        "model_call_attempts": 1,
+        "terminal_state": "sent_provider_error_reconciled",
+        "unknown_outcomes": 0,
+        "zero_retries": true
+      },
+      "response-accounting-incomplete": {
+        "model_call_attempts": 1,
+        "terminal_state": "sent_outcome_unknown",
+        "unknown_outcomes": 1,
+        "zero_retries": true
+      }
+    },
+    "zero_real_effects": true
+  }
+}
