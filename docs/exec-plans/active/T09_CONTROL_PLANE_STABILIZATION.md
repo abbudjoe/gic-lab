@@ -260,7 +260,7 @@ review path because the governing operator contract prohibits subagents.
 
 ### PR #13 exact-head review repair
 
-Assembly status: **implemented and locally focused — final gates pending**
+Assembly status: **implemented and locally validated — parity and exact-head GitHub gates pending**
 
 Review `5078551304` examined commit
 `ccb5ee0fc454111a976c6de951d798a630a537b9`, tree
@@ -292,6 +292,13 @@ maps to RC-06; goal/capsule/incident validation maps to RC-07 and RC-08; orderin
 preservation, receipt rebinding, and final review map to RC-09 through RC-12. The
 operator prohibits delegation, so direct Sol/max source/spec review replaces the
 assembly workflow's subagent review.
+
+Local final-gate evidence on 2026-09-01: the complete focused repair batch passed
+176/176 nodes without skips or xfails; the raw suite reported 2,067 passed, the same
+23 inherited failures, and the same five inherited private-fixture skips; Ruff,
+strict mypy, repository validation, goal-derived V16 agent-check, pinned-Quarto site
+render/validation, and `git diff --check` passed. Base-relative parity, the draft PR
+update, and exact-head GitHub Actions remain the only RC-12 work.
 
 ## Next permitted phase
 

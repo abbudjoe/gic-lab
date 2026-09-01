@@ -505,7 +505,7 @@ required: no merge or auto-merge is authorized.
 
 ## PR #13 review 5078551304 repair assembly
 
-Status: **in-progress**
+Status: **local repair and validation complete; parity, PR update, and exact-head Actions pending**
 
 The exact reviewed identity was verified before mutation:
 
@@ -533,10 +533,10 @@ Exact root-cause inventory:
 
 | Finding | Reviewed defect | Repair contract | Status |
 |---|---|---|---|
-| A | `validate_selected_runtime_target_document()` and capsule proof validation substitute the mutable working-tree goal; repository validation selects only one current root | Resolve a serialized target from exact goal bytes in its bound commit, enumerate every sealed root, and apply current-goal compatibility only to the active root | in-progress |
-| B | `_publish_receipt_tree()` creates the final root and moves children individually, so interruption can expose an unrecoverable partial root | Validate and sync one same-parent staging tree, then commit it to an absent final path with one no-replace directory rename | in-progress |
-| C | AST lint misses `V16_PROVIDER_CONTRACT` imports, aliases, names, and attributes | Track versioned provider-contract symbols and reject their use in active runtime code with narrow registry/historical exceptions | in-progress |
-| D | Goal/capsule names a resolved incident as blocker and recommends completed implementation | Separate nullable technical blocker, external governance gate, and next subgoal; cross-check blocker status against the append-only incident ledger | in-progress |
+| A | `validate_selected_runtime_target_document()` and capsule proof validation substitute the mutable working-tree goal; repository validation selects only one current root | Resolve a serialized target from exact goal bytes in its bound commit, enumerate every sealed root, and apply current-goal compatibility only to the active root | met |
+| B | `_publish_receipt_tree()` creates the final root and moves children individually, so interruption can expose an unrecoverable partial root | Validate and sync one same-parent staging tree, then commit it to an absent final path with one no-replace directory rename | met |
+| C | AST lint misses `V16_PROVIDER_CONTRACT` imports, aliases, names, and attributes | Track versioned provider-contract symbols and reject their use in active runtime code with narrow registry/historical exceptions | met |
+| D | Goal/capsule names a resolved incident as blocker and recommends completed implementation | Separate nullable technical blocker, external governance gate, and next subgoal; cross-check blocker status against the append-only incident ledger | met |
 
 The authoritative RC-01 through RC-12 evidence checklist and implementation mapping
 are recorded in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. No RC
@@ -648,3 +648,22 @@ publication/lint/capsule/incident batch, the 21-test target/error/aggregate batc
 the 11-test simultaneous historical/current-root batch pass. RC-12 remains
 in-progress until the full/parity/static/privacy/site gates, exact descendant commit,
 draft-PR update, and exact-head GitHub Actions complete.
+
+The complete focused review-repair batch covers target selection, historical/current
+roots, publication interruption, direct-constant lint, capsule/incident consistency,
+proof forgery, production coupling, registry completeness, and all shadow scenarios:
+**176 passed, 0 failed, 0 skipped** in 665.74 seconds. The final raw repository suite
+reports **2,067 passed, 23 inherited failures, and 5 inherited private-fixture skips**
+in 774.57 seconds. The sole stale review-repair-era test was corrected in ordinary
+descendant commits `864fe50856657ac9e521c112d02b70fc968383e6` and
+`baca8d77395d2f55975b5a1887639fbea9ec142c`: it now mutates the actual sealed
+`agent-check.json` bytes and proves the historical root rejects the bound-file hash
+drift, instead of mocking the retired current-goal projection loader.
+
+Final local static and orientation gates at that descendant are green: Ruff format
+and lint cover 203 files, strict mypy covers 82 source files, `giclab-validate all`
+passes, `make agent-check` selects goal-derived V16 across 14 registered contracts
+and all 16 shadow scenarios, and pinned Quarto 1.9.38 renders all 16 public notebook
+pages before `giclab-validate site` passes. `git diff --check` is clean. Exact
+base-relative `make ci-check`, the PR update, and exact-head Actions remain before
+RC-12 can become met.
