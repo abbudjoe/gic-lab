@@ -408,13 +408,19 @@ def test_output_root_contract_rejects_escape_symlink_partial_and_sealed(
 
     symlink_root.mkdir()
     (symlink_root / "partial.json").write_text("{}\n", encoding="utf-8")
-    with pytest.raises(ValueError, match="partial"):
+    assert (
         cli._new_receipt_output_path(
             repository,
             Path("control/receipts/packages/v16"),
             target=target,
         )
-    shutil.rmtree(symlink_root)
+        == symlink_root
+    )
+    recovery = cli._recover_unsealed_receipt_root(symlink_root)
+    assert recovery == repository / "control/receipts/packages/.v16-unowned-partial-recovery"
+    assert not symlink_root.exists()
+    assert recovery is not None and (recovery / "partial.json").is_file()
+    shutil.rmtree(recovery)
 
     symlink_root.mkdir()
     (symlink_root / "t09-control-receipt-bindings.json").write_text("{}\n")

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -20,17 +22,19 @@ from giclab.control.agent_check import run_agent_check
 from giclab.control.composition import compose_control_plane
 from giclab.control.incidents import validate_incidents
 from giclab.control.proofs import (
+    BOUND_GOAL_RECORD,
     REPOSITORY_SLUG,
     ControlProofReference,
     generate_control_binding_document,
     generate_source_binding_receipt,
-    validate_control_receipt_set,
+    validate_current_control_receipt_set,
 )
 from giclab.control.registry_validation import validate_registry_completeness
 from giclab.control.scenarios import HAPPY_PATH, REQUIRED_FAILURE_SCENARIOS
 from giclab.control.shadow import run_required_shadow_matrix, run_shadow_scenario
 from giclab.control.state_capsule import generate_state_capsule
 from giclab.control.target import (
+    GOAL_RECORD,
     SelectedRuntimeTarget,
     resolve_selected_runtime_target,
 )
@@ -75,6 +79,16 @@ def _write_json(approved_root: Path, path: Path, document: object) -> dict[str, 
         "bytes": len(encoded),
         "file_sha256": hashlib.sha256(encoded).hexdigest(),
         "semantic_sha256": semantic,
+    }
+
+
+def _write_bytes(approved_root: Path, path: Path, encoded: bytes) -> dict[str, object]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(encoded)
+    return {
+        "path": path.relative_to(approved_root).as_posix(),
+        "bytes": len(encoded),
+        "file_sha256": hashlib.sha256(encoded).hexdigest(),
     }
 
 
@@ -385,7 +399,11 @@ def _generate_receipt_tree(
     )
 
     composition_name = f"{contract.version.lower()}-composition.json"
+    goal_bytes = (repository / GOAL_RECORD).read_bytes()
+    if hashlib.sha256(goal_bytes).hexdigest() != target.goal_record_sha256:
+        raise ValueError("goal bytes changed after target selection")
     written = [
+        _write_bytes(output, output / BOUND_GOAL_RECORD, goal_bytes),
         _write_json(output, output / "active-version-lint.json", lint),
         _write_json(output, output / "registry-completeness.json", registry),
         _write_json(output, output / composition_name, composition),
@@ -411,6 +429,7 @@ def _generate_receipt_tree(
         control_commit=commit,
         control_tree=tree,
         target=target,
+        goal_record_snapshot=output / BOUND_GOAL_RECORD,
         registry_receipt=output / "registry-completeness.json",
         active_version_lint_receipt=output / "active-version-lint.json",
         composition_receipt=output / composition_name,
@@ -430,7 +449,7 @@ def _generate_receipt_tree(
     )
     binding_sha = binding_identity["file_sha256"]
     assert isinstance(binding_sha, str)
-    validate_control_receipt_set(
+    validate_current_control_receipt_set(
         repository,
         contract,
         _receipt_reference(
@@ -493,7 +512,7 @@ def _new_receipt_output_path(
             binding = cursor / "t09-control-receipt-bindings.json"
             if binding.is_file() and not binding.is_symlink():
                 raise ValueError("sealed receipt output root cannot be overwritten")
-            raise ValueError("existing partial receipt output root is unsafe")
+            return cursor
         if not stat.S_ISDIR(metadata.st_mode):
             raise ValueError("receipt output root parent is not a directory")
     return repository / Path(*pure.parts)
@@ -512,13 +531,133 @@ def _ensure_output_parent(repository: Path, output: Path) -> None:
             cursor.mkdir()
 
 
-def _publish_receipt_tree(staging: Path, output: Path) -> None:
-    """Reserve the final root atomically, then publish without replacing any path."""
+def _commit_path_no_replace(source: Path, destination: Path) -> None:
+    """Rename one complete same-parent path without replacing a concurrent winner."""
 
-    output.mkdir()
-    for child in sorted(staging.iterdir(), key=lambda path: path.name):
-        child.rename(output / child.name)
-    staging.rmdir()
+    if source.parent != destination.parent:
+        raise ValueError("atomic receipt commit requires one shared parent")
+    libc = ctypes.CDLL(None, use_errno=True)
+    source_bytes = os.fsencode(source)
+    destination_bytes = os.fsencode(destination)
+    if sys.platform == "darwin":
+        rename = libc.renamex_np
+        rename.argtypes = (ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint)
+        rename.restype = ctypes.c_int
+        result = rename(source_bytes, destination_bytes, 0x00000004)
+    elif sys.platform.startswith("linux"):
+        rename = libc.renameat2
+        rename.argtypes = (
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.c_uint,
+        )
+        rename.restype = ctypes.c_int
+        result = rename(-100, source_bytes, -100, destination_bytes, 0x00000001)
+    else:  # pragma: no cover - repository CI supports macOS and Linux
+        raise OSError(errno.ENOTSUP, "atomic no-replace directory commit is unsupported")
+    if result != 0:
+        error = ctypes.get_errno()
+        if error in {errno.EEXIST, errno.ENOTEMPTY}:
+            raise FileExistsError(error, os.strerror(error), destination)
+        raise OSError(error, os.strerror(error), destination)
+
+
+def _fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    descriptor = os.open(path, flags)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _sync_receipt_tree(staging: Path) -> None:
+    """Durably prepare every regular file and directory before publication."""
+
+    directories = [staging]
+    for path in sorted(staging.rglob("*"), key=lambda item: item.as_posix()):
+        metadata = path.stat(follow_symlinks=False)
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ValueError("receipt staging tree contains a symbolic link")
+        if stat.S_ISDIR(metadata.st_mode):
+            directories.append(path)
+            continue
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("receipt staging tree contains a non-regular artifact")
+        descriptor = os.open(path, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+    for directory in sorted(directories, key=lambda item: len(item.parts), reverse=True):
+        _fsync_directory(directory)
+
+
+def _recovery_path(output: Path) -> Path:
+    return output.parent / f".{output.name}-unowned-partial-recovery"
+
+
+def _recover_unsealed_receipt_root(output: Path) -> Path | None:
+    """Atomically quarantine an exact unsealed root so normal generation can resume."""
+
+    if not os.path.lexists(output):
+        return None
+    metadata = output.stat(follow_symlinks=False)
+    if stat.S_ISLNK(metadata.st_mode):
+        raise ValueError("receipt output root contains a symbolic link")
+    binding = output / "t09-control-receipt-bindings.json"
+    if stat.S_ISDIR(metadata.st_mode) and binding.is_file() and not binding.is_symlink():
+        raise ValueError("sealed receipt output root cannot be overwritten")
+    recovery = _recovery_path(output)
+    if os.path.lexists(recovery):
+        raise ValueError(f"unsealed receipt recovery path already exists: {recovery.name}")
+    _commit_path_no_replace(output, recovery)
+    _fsync_directory(output.parent)
+    return recovery
+
+
+def _receipt_trees_identical(first: Path, second: Path) -> bool:
+    def identities(root: Path) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for path in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+            metadata = path.stat(follow_symlinks=False)
+            if stat.S_ISLNK(metadata.st_mode) or (
+                not stat.S_ISDIR(metadata.st_mode) and not stat.S_ISREG(metadata.st_mode)
+            ):
+                return {}
+            if stat.S_ISREG(metadata.st_mode):
+                result[path.relative_to(root).as_posix()] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+        return result
+
+    first_identities = identities(first)
+    return bool(first_identities) and first_identities == identities(second)
+
+
+def _publish_receipt_tree(staging: Path, output: Path) -> Path | None:
+    """Publish one prevalidated complete tree through one atomic no-replace commit."""
+
+    _sync_receipt_tree(staging)
+    _fsync_directory(output.parent)
+    try:
+        _commit_path_no_replace(staging, output)
+    except FileExistsError:
+        binding = output / "t09-control-receipt-bindings.json"
+        if binding.is_file() and not binding.is_symlink():
+            if _receipt_trees_identical(staging, output):
+                shutil.rmtree(staging)
+                _fsync_directory(output.parent)
+                return None
+            raise
+        recovered = _recover_unsealed_receipt_root(output)
+        _commit_path_no_replace(staging, output)
+    else:
+        recovered = None
+    _fsync_directory(output.parent)
+    return recovered
 
 
 def _command_refresh_receipts(args: argparse.Namespace) -> tuple[object, bool]:
@@ -533,6 +672,7 @@ def _command_refresh_receipts(args: argparse.Namespace) -> tuple[object, bool]:
     )
     commit, tree = _clean_git_identity(repository)
     _ensure_output_parent(repository, output)
+    recovered = _recover_unsealed_receipt_root(output)
     staging = Path(
         tempfile.mkdtemp(
             prefix=f".{target.selected_contract.version.lower()}-receipt-staging-",
@@ -547,11 +687,13 @@ def _command_refresh_receipts(args: argparse.Namespace) -> tuple[object, bool]:
             commit=commit,
             tree=tree,
         )
-        _publish_receipt_tree(staging, output)
+        publication_recovery = _publish_receipt_tree(staging, output)
+        if recovered is None:
+            recovered = publication_recovery
         binding_sha = result.get("binding_file_sha256")
         if not isinstance(binding_sha, str):
             raise ValueError("generated binding identity is unavailable")
-        validate_control_receipt_set(
+        validate_current_control_receipt_set(
             repository,
             target.selected_contract,
             _receipt_reference(
@@ -567,6 +709,9 @@ def _command_refresh_receipts(args: argparse.Namespace) -> tuple[object, bool]:
             shutil.rmtree(staging)
         raise
     result["output_root"] = args.output_root.as_posix()
+    result["recovered_unsealed_root"] = (
+        recovered.relative_to(repository).as_posix() if recovered is not None else None
+    )
     result.pop("semantic_sha256", None)
     result["semantic_sha256"] = _semantic_sha256(result)
     return result, result.get("complete") is True

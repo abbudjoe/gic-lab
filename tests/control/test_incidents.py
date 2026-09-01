@@ -23,7 +23,8 @@ def test_v16_incident_validates_and_named_regressions_pass() -> None:
         "INC-T09-V16-LIFECYCLE-REGISTRY",
     }
     assert all(incident["regressions_passed"] is True for incident in incidents.values())
-    assert all(len(incident["regression_nodes"]) == 3 for incident in incidents.values())
+    assert len(incidents["INC-T09-V16-LIFECYCLE-REGISTRY"]["regression_nodes"]) == 3
+    assert len(incidents["INC-T09-CONTROL-FIXED-TARGET-SELECTION"]["regression_nodes"]) == 4
 
 
 def test_resolved_incident_with_missing_regression_fails() -> None:

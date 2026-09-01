@@ -16,7 +16,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "3.0.0"},
+    "schema_version": {"const": "4.0.0"},
     "repository_slug": {"const": "abbudjoe/gic-lab"},
     "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "control_plane_revision": {
@@ -75,6 +75,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
+        "goal_record",
         "registry_receipt",
         "active_version_lint_receipt",
         "composition_receipt",
@@ -86,6 +87,7 @@
         "incident_receipt"
       ],
       "properties": {
+        "goal_record": {"$ref": "#/$defs/byteArtifact"},
         "registry_receipt": {"$ref": "#/$defs/artifact"},
         "active_version_lint_receipt": {"$ref": "#/$defs/artifact"},
         "composition_receipt": {"$ref": "#/$defs/artifact"},
@@ -129,6 +131,16 @@
         "bytes": {"type": "integer", "minimum": 2},
         "file_sha256": {"$ref": "#/$defs/sha256"},
         "semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "byteArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "file_sha256"],
+      "properties": {
+        "path": {"const": "bound-goal-record.yaml"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "file_sha256": {"$ref": "#/$defs/sha256"}
       }
     }
   }

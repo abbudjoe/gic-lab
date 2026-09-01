@@ -7,6 +7,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -136,6 +137,15 @@ def _load_goal(repository: Path) -> tuple[dict[str, object], str]:
         encoded = path.read_bytes()
     except OSError as exc:
         raise TargetSelectionError(f"goal record is unavailable: {exc}") from exc
+    return _parse_goal_bytes(repository, encoded)
+
+
+def _parse_goal_bytes(
+    repository: Path,
+    encoded: bytes,
+) -> tuple[dict[str, object], str]:
+    """Parse exact goal bytes without substituting the working-tree record."""
+
     if not encoded or len(encoded) > _MAX_GOAL_BYTES:
         raise TargetSelectionError("goal record byte size is unsafe")
     try:
@@ -146,6 +156,28 @@ def _load_goal(repository: Path) -> tuple[dict[str, object], str]:
         raise TargetSelectionError("goal record is not an object")
     _public_safe(loaded, repository=repository)
     return loaded, hashlib.sha256(encoded).hexdigest()
+
+
+def _git_blob(repository: Path, commit: str, relative: str) -> bytes:
+    if re.fullmatch(r"[a-f0-9]{40}", commit) is None:
+        raise TargetSelectionError("bound control commit is malformed")
+    completed = subprocess.run(
+        ["git", "-C", str(repository), "show", f"{commit}:{relative}"],
+        env={
+            "PATH": os.defpath,
+            "LANG": "C",
+            "LC_ALL": "C",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+        },
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    if completed.returncode != 0:
+        raise TargetSelectionError(f"bound package artifact is unavailable: {relative}")
+    return completed.stdout
 
 
 def _regular_relative_file(repository: Path, relative: str, *, role: str) -> Path:
@@ -173,9 +205,103 @@ def _regular_package_file(repository: Path, relative: str | None, *, role: str) 
     return _regular_relative_file(repository, relative, role=f"selected contract {role}")
 
 
+def _declared_artifact_identities(value: object) -> dict[str, str]:
+    """Collect package-owned plan, execution, command, and condition identities."""
+
+    identities: dict[str, str] = {}
+
+    def visit(current: object) -> None:
+        if isinstance(current, dict):
+            for key, child in current.items():
+                if isinstance(child, str):
+                    sha_key = None
+                    if key in {
+                        "plan_path",
+                        "provider_profile_path",
+                        "execution_contract_path",
+                        "command_manifest_path",
+                        "condition_plan_path",
+                    }:
+                        sha_key = f"{key[:-5]}_sha256"
+                    expected = current.get(sha_key) if sha_key is not None else None
+                    if isinstance(expected, str) and _HEX64.fullmatch(expected):
+                        previous = identities.setdefault(child, expected)
+                        if previous != expected:
+                            raise TargetSelectionError(
+                                "selected package declares conflicting artifact identities"
+                            )
+                visit(child)
+        elif isinstance(current, list):
+            for child in current:
+                visit(child)
+
+    visit(value)
+    return identities
+
+
+def _structured_package_document(path: Path) -> Mapping[str, object]:
+    try:
+        value = yaml.safe_load(path.read_bytes())
+    except (UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise TargetSelectionError("selected package document is malformed") from exc
+    if not isinstance(value, dict):
+        raise TargetSelectionError("selected package document is not an object")
+    return value
+
+
+def _validate_bound_package_bytes(
+    repository: Path,
+    contract: T09ProviderContract,
+    *,
+    bound_commit: str,
+) -> None:
+    """Prove package bytes used by a historical target existed in its bound commit."""
+
+    primary: dict[str, str] = {}
+    for relative, expected in (
+        (contract.plan_path, contract.expected_plan_sha256),
+        (contract.provider_profile_path, contract.expected_provider_profile_sha256),
+        (contract.command_manifest_path, contract.expected_command_manifest_sha256),
+    ):
+        if relative is None or expected is None:
+            raise TargetSelectionError("selected contract lacks a bound package identity")
+        previous = primary.setdefault(relative, expected)
+        if previous != expected:
+            raise TargetSelectionError("selected contract package identities conflict")
+
+    documents: list[Mapping[str, object]] = []
+    for relative in (
+        contract.plan_path,
+        contract.provider_profile_path,
+        contract.execution_contract_path,
+        contract.command_manifest_path,
+    ):
+        if relative is None:
+            raise TargetSelectionError("selected contract lacks a required package artifact")
+        path = _regular_relative_file(repository, relative, role="bound package artifact")
+        documents.append(_structured_package_document(path))
+
+    declared = dict(primary)
+    for document in documents:
+        for relative, expected in _declared_artifact_identities(document).items():
+            previous = declared.setdefault(relative, expected)
+            if previous != expected:
+                raise TargetSelectionError("selected package artifact identities conflict")
+
+    for relative, expected in sorted(declared.items()):
+        path = _regular_relative_file(repository, relative, role="bound package artifact")
+        current = path.read_bytes()
+        if hashlib.sha256(current).hexdigest() != expected:
+            raise TargetSelectionError(f"bound package artifact identity drifted: {relative}")
+        if _git_blob(repository, bound_commit, relative) != current:
+            raise TargetSelectionError(f"bound package artifact differs from Git: {relative}")
+
+
 def _selected_package_identity(
     repository: Path,
     contract: T09ProviderContract,
+    *,
+    bound_commit: str | None = None,
 ) -> str:
     expected_plan_id = f"PLAN-EXP0001-PILOT-{contract.version}"
     if contract.plan_id != expected_plan_id or contract.provider_profile_id != expected_plan_id:
@@ -222,6 +348,12 @@ def _selected_package_identity(
         raise TargetSelectionError("selected command package lacks execution identity")
     if hashlib.sha256(execution_path.read_bytes()).hexdigest() != execution_sha256:
         raise TargetSelectionError("selected execution-contract identity drifted")
+    if bound_commit is not None:
+        _validate_bound_package_bytes(
+            repository,
+            contract,
+            bound_commit=bound_commit,
+        )
     return command_sha256
 
 
@@ -245,6 +377,43 @@ def resolve_selected_runtime_target(
 
     root = repository.resolve(strict=True)
     goal, goal_sha256 = _load_goal(root)
+    return _resolve_selected_runtime_target(
+        root,
+        goal=goal,
+        goal_sha256=goal_sha256,
+        explicit_provider_contract=explicit_provider_contract,
+        bound_package_commit=None,
+    )
+
+
+def resolve_selected_runtime_target_from_goal_bytes(
+    repository: Path,
+    goal_bytes: bytes,
+    *,
+    explicit_provider_contract: str | None = None,
+    bound_package_commit: str,
+) -> SelectedRuntimeTarget:
+    """Resolve a historical target from exact bound goal and package bytes."""
+
+    root = repository.resolve(strict=True)
+    goal, goal_sha256 = _parse_goal_bytes(root, goal_bytes)
+    return _resolve_selected_runtime_target(
+        root,
+        goal=goal,
+        goal_sha256=goal_sha256,
+        explicit_provider_contract=explicit_provider_contract,
+        bound_package_commit=bound_package_commit,
+    )
+
+
+def _resolve_selected_runtime_target(
+    root: Path,
+    *,
+    goal: Mapping[str, object],
+    goal_sha256: str,
+    explicit_provider_contract: str | None,
+    bound_package_commit: str | None,
+) -> SelectedRuntimeTarget:
     runtime = _required_mapping(goal, "runtime_package")
     science = _required_mapping(goal, "science")
     authority = _required_mapping(goal, "authority")
@@ -298,7 +467,11 @@ def resolve_selected_runtime_target(
     else:
         source = GOAL_SOURCE
 
-    command_sha256 = _selected_package_identity(root, selected_contract)
+    command_sha256 = _selected_package_identity(
+        root,
+        selected_contract,
+        bound_commit=bound_package_commit,
+    )
     target = SelectedRuntimeTarget(
         source=source,
         historical_contract_version=historical,
@@ -353,9 +526,30 @@ def validate_selected_runtime_target_document(
     return target
 
 
-def selected_receipt_root(target: SelectedRuntimeTarget) -> Path:
-    """Return the tracked root for the goal-selected current receipt set."""
+def validate_bound_selected_runtime_target_document(
+    repository: Path,
+    document: Mapping[str, object],
+    *,
+    goal_bytes: bytes,
+    bound_package_commit: str,
+) -> SelectedRuntimeTarget:
+    """Validate a serialized target against its receipt-bound historical goal."""
 
-    if target.successor_status == "not-created":
-        return Path("control/receipts")
-    return Path("control/receipts/packages") / target.selected_contract.version.lower()
+    root = repository.resolve(strict=True)
+    errors = _target_schema_errors(root, document)
+    if errors:
+        raise TargetSelectionError(f"selected-runtime target schema failed: {errors[0]}")
+    source = document.get("source")
+    version = document.get("selected_provider_contract_version")
+    explicit = version if source == EXPLICIT_SOURCE and isinstance(version, str) else None
+    if source not in {GOAL_SOURCE, EXPLICIT_SOURCE}:
+        raise TargetSelectionError("selected-runtime target source is unsupported")
+    target = resolve_selected_runtime_target_from_goal_bytes(
+        root,
+        goal_bytes,
+        explicit_provider_contract=explicit,
+        bound_package_commit=bound_package_commit,
+    )
+    if target.to_document() != dict(document):
+        raise TargetSelectionError("serialized target differs from bound goal/package state")
+    return target

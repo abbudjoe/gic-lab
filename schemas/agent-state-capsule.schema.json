@@ -11,6 +11,7 @@
     "repository",
     "terminal_goal",
     "current_subgoal",
+    "next_technical_subgoal",
     "science",
     "control_plane",
     "runtime_package",
@@ -20,6 +21,7 @@
     "evidence",
     "cost",
     "blocking_incident",
+    "external_governance_gate",
     "available_actions",
     "recommended_action",
     "provenance",
@@ -28,7 +30,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "2.0.0"},
+    "schema_version": {"const": "3.0.0"},
     "generated_at_policy": {"enum": ["deterministic-fixed", "caller-supplied-or-wall-clock"]},
     "generated_at": {"type": "string", "minLength": 1},
     "repository": {
@@ -42,6 +44,7 @@
     },
     "terminal_goal": {"const": "evaluate simulative versus reactive SiRA"},
     "current_subgoal": {"type": "string", "minLength": 1},
+    "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"},
     "science": {
       "type": "object",
       "additionalProperties": false,
@@ -59,7 +62,12 @@
       "required": ["revision", "status", "registry_complete", "composition_valid", "active_version_lint_valid", "shadow_happy_path", "failure_matrix_valid"],
       "properties": {
         "revision": {"const": "T09-control-target-selection"},
-        "status": {"const": "candidate-control-target-repair-branch"},
+        "status": {
+          "enum": [
+            "implementation-complete-external-governance",
+            "successor-package-bound-not-authorized"
+          ]
+        },
         "registry_complete": {"type": "boolean"},
         "composition_valid": {"type": "boolean"},
         "active_version_lint_valid": {"type": "boolean"},
@@ -126,7 +134,22 @@
         "stabilization_provider_usd": {"const": "0.00"}
       }
     },
-    "blocking_incident": {"const": "INC-T09-CONTROL-FIXED-TARGET-SELECTION"},
+    "blocking_incident": {
+      "oneOf": [
+        {"type": "null"},
+        {"type": "string", "pattern": "^INC-[A-Z0-9-]+$"}
+      ]
+    },
+    "external_governance_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "state", "repository_state_grants_authority"],
+      "properties": {
+        "kind": {"const": "independent-exact-head-review-and-explicit-merge-authorization"},
+        "state": {"const": "consult-external-state"},
+        "repository_state_grants_authority": {"const": false}
+      }
+    },
     "available_actions": {"$ref": "#/$defs/stringArray"},
     "recommended_action": {"type": "string", "minLength": 1},
     "provenance": {"$ref": "#/$defs/stringArray"},

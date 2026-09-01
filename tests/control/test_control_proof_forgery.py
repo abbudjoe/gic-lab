@@ -385,6 +385,39 @@ def test_capsule_with_private_path_marker_is_rejected(tmp_path: Path) -> None:
     _execute_forgery(proof_root)
 
 
+def test_capsule_cannot_name_a_resolved_incident_as_current_blocker(
+    tmp_path: Path,
+) -> None:
+    proof_root = _copy_proofs(tmp_path)
+    _replace_artifact(
+        proof_root,
+        binding_key="state_capsule",
+        document_path=proof_root / "state-capsule.json",
+        mutate=lambda document: document.__setitem__(
+            "blocking_incident",
+            "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+        ),
+    )
+    _execute_forgery(proof_root)
+
+
+def test_capsule_governance_gate_cannot_grant_repository_authority(
+    tmp_path: Path,
+) -> None:
+    proof_root = _copy_proofs(tmp_path)
+
+    def mutate(document: dict[str, Any]) -> None:
+        document["external_governance_gate"]["repository_state_grants_authority"] = True
+
+    _replace_artifact(
+        proof_root,
+        binding_key="state_capsule",
+        document_path=proof_root / "state-capsule.json",
+        mutate=mutate,
+    )
+    _execute_forgery(proof_root)
+
+
 def test_capsule_for_another_runtime_contract_is_rejected(tmp_path: Path) -> None:
     proof_root = _copy_proofs(tmp_path)
 

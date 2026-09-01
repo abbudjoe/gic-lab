@@ -12,14 +12,14 @@ from pathlib import Path
 from typing import Final
 
 VERSION_LITERAL: Final = re.compile(r"^V[0-9]+$")
+VERSIONED_PROVIDER_CONTRACT_SYMBOL: Final = re.compile(r"^V[1-9][0-9]*_PROVIDER_CONTRACT$")
 ANNOTATION: Final = "giclab-version-lint: historical-identity"
 SCAN_ROOTS: Final = (
     "src/giclab",
     "containers/sira-smoke/pragmatic",
 )
-# This module validates immutable historical package/schema projections. It does
-# not select runtime behavior and is kept explicit rather than hiding all t09_*.
-HISTORICAL_MODULE_ALLOWLIST: Final = frozenset({"src/giclab/validation.py"})
+CENTRAL_PROVIDER_REGISTRY: Final = "src/giclab/harness/t09_provider_contracts.py"
+ACTIVE_CONTRACT_SELECTION_ROOT: Final = "src/giclab/control/"
 ACTIVE_SELECTION_TEXT_PATHS: Final = ("Makefile", ".github/workflows/ci.yml")
 _FIXED_SELECTOR: Final = re.compile(r"--provider-contract(?:=|\s+)[\"']?(V[0-9]+)\b")
 
@@ -94,10 +94,16 @@ class _Visitor(ast.NodeVisitor):
         self.lines = lines
         self.findings: list[VersionDispatchFinding] = []
         self.assert_depth = 0
+        self.versioned_contract_aliases: set[str] = set()
+
+    def _scans_versioned_contract_symbols(self) -> bool:
+        return self.relative.startswith(ACTIVE_CONTRACT_SELECTION_ROOT)
 
     def _annotated(self, node: ast.AST) -> bool:
         line = getattr(node, "lineno", 0)
-        return 1 <= line <= len(self.lines) and ANNOTATION in self.lines[line - 1]
+        if not 1 <= line <= len(self.lines):
+            return False
+        return any(ANNOTATION in candidate for candidate in self.lines[max(0, line - 2) : line])
 
     def _add(self, node: ast.AST, *, code: str, message: str) -> None:
         self.findings.append(
@@ -169,6 +175,59 @@ class _Visitor(ast.NodeVisitor):
             )
         self.generic_visit(node)
 
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        if self._scans_versioned_contract_symbols():
+            for alias in node.names:
+                if VERSIONED_PROVIDER_CONTRACT_SYMBOL.fullmatch(alias.name):
+                    self.versioned_contract_aliases.add(alias.asname or alias.name)
+                    if not self._annotated(node):
+                        self._add(
+                            node,
+                            code="T09V007",
+                            message=(
+                                "active code imports a version-specific provider-contract "
+                                "constant; resolve the goal-compatible SelectedRuntimeTarget"
+                            ),
+                        )
+        self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        if (
+            self._scans_versioned_contract_symbols()
+            and isinstance(node.ctx, ast.Load)
+            and (
+                VERSIONED_PROVIDER_CONTRACT_SYMBOL.fullmatch(node.id)
+                or node.id in self.versioned_contract_aliases
+            )
+            and not (self.assert_depth > 0 and self._annotated(node))
+        ):
+            self._add(
+                node,
+                code="T09V008",
+                message=(
+                    "active code uses a version-specific provider-contract constant; "
+                    "resolve the goal-compatible SelectedRuntimeTarget"
+                ),
+            )
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        if (
+            self._scans_versioned_contract_symbols()
+            and isinstance(node.ctx, ast.Load)
+            and VERSIONED_PROVIDER_CONTRACT_SYMBOL.fullmatch(node.attr)
+            and not (self.assert_depth > 0 and self._annotated(node))
+        ):
+            self._add(
+                node,
+                code="T09V008",
+                message=(
+                    "active code uses a version-specific provider-contract constant; "
+                    "resolve the goal-compatible SelectedRuntimeTarget"
+                ),
+            )
+        self.generic_visit(node)
+
     def visit_Assign(self, node: ast.Assign) -> None:
         self._visit_assignment(node, node.value)
 
@@ -195,8 +254,6 @@ class _Visitor(ast.NodeVisitor):
 def lint_source(source: str, *, relative_path: str) -> tuple[VersionDispatchFinding, ...]:
     """Lint one Python source string for prohibited package-version dispatch."""
 
-    if relative_path in HISTORICAL_MODULE_ALLOWLIST:
-        return ()
     tree = ast.parse(source, filename=relative_path)
     visitor = _Visitor(relative=relative_path, lines=source.splitlines())
     visitor.visit(tree)
@@ -241,13 +298,9 @@ def validate_active_version_dispatch(repository: Path) -> dict[str, object]:
     )
     findings: list[VersionDispatchFinding] = []
     scanned: list[str] = []
-    allowlisted: list[str] = []
     for path in files:
         relative = path.relative_to(root).as_posix()
-        if relative in HISTORICAL_MODULE_ALLOWLIST:
-            allowlisted.append(relative)
-        else:
-            scanned.append(relative)
+        scanned.append(relative)
         findings.extend(lint_source(path.read_text(encoding="utf-8"), relative_path=relative))
     for relative in ACTIVE_SELECTION_TEXT_PATHS:
         path = root / relative
@@ -276,7 +329,7 @@ def validate_active_version_dispatch(repository: Path) -> dict[str, object]:
         "repository_tree": tree,
         "scan_roots": list(SCAN_ROOTS),
         "files_scanned": scanned,
-        "historical_module_allowlist": allowlisted,
+        "historical_module_allowlist": [],
         "findings": [
             asdict(item) for item in sorted(findings, key=lambda item: (item.path, item.line))
         ],

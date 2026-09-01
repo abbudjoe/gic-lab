@@ -502,3 +502,42 @@ Direct Sol/max self-review answers:
 
 All CT-01 through CT-22 outcomes are met. The terminal state remains draft review
 required: no merge or auto-merge is authorized.
+
+## PR #13 review 5078551304 repair assembly
+
+Status: **in-progress**
+
+The exact reviewed identity was verified before mutation:
+
+```text
+review_id: 5078551304
+reviewed_commit: ccb5ee0fc454111a976c6de951d798a630a537b9
+reviewed_tree: 4a5c617e3746cf3148b2d4dc85764e49d2096288
+base_commit: d0aff8a47e92013773d9d05b2cd90fb741658b03
+branch: codex/t09-control-target-selection
+pr: 13
+pr_state: open-draft-unmerged
+auto_merge: disabled
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+implementation_delegated: false
+```
+
+The local and remote task heads matched the reviewed commit, the destination still
+matched the exact base, the worktree was clean, the review contained exactly the
+four supplied findings and no unresolved review threads, and no tracked V17 package,
+receipt root, or `AUTONOMOUS-0010` identity existed. Goal and bound-receipt authority
+and science flags remained false.
+
+Exact root-cause inventory:
+
+| Finding | Reviewed defect | Repair contract | Status |
+|---|---|---|---|
+| A | `validate_selected_runtime_target_document()` and capsule proof validation substitute the mutable working-tree goal; repository validation selects only one current root | Resolve a serialized target from exact goal bytes in its bound commit, enumerate every sealed root, and apply current-goal compatibility only to the active root | in-progress |
+| B | `_publish_receipt_tree()` creates the final root and moves children individually, so interruption can expose an unrecoverable partial root | Validate and sync one same-parent staging tree, then commit it to an absent final path with one no-replace directory rename | in-progress |
+| C | AST lint misses `V16_PROVIDER_CONTRACT` imports, aliases, names, and attributes | Track versioned provider-contract symbols and reject their use in active runtime code with narrow registry/historical exceptions | in-progress |
+| D | Goal/capsule names a resolved incident as blocker and recommends completed implementation | Separate nullable technical blocker, external governance gate, and next subgoal; cross-check blocker status against the append-only incident ledger | in-progress |
+
+The authoritative RC-01 through RC-12 evidence checklist and implementation mapping
+are recorded in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. No RC
+item may become `met` until its focused evidence and the final exact-head gates pass.

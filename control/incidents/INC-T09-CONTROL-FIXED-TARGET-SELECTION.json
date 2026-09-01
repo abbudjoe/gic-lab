@@ -45,6 +45,10 @@
     {
       "kind": "test-node",
       "reference": "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
     }
   ],
   "repair": "goal-compatible-selected-runtime-target-resolver",

@@ -36,7 +36,7 @@ from giclab.control.proofs import (
     ValidatedControlReceiptSet,
     ValidatedDeterministicStaging,
     ValidatedShadowRehearsal,
-    validate_control_receipt_set,
+    validate_current_control_receipt_set,
     validate_deterministic_staging,
 )
 from giclab.harness.t09_provider_contracts import (
@@ -251,7 +251,7 @@ def prepare_category3(
     proof = request.control_proof
     try:
         if isinstance(proof, ControlProofReference):
-            validated_receipts = validate_control_receipt_set(
+            validated_receipts = validate_current_control_receipt_set(
                 request.repository,
                 request.contract,
                 proof,
