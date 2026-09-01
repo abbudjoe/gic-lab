@@ -576,8 +576,7 @@ def test_tracked_control_receipt_mutation_fails_closed(
     errors = validate_tracked_control_receipts(ROOT)
     assert any(
         error.endswith(
-            "historical control receipt root is invalid: "
-            "bound file bytes changed: agent-check.json"
+            "historical control receipt root is invalid: bound file bytes changed: agent-check.json"
         )
         for error in errors
     )
