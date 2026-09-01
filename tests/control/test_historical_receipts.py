@@ -284,6 +284,10 @@ def test_duplicate_cross_root_v16_seal_fails_inventory(
 ) -> None:
     repository, _v17_contract = successor_receipt_repository
     duplicate = repository / "control/receipts/packages/v16"
+    retained_current = repository / "control/current-v16-receipt-root"
+    had_current = duplicate.exists()
+    if had_current:
+        duplicate.rename(retained_current)
     shutil.copytree(
         repository / "control/receipts",
         duplicate,
@@ -293,6 +297,8 @@ def test_duplicate_cross_root_v16_seal_fails_inventory(
         errors = validation.validate_tracked_control_receipts(repository)
     finally:
         shutil.rmtree(duplicate)
+        if had_current:
+            retained_current.rename(duplicate)
     assert any("duplicate sealed roots select V16" in error for error in errors)
 
 
