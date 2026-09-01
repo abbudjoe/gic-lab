@@ -300,6 +300,10 @@ strict mypy, repository validation, goal-derived V16 agent-check, pinned-Quarto 
 render/validation, and `git diff --check` passed. Base-relative parity, the draft PR
 update, and exact-head GitHub Actions remain the only RC-12 work.
 
+The first exact parity attempt rejected one renamed pre-existing capsule node despite
+zero newly failing nodes. Its historical node ID is restored with the strengthened
+review-repair assertions; a fresh exact-head parity run remains required.
+
 ## Next permitted phase
 
 Complete this PR 1.1 assembly on `codex/t09-control-target-selection`, open one draft

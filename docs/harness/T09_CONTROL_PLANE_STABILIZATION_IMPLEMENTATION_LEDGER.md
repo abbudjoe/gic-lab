@@ -667,3 +667,12 @@ and all 16 shadow scenarios, and pinned Quarto 1.9.38 renders all 16 public note
 pages before `giclab-validate site` passes. `git diff --check` is clean. Exact
 base-relative `make ci-check`, the PR update, and exact-head Actions remain before
 RC-12 can become met.
+
+The first exact-base parity attempt failed closed with zero newly failing tests but
+identified one missing base node: the strengthened capsule regression had been
+renamed from
+`test_state_capsule_represents_v16_incident_and_v17_absence`. The exact historical
+node ID is retained while its assertions now prove nullable technical-blocker state,
+resolved-incident provenance, the external governance gate, and V17 absence. This is
+a test-identity preservation descendant only; it does not alter bound implementation
+source or receipts. Final exact-head parity must be rerun after this correction.
