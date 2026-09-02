@@ -238,6 +238,128 @@ def _literal_cap_findings(source: str, *, relative_path: str) -> list[AntiShadow
     return findings
 
 
+def _review_bypass_findings(source: str, *, relative_path: str) -> list[AntiShadowFinding]:
+    """Reject the exact review bypass shapes in effect-neutral source."""
+
+    findings: list[AntiShadowFinding] = []
+    tree = ast.parse(source, filename=relative_path)
+    resolved_names = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Attribute)
+        and node.value.func.attr == "resolve"
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+
+    def add(node: ast.AST, code: str, message: str) -> None:
+        findings.append(
+            AntiShadowFinding(
+                path=relative_path,
+                line=getattr(node, "lineno", 1),
+                column=getattr(node, "col_offset", 0) + 1,
+                code=code,
+                message=message,
+            )
+        )
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key, value in zip(node.keys, node.values, strict=True):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value == "decision"
+                    and isinstance(value, ast.Constant)
+                    and value.value == "continue-to-task-b"
+                ):
+                    add(
+                        value,
+                        "T09S012",
+                        "checkpoint continuation is hardcoded instead of retained-policy sourced",
+                    )
+        if isinstance(node, ast.ClassDef):
+            lowered = node.name.casefold()
+            if "live" in lowered and (
+                lowered.endswith("authority")
+                or "authoritygrant" in lowered
+                or "livegrant" in lowered
+            ):
+                opaque_dataclass = any(
+                    isinstance(decorator, ast.Call)
+                    and (
+                        (isinstance(decorator.func, ast.Name) and decorator.func.id == "dataclass")
+                        or (
+                            isinstance(decorator.func, ast.Attribute)
+                            and decorator.func.attr == "dataclass"
+                        )
+                    )
+                    and any(
+                        keyword.arg == "init"
+                        and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is False
+                        for keyword in decorator.keywords
+                    )
+                    for decorator in node.decorator_list
+                )
+                constructor_raises = any(
+                    child.name == "__init__"
+                    and any(isinstance(statement, ast.Raise) for statement in ast.walk(child))
+                    for child in node.body
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                )
+                if not opaque_dataclass or not constructor_raises:
+                    add(
+                        node,
+                        "T09S013",
+                        "live authority class is publicly constructible",
+                    )
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "is_symlink"
+            and (
+                (
+                    isinstance(node.func.value, ast.Call)
+                    and isinstance(node.func.value.func, ast.Attribute)
+                    and node.func.value.func.attr == "resolve"
+                )
+                or (isinstance(node.func.value, ast.Name) and node.func.value.id in resolved_names)
+            )
+        ):
+            add(
+                node,
+                "T09S014",
+                "symlink identity is checked only after path resolution",
+            )
+        if (
+            relative_path.endswith("/effects.py")
+            and isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "spec_from_file_location"
+        ):
+            add(
+                node,
+                "T09S015",
+                "package effect source execution reopens a pathname through import machinery",
+            )
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == "transaction_root_identity"
+        ) or (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "transaction_root_identity"
+        ):
+            add(
+                node,
+                "T09S016",
+                "effect-supplied transaction-root identity is used as authority",
+            )
+    return findings
+
+
 def lint_effect_neutral_source(
     source: str,
     *,
@@ -259,6 +381,7 @@ def lint_effect_neutral_source(
                 )
             )
     findings.extend(_literal_cap_findings(source, relative_path=relative_path))
+    findings.extend(_review_bypass_findings(source, relative_path=relative_path))
     return tuple(sorted(findings, key=lambda item: (item.line, item.column, item.code)))
 
 
@@ -354,7 +477,7 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
         "shared_effect_neutral_sources": scanned,
         "lint_definition_path": LINT_DEFINITION_PATH,
         "forbidden_rule_codes": [code for code, _pattern, _message in _FORBIDDEN_TEXT]
-        + ["T09S011"],
+        + ["T09S011", "T09S012", "T09S013", "T09S014", "T09S015", "T09S016"],
         "findings": [asdict(item) for item in findings],
         "assumption_inventory": [asdict(item) for item in inventory],
         "classification_counts": {

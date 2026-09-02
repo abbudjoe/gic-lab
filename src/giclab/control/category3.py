@@ -23,7 +23,9 @@ from giclab.control.adapters import (
     AmbiguousProviderOutcome,
     Category3Adapters,
     CleanupInterrupted,
+    ConsumedConditionFailure,
     EffectAuthorityKind,
+    FirstPairCheckpointDisposition,
     MetadataEnvelope,
     ProviderHandle,
     ReplacementEligibleFailure,
@@ -419,7 +421,10 @@ class _TransactionState:
     raw_evidence: list[str] = field(default_factory=list)
     finalized_evidence: list[str] = field(default_factory=list)
     evaluator_outputs: list[str] = field(default_factory=list)
+    essential_failures: list[dict[str, object]] = field(default_factory=list)
     pair_checkpoint_sha256: str | None = None
+    pair_checkpoint_decision: str | None = None
+    pair_checkpoint_reasons: tuple[str, ...] = ()
     cleanup_state: str = "not-started"
     cleanup_resumed: bool = False
     provider_resources_zero: bool | None = None
@@ -475,79 +480,87 @@ def _result_document(
     preparation: PreparationOutcome,
     state: _TransactionState,
 ) -> dict[str, object]:
-    counts = _call_counts(adapters)
-    shadow_only = adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY
-    terminal_prefix = "category3-shadow" if shadow_only else "category3-live"
-    if state.provider_resources_zero is not True or state.cleanup_state == "unresolved":
-        terminal_state = f"{terminal_prefix}-stopped-cleanup-unresolved"
-    elif not state.privacy_clean:
-        terminal_state = f"{terminal_prefix}-stopped-privacy-blocked"
-    elif state.stopping_phase is None:
-        terminal_state = f"{terminal_prefix}-complete-clean"
-    else:
-        terminal_state = f"{terminal_prefix}-stopped-cleanup-verified"
-    composition = preparation.composition or {}
-    production_evidence = dict(adapters.diagnostics.control_evidence())
-    accounting = production_evidence.get("accounting")
-    projected = accounting.get("projected_real_cost_usd") if isinstance(accounting, dict) else 0
-    projected_cost = f"{float(projected):.2f}" if isinstance(projected, (int, float)) else "unknown"
-    document: dict[str, object] = {
-        "schema_version": SHADOW_SCHEMA_VERSION,
-        "scenario": request.scenario,
-        "implementation_flavor": adapters.implementation_flavor.value,
-        "effect_authority": adapters.authority.kind.value,
-        "effect_authorization_context_sha256": (adapters.authorization_context.semantic_sha256),
-        "provider_contract_version": request.contract.version,
-        "repository_commit": request.expected_repository_commit,
-        "repository_tree": request.expected_repository_tree,
-        "composition_sha256": composition.get("semantic_sha256"),
-        "command_package_sha256": composition.get("command_package_sha256"),
-        "ordered_state_transitions": state.transitions,
-        "adapter_call_ledger": [call.to_document() for call in adapters.audit.calls],
-        "call_counts": counts,
-        "authority_consumed": {
-            "model_metadata": state.metadata_consumed,
-            "provider_launch": state.provider_launch_outcome,
-            "launch_count": state.launch_count,
-            "replacement_count": state.replacement_count,
-        },
-        "condition_identities_reserved": state.condition_reserved,
-        "condition_identities_consumed": state.condition_consumed,
-        "scientific_attempt_consumption": {
-            "count": len(state.condition_consumed),
-            "run_ids": state.condition_consumed,
-        },
-        "evidence_retained": {
-            "raw": state.raw_evidence,
-            "finalized": state.finalized_evidence,
-            "evaluator": state.evaluator_outputs,
-            "pair_checkpoint_sha256": state.pair_checkpoint_sha256,
-            "classification": (
-                "shadow-control-plane-output" if shadow_only else "live-control-plane-output"
-            ),
-        },
-        "cleanup": {
-            "state": state.cleanup_state,
-            "resumed": state.cleanup_resumed,
-            "provider_resources_zero": state.provider_resources_zero,
-            "security_restored": state.security_restored,
-            "privacy_clean": state.privacy_clean,
-        },
-        "earliest_stopping_phase": state.stopping_phase,
-        "stop_reason": state.stop_reason,
-        "terminal_state": terminal_state,
-        "projected_cost_usd": projected_cost,
-        "undeclared_adapter_calls": list(adapters.audit.undeclared_calls),
-        "zero_undeclared_calls": not adapters.audit.undeclared_calls,
-        "shadow_only": shadow_only,
-        "scientific_interpretation_allowed": state.scientific_interpretation_allowed,
-        "production_control_evidence": production_evidence,
-    }
-    document["fake_evidence_outputs" if shadow_only else "effect_evidence_outputs"] = (
-        state.effect_evidence
-    )
-    document["semantic_sha256"] = _canonical_sha256(document)
-    return document
+    try:
+        counts = _call_counts(adapters)
+        shadow_only = adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY
+        terminal_prefix = "category3-shadow" if shadow_only else "category3-live"
+        if state.provider_resources_zero is not True or state.cleanup_state == "unresolved":
+            terminal_state = f"{terminal_prefix}-stopped-cleanup-unresolved"
+        elif not state.privacy_clean:
+            terminal_state = f"{terminal_prefix}-stopped-privacy-blocked"
+        elif state.stopping_phase is None:
+            terminal_state = f"{terminal_prefix}-complete-clean"
+        else:
+            terminal_state = f"{terminal_prefix}-stopped-cleanup-verified"
+        composition = preparation.composition or {}
+        production_evidence = dict(adapters.diagnostics.control_evidence())
+        accounting = production_evidence.get("accounting")
+        projected = accounting.get("projected_real_cost_usd") if isinstance(accounting, dict) else 0
+        projected_cost = (
+            f"{float(projected):.2f}" if isinstance(projected, (int, float)) else "unknown"
+        )
+        document: dict[str, object] = {
+            "schema_version": SHADOW_SCHEMA_VERSION,
+            "scenario": request.scenario,
+            "implementation_flavor": adapters.implementation_flavor.value,
+            "effect_authority": adapters.authority.kind.value,
+            "effect_authorization_context_sha256": (adapters.authorization_context.semantic_sha256),
+            "provider_contract_version": request.contract.version,
+            "repository_commit": request.expected_repository_commit,
+            "repository_tree": request.expected_repository_tree,
+            "composition_sha256": composition.get("semantic_sha256"),
+            "command_package_sha256": composition.get("command_package_sha256"),
+            "ordered_state_transitions": state.transitions,
+            "adapter_call_ledger": [call.to_document() for call in adapters.audit.calls],
+            "call_counts": counts,
+            "authority_consumed": {
+                "model_metadata": state.metadata_consumed,
+                "provider_launch": state.provider_launch_outcome,
+                "launch_count": state.launch_count,
+                "replacement_count": state.replacement_count,
+            },
+            "condition_identities_reserved": state.condition_reserved,
+            "condition_identities_consumed": state.condition_consumed,
+            "scientific_attempt_consumption": {
+                "count": len(state.condition_consumed),
+                "run_ids": state.condition_consumed,
+            },
+            "evidence_retained": {
+                "raw": state.raw_evidence,
+                "finalized": state.finalized_evidence,
+                "evaluator": state.evaluator_outputs,
+                "pair_checkpoint_sha256": state.pair_checkpoint_sha256,
+                "pair_checkpoint_decision": state.pair_checkpoint_decision,
+                "pair_checkpoint_reasons": list(state.pair_checkpoint_reasons),
+                "essential_failures": state.essential_failures,
+                "classification": (
+                    "shadow-control-plane-output" if shadow_only else "live-control-plane-output"
+                ),
+            },
+            "cleanup": {
+                "state": state.cleanup_state,
+                "resumed": state.cleanup_resumed,
+                "provider_resources_zero": state.provider_resources_zero,
+                "security_restored": state.security_restored,
+                "privacy_clean": state.privacy_clean,
+            },
+            "earliest_stopping_phase": state.stopping_phase,
+            "stop_reason": state.stop_reason,
+            "terminal_state": terminal_state,
+            "projected_cost_usd": projected_cost,
+            "undeclared_adapter_calls": list(adapters.audit.undeclared_calls),
+            "zero_undeclared_calls": not adapters.audit.undeclared_calls,
+            "shadow_only": shadow_only,
+            "scientific_interpretation_allowed": state.scientific_interpretation_allowed,
+            "production_control_evidence": production_evidence,
+        }
+        document["fake_evidence_outputs" if shadow_only else "effect_evidence_outputs"] = (
+            state.effect_evidence
+        )
+        document["semantic_sha256"] = _canonical_sha256(document)
+        return document
+    finally:
+        adapters.diagnostics.release_resources()
 
 
 def _early_result(
@@ -769,6 +782,38 @@ def _run_conditions(
             )
             if not run_output:
                 raise AdapterFailure("empty fake condition output")
+        except ConsumedConditionFailure as exc:
+            record = exc.record
+            state.essential_failures.append(
+                {
+                    "run_id": record.run_id,
+                    "stopping_phase": record.stopping_phase,
+                    "failure_class": record.failure_class,
+                    "manifest_sha256": record.manifest_sha256,
+                    "receipt_sha256": record.receipt_sha256,
+                    "export_receipt_sha256": record.export_receipt_sha256,
+                    "evidence_binding_sha256": record.evidence_binding_sha256,
+                    "infrastructure_invalid": True,
+                    "unscored": True,
+                }
+            )
+            state.effect_evidence.append(
+                {
+                    "run_id": record.run_id,
+                    "kind": "essential-infrastructure-failure",
+                    "sha256": record.evidence_binding_sha256,
+                    "shadow_only": adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY,
+                }
+            )
+            failure_phase = Category3Phase(record.stopping_phase)
+            _transition(
+                state.transitions,
+                failure_phase,
+                "essential-failure-sealed",
+                detail=f"{run_id}: {record.failure_class}",
+            )
+            state.stop(failure_phase, str(exc))
+            return
         except AdapterFailure as exc:
             operation = adapters.audit.calls[-1].operation if adapters.audit.calls else ""
             phase = {
@@ -795,8 +840,24 @@ def _run_conditions(
                 )
                 state.stop(Category3Phase.PAIR_CHECKPOINT, str(exc))
                 return
-            state.pair_checkpoint_sha256 = checkpoint
-            _transition(state.transitions, Category3Phase.PAIR_CHECKPOINT, "passed")
+            state.pair_checkpoint_sha256 = checkpoint.decision_sha256
+            state.pair_checkpoint_decision = checkpoint.disposition.value
+            state.pair_checkpoint_reasons = checkpoint.reasons
+            if checkpoint.disposition is FirstPairCheckpointDisposition.STOP:
+                detail = ", ".join(checkpoint.reasons) or "retained checkpoint stopped"
+                _transition(
+                    state.transitions,
+                    Category3Phase.PAIR_CHECKPOINT,
+                    FirstPairCheckpointDisposition.STOP.value,
+                    detail=detail,
+                )
+                state.stop(Category3Phase.PAIR_CHECKPOINT, detail)
+                return
+            _transition(
+                state.transitions,
+                Category3Phase.PAIR_CHECKPOINT,
+                FirstPairCheckpointDisposition.CONTINUE.value,
+            )
 
 
 def _cleanup(

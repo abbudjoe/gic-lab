@@ -1,161 +1,73 @@
 from __future__ import annotations
 
-import hashlib
-import importlib.util
-import sys
 from dataclasses import replace
 from pathlib import Path
-from types import ModuleType
 from typing import cast
 
 import pytest
-from _synthetic_successor import (
-    commit_repository,
-    materialize_synthetic_successor,
-    synthetic_contract,
-)
+from _live_effect_fixture import RuntimePackage, materialize_runtime_package
 
 from giclab.control.effects import (
     EFFECT_PROTOCOL_VERSION,
     EffectAuthorityGrant,
     EffectAuthorityKind,
-    EffectAuthorizationContext,
     EffectExecutionMode,
-    EffectImplementationIdentity,
+    ValidatedLiveEffectAuthority,
     load_registered_package_effects,
     mint_shadow_effect_authority,
     validate_package_effect_registration,
 )
-from giclab.control.live_conformance import _copy_working_repository
 from giclab.control.production import build_production_adapter_assembly
-from giclab.control.shadow_effects import DeterministicLowLevelEffects, ShadowFaultPlan
-from giclab.harness.t09_provider_contracts import (
-    PackageEffectRegistration,
-    T09ProviderContract,
-    T09ProviderContractError,
-)
+from giclab.harness.t09_provider_contracts import PackageEffectRegistration
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _load_grant_module(path: Path, identity: EffectImplementationIdentity) -> ModuleType:
-    name = "giclab_test_package_grant_" + identity.sha256
-    specification = importlib.util.spec_from_file_location(name, path)
-    assert specification is not None and specification.loader is not None
-    module = importlib.util.module_from_spec(specification)
-    sys.modules[name] = module
-    specification.loader.exec_module(module)
-    return module
-
-
-@pytest.fixture(scope="module")
-def package_fixture(
-    tmp_path_factory: pytest.TempPathFactory,
-) -> tuple[
-    Path,
-    T09ProviderContract,
-    EffectImplementationIdentity,
-    EffectAuthorizationContext,
-    EffectAuthorityGrant,
-]:
-    repository = tmp_path_factory.mktemp("package-effect-loader") / "repository"
-    _copy_working_repository(ROOT, repository)
-    identities = materialize_synthetic_successor(ROOT, repository)
-    commit, tree = commit_repository(repository)
-    contract = synthetic_contract(identities, source_commit=commit)
-    identity = validate_package_effect_registration(repository, contract)
-    assert identity is not None
-    probe = DeterministicLowLevelEffects(
-        repository=repository,
-        contract=contract,
-        fault_plan=ShadowFaultPlan("live-shaped-conformance"),
-        fixed_tick=2000,
-    )
-    context = EffectAuthorizationContext(
-        authority_kind=EffectAuthorityKind.LIVE_AUTHORIZED,
-        execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
-        control_commit=commit,
-        control_tree=tree,
-        provider_contract_version=contract.version,
-        plan_id=contract.plan_id,
-        plan_sha256=contract.expected_plan_sha256,
-        command_package_sha256=cast(str, contract.expected_command_manifest_sha256),
-        control_binding_semantic_sha256="a" * 64,
-        effect_implementation=identity,
-        transaction_root_identity=probe.transaction_root_identity(),
-        external_authorization_reference="AUTH-TEST-EXTERNAL-VALIDATOR",
-        external_authorization_source_sha256=hashlib.sha256(
-            b"runtime-created-external-test-authorization"
-        ).hexdigest(),
-    )
-    module = _load_grant_module(repository / identity.path, identity)
-    grant_type = module.PackageEffectGrant
-    grant = cast(EffectAuthorityGrant, grant_type(context))
-    return repository, contract, identity, context, grant
+@pytest.fixture()
+def package(tmp_path: Path) -> RuntimePackage:
+    return materialize_runtime_package(ROOT, tmp_path)
 
 
 def test_exact_package_effect_factory_loads_and_builds_production_assembly(
-    package_fixture: tuple[
-        Path,
-        T09ProviderContract,
-        EffectImplementationIdentity,
-        EffectAuthorizationContext,
-        EffectAuthorityGrant,
-    ],
+    package: RuntimePackage,
 ) -> None:
-    repository, contract, identity, context, grant = package_fixture
-    loaded = load_registered_package_effects(
-        repository,
-        contract,
-        authorization_context=context,
-        authority=grant,
-    )
-    assert loaded.identity == identity
-    assert loaded.effects.implementation_identity() == identity
-    assert loaded.effects.provider_contract_version == contract.version
+    loaded = package.load()
+    assert loaded.identity == package.held_source.identity
+    assert loaded.held_source is package.held_source
+    assert loaded.held_transaction_root is package.held_root
+    assert loaded.effects.implementation_identity() == loaded.identity
     world = build_production_adapter_assembly(
-        repository,
-        contract,
+        package.repository,
+        package.contract,
         low_level_effects=loaded.effects,
-        authorization_context=context,
-        authority=grant,
+        authorization_context=package.context,
+        authority=package.authority,
+        held_transaction_root=package.held_root,
+        held_effect_source=loaded.held_source,
     )
-    assert world.contract == contract
-    assert type(world).__name__ == "ProductionCategory3World"
+    assert world.contract == package.contract
+    assert world.held_transaction_root is package.held_root
 
 
 def test_shadow_grant_cannot_instantiate_package_live_effects(
-    package_fixture: tuple[
-        Path,
-        T09ProviderContract,
-        EffectImplementationIdentity,
-        EffectAuthorizationContext,
-        EffectAuthorityGrant,
-    ],
+    package: RuntimePackage,
 ) -> None:
-    repository, contract, identity, context, _grant = package_fixture
-    shadow_context = EffectAuthorizationContext(
+    shadow_context = replace(
+        package.context,
         authority_kind=EffectAuthorityKind.SHADOW_ONLY,
         execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
-        control_commit=context.control_commit,
-        control_tree=context.control_tree,
-        provider_contract_version=context.provider_contract_version,
-        plan_id=context.plan_id,
-        plan_sha256=context.plan_sha256,
-        command_package_sha256=context.command_package_sha256,
-        control_binding_semantic_sha256=context.control_binding_semantic_sha256,
-        effect_implementation=identity,
-        transaction_root_identity=context.transaction_root_identity,
         external_authorization_reference=None,
         external_authorization_source_sha256=None,
+        current_turn_scope="test-shadow-only",
     )
     shadow = mint_shadow_effect_authority(source="test-shadow-only", context=shadow_context)
-    with pytest.raises(ValueError, match="shadow authority"):
+    with pytest.raises(ValueError, match="opaque validated authority"):
         load_registered_package_effects(
-            repository,
-            contract,
+            package.repository,
+            package.contract,
             authorization_context=shadow_context,
             authority=shadow,
+            held_source=package.held_source,
         )
 
 
@@ -166,59 +78,69 @@ def test_shadow_grant_cannot_instantiate_package_live_effects(
         ("control_tree", "2" * 40),
         ("provider_contract_version", "V18"),
         ("plan_id", "PLAN-EXP0001-PILOT-V18"),
+        ("plan_path", "plans/changed.yaml"),
+        ("plan_bytes", 1),
         ("plan_sha256", "3" * 64),
         ("command_package_sha256", "4" * 64),
         ("control_binding_semantic_sha256", "5" * 64),
         ("transaction_root_identity", "6" * 64),
-        ("external_authorization_reference", "AUTH-CHANGED-EXTERNAL"),
+        ("external_authorization_reference", "AUTH-T09-V17-CHANGED"),
         ("external_authorization_source_sha256", "7" * 64),
+        ("current_turn_scope", "T09-PR14-CHANGED"),
     ],
 )
 def test_live_grant_rejects_every_changed_authorization_binding(
-    package_fixture: tuple[
-        Path,
-        T09ProviderContract,
-        EffectImplementationIdentity,
-        EffectAuthorizationContext,
-        EffectAuthorityGrant,
-    ],
+    package: RuntimePackage,
     field: str,
-    replacement: str,
+    replacement: object,
 ) -> None:
-    repository, contract, _identity, context, grant = package_fixture
-    changed = replace(context, **{field: replacement})
+    changed = replace(package.context, **{field: replacement})
     with pytest.raises(ValueError, match="authority"):
         load_registered_package_effects(
-            repository,
-            contract,
+            package.repository,
+            package.contract,
             authorization_context=changed,
-            authority=grant,
+            authority=package.authority,
+            held_source=package.held_source,
         )
 
 
-def test_changed_package_effect_identity_invalidates_external_grant(
-    package_fixture: tuple[
-        Path,
-        T09ProviderContract,
-        EffectImplementationIdentity,
-        EffectAuthorizationContext,
-        EffectAuthorityGrant,
-    ],
-) -> None:
-    repository, contract, identity, context, grant = package_fixture
-    changed_identity = replace(identity, sha256="8" * 64)
-    changed = replace(context, effect_implementation=changed_identity)
-    with pytest.raises(ValueError, match="authority"):
-        load_registered_package_effects(
-            repository,
-            contract,
-            authorization_context=changed,
-            authority=grant,
-        )
+def test_trivial_duck_typed_grants_are_rejected(package: RuntimePackage) -> None:
+    class AlwaysTrue:
+        kind = EffectAuthorityKind.LIVE_AUTHORIZED
+        source = "forged"
+
+        def authorizes(self, _context: object) -> bool:
+            return True
+
+    class ContextEquality:
+        kind = EffectAuthorityKind.LIVE_AUTHORIZED
+        source = "forged"
+
+        def __init__(self, context: object) -> None:
+            self.context = context
+
+        def authorizes(self, context: object) -> bool:
+            return context == self.context
+
+    for forged in (AlwaysTrue(), ContextEquality(package.context)):
+        with pytest.raises(ValueError, match="opaque validated authority"):
+            load_registered_package_effects(
+                package.repository,
+                package.contract,
+                authorization_context=package.context,
+                authority=cast(EffectAuthorityGrant, forged),
+                held_source=package.held_source,
+            )
+
+
+def test_public_live_authority_construction_is_rejected() -> None:
+    with pytest.raises(TypeError, match="external validator"):
+        ValidatedLiveEffectAuthority()
 
 
 def test_package_effect_path_escape_and_unsupported_protocol_are_rejected() -> None:
-    with pytest.raises(T09ProviderContractError, match="path is unsafe"):
+    with pytest.raises(ValueError, match="path is unsafe"):
         PackageEffectRegistration(
             implementation_path="../live.py",
             implementation_bytes=1,
@@ -227,7 +149,7 @@ def test_package_effect_path_escape_and_unsupported_protocol_are_rejected() -> N
             authority_grant_schema_version="1.0.0",
             effect_protocol_version=EFFECT_PROTOCOL_VERSION,
         )
-    with pytest.raises(T09ProviderContractError, match="protocol is unsupported"):
+    with pytest.raises(ValueError, match="protocol is unsupported"):
         PackageEffectRegistration(
             implementation_path="runtime/live.py",
             implementation_bytes=1,
@@ -238,63 +160,47 @@ def test_package_effect_path_escape_and_unsupported_protocol_are_rejected() -> N
         )
 
 
-def test_symlink_or_mutated_effect_source_is_rejected_before_import(
-    package_fixture: tuple[
-        Path,
-        T09ProviderContract,
-        EffectImplementationIdentity,
-        EffectAuthorizationContext,
-        EffectAuthorityGrant,
-    ],
+def test_symlink_or_mutated_effect_source_is_rejected_before_load(
+    package: RuntimePackage,
 ) -> None:
-    repository, contract, identity, _context, _grant = package_fixture
-    path = repository / identity.path
+    path = package.held_source.path
     original = path.read_bytes()
     target = path.with_name("effect-target.py")
+    path.write_bytes(original + b"\n")
+    with pytest.raises(ValueError, match="identity drifted"):
+        validate_package_effect_registration(package.repository, package.contract)
+    path.write_bytes(original)
+    path.rename(target)
+    path.symlink_to(target.name)
     try:
-        path.write_bytes(original + b"\n")
-        with pytest.raises(ValueError, match="byte identity drifted"):
-            validate_package_effect_registration(repository, contract)
-        path.write_bytes(original)
-        path.rename(target)
-        path.symlink_to(target.name)
-        with pytest.raises(ValueError, match="path is unsafe"):
-            validate_package_effect_registration(repository, contract)
+        with pytest.raises(ValueError, match="symlink"):
+            validate_package_effect_registration(package.repository, package.contract)
     finally:
-        path.unlink(missing_ok=True)
+        path.unlink()
         target.rename(path)
 
 
-def test_wrong_factory_is_rejected_after_exact_module_load(
-    package_fixture: tuple[
-        Path,
-        T09ProviderContract,
-        EffectImplementationIdentity,
-        EffectAuthorizationContext,
-        EffectAuthorityGrant,
-    ],
+def test_wrong_declared_factory_is_rejected_before_execution(
+    package: RuntimePackage,
 ) -> None:
-    repository, contract, identity, context, _grant = package_fixture
-    registration = contract.effect_registration
+    registration = package.contract.effect_registration
     assert registration is not None
-    wrong_registration = replace(registration, factory_entry_point="wrong_factory")
-    wrong_contract = replace(contract, effect_registration=wrong_registration)
-    wrong_identity = replace(identity, factory_entry_point="wrong_factory")
-    wrong_context = replace(context, effect_implementation=wrong_identity)
-    module = _load_grant_module(repository / identity.path, identity)
-    grant_type = module.PackageEffectGrant
-    wrong_grant = cast(EffectAuthorityGrant, grant_type(wrong_context))
-    with pytest.raises(ValueError, match="factory is absent"):
+    wrong_contract = replace(
+        package.contract,
+        effect_registration=replace(registration, factory_entry_point="wrong_factory"),
+    )
+    with pytest.raises(ValueError, match="held source does not match"):
         load_registered_package_effects(
-            repository,
+            package.repository,
             wrong_contract,
-            authorization_context=wrong_context,
-            authority=wrong_grant,
+            authorization_context=package.context,
+            authority=package.authority,
+            held_source=package.held_source,
         )
 
 
-def test_shared_effect_source_has_no_live_grant_factory() -> None:
+def test_shared_effect_source_has_no_generic_live_grant_factory() -> None:
     source = (ROOT / "src/giclab/control/effects.py").read_text(encoding="utf-8")
     assert "mint_live" not in source
     assert "_mint_live" not in source
-    assert "shared code has no live factory" in source
+    assert "class PackageEffectGrant" not in source

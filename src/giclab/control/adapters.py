@@ -58,6 +58,27 @@ class UndeclaredAdapterCall(AdapterFailure):
 
 
 @dataclass(frozen=True, slots=True)
+class EssentialFailureRecord:
+    """Controller-visible identity of one sealed, exported failed attempt."""
+
+    run_id: str
+    stopping_phase: str
+    failure_class: str
+    manifest_sha256: str
+    receipt_sha256: str
+    export_receipt_sha256: str
+    evidence_binding_sha256: str
+
+
+class ConsumedConditionFailure(AdapterFailure):
+    """A consumed attempt stopped with reconstructable essential evidence."""
+
+    def __init__(self, message: str, *, record: EssentialFailureRecord) -> None:
+        super().__init__(message)
+        self.record = record
+
+
+@dataclass(frozen=True, slots=True)
 class AdapterCall:
     index: int
     adapter: str
@@ -88,6 +109,23 @@ class MetadataEnvelope:
     expires_wall_time: float
     issued_monotonic: float
     max_monotonic_age_seconds: float
+
+
+class FirstPairCheckpointDisposition(StrEnum):
+    """The three controller-visible outcomes of the Task A checkpoint."""
+
+    CONTINUE = "continue-to-task-b"
+    STOP = "stop-before-task-b"
+
+
+@dataclass(frozen=True, slots=True)
+class FirstPairCheckpointResult:
+    """Retained policy decision returned by the production evidence store."""
+
+    disposition: FirstPairCheckpointDisposition
+    reasons: tuple[str, ...]
+    decision_sha256: str
+    evidence_binding_sha256: str
 
 
 class SecretChannel(Protocol):
@@ -158,8 +196,8 @@ class EvidenceStore(Protocol):
     def record(self, *, kind: str, identity: str) -> None:
         """Record one sanitized evidence identity."""
 
-    def checkpoint(self, *, name: str) -> str:
-        """Persist the first-pair checkpoint identity."""
+    def checkpoint(self, *, name: str) -> FirstPairCheckpointResult:
+        """Persist and return the retained first-pair policy decision."""
 
     def scan_privacy(self) -> str:
         """Run structural and exact-secret publication checks."""
@@ -175,6 +213,9 @@ class AdapterAudit(Protocol):
 
 class AdapterDiagnostics(Protocol):
     def control_evidence(self) -> Mapping[str, object]: ...
+
+    def release_resources(self) -> None:
+        """Release identities held through terminal result materialization."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,8 +242,12 @@ __all__ = [
     "AmbiguousProviderOutcome",
     "Category3Adapters",
     "CleanupInterrupted",
+    "ConsumedConditionFailure",
     "EffectAuthorityGrant",
     "EffectAuthorityKind",
+    "EssentialFailureRecord",
+    "FirstPairCheckpointDisposition",
+    "FirstPairCheckpointResult",
     "ImplementationFlavor",
     "MetadataEnvelope",
     "ProviderHandle",

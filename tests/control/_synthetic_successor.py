@@ -9,7 +9,7 @@ import subprocess
 from dataclasses import replace
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -37,37 +37,23 @@ _HEX_IDENTITY_LENGTHS = {40, 64}
 
 
 def _package_effect_source() -> bytes:
-    return f'''"""Temporary no-network package effect used only by control tests."""
+    return b'''"""Temporary no-network package effect used only by control tests."""
 
-from pathlib import Path
-
-from giclab.control.effects import EffectAuthorityKind
 from giclab.control.shadow_effects import build_live_shaped_no_network_effects
 
 
-class PackageEffectGrant:
-    """Test-owned stand-in for externally validated package authority."""
-
-    kind = EffectAuthorityKind.LIVE_AUTHORIZED
-    source = "temporary-package-external-validator"
-
-    def __init__(self, context):
-        self._context = context
-
-    def authorizes(self, context):
-        return context == self._context
-
-
-def build_package_effects(*, repository, contract, authorization_context, authority):
+def build_package_effects(
+    *, repository, contract, authorization_context, authority, held_transaction_root
+):
     return build_live_shaped_no_network_effects(
         repository=repository,
         contract=contract,
-        implementation_path=Path(__file__),
-        factory_entry_point="{_V17_EFFECT_FACTORY}",
+        implementation_identity=authorization_context.effect_implementation,
         authorization_context=authorization_context,
         authority=authority,
+        held_transaction_root=held_transaction_root,
     )
-'''.encode()
+'''
 
 
 def _json_bytes(value: object) -> bytes:
@@ -305,11 +291,11 @@ def synthetic_contract(
         authorization_prefix="AUTH-T09-V17-",
         instance_name="giclab-t09-pilot-v17-autonomous-0010",
         plan_path=_V17_PLAN,
-        expected_plan_bytes=int(identities["plan_bytes"]),
+        expected_plan_bytes=cast(int, identities["plan_bytes"]),
         expected_plan_sha256=str(identities["plan_sha256"]),
         provider_profile_id="PLAN-EXP0001-PILOT-V17",
         provider_profile_path=_V17_PLAN,
-        expected_provider_profile_bytes=int(identities["plan_bytes"]),
+        expected_provider_profile_bytes=cast(int, identities["plan_bytes"]),
         expected_provider_profile_sha256=str(identities["plan_sha256"]),
         execution_contract_path=_V17_EXECUTION,
         command_manifest_path=_V17_COMMAND,
@@ -327,7 +313,7 @@ def synthetic_contract(
         container_prefix="giclab-t09-pilot-v17-autonomous-",
         effect_registration=PackageEffectRegistration(
             implementation_path=str(identities["effect_path"]),
-            implementation_bytes=int(identities["effect_bytes"]),
+            implementation_bytes=cast(int, identities["effect_bytes"]),
             implementation_sha256=str(identities["effect_sha256"]),
             factory_entry_point=str(identities["effect_factory"]),
             authority_grant_schema_version="1.0.0",

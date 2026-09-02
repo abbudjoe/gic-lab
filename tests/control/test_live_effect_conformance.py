@@ -175,6 +175,81 @@ def test_live_shaped_host_raw_finalizer_evaluator_and_cleanup_chain(
     }
 
 
+def test_live_shaped_checkpoint_authority_and_held_identity_repairs(
+    conformance: dict[str, object],
+) -> None:
+    package = conformance["temporary_package"]
+    assert isinstance(package, dict)
+    checkpoint = package["first_pair_checkpoint"]
+    provider_cost = package["provider_cost_accounting"]
+    authorization = package["authorization"]
+    authorization_context = package["authorization_context_binding"]
+    held_source = package["held_effect_source"]
+    held_root = package["held_transaction_root"]
+    held_evidence = package["held_evidence_chain"]
+    assert isinstance(checkpoint, dict)
+    assert checkpoint["retained_first_pair_decision_invoked"] is True
+    assert checkpoint["task_a_valid_scored_attempt"] == [True, True]
+    assert checkpoint["decision"] == "continue-to-task-b"
+    assert checkpoint["reasons"] == []
+    assert checkpoint["task_b_admitted_only_after_retained_decision"] is True
+    assert isinstance(provider_cost, dict)
+    assert provider_cost["cumulative_provider_cost_usd"] == 0.0
+    assert provider_cost["zero_real_provider_effects"] is True
+    assert isinstance(authorization, dict)
+    assert str(authorization["reference"]).startswith("AUTH-T09-V16-")
+    assert authorization["same_reference_and_source_across_effect_metadata_launch_cleanup"] is True
+    assert authorization["source_binding"] == {
+        "exact_sha256_validated": True,
+        "same_across_effect_metadata_launch_cleanup": True,
+        "private_runtime_value_retained": False,
+    }
+    assert authorization["replay_rejected"] is True
+    assert isinstance(authorization_context, dict)
+    assert authorization_context["exact_private_source_sha256_validated"] is True
+    assert authorization_context["shared_held_transaction_root_identity_validated"] is True
+    assert authorization_context["private_runtime_identity_values_retained"] is False
+    assert isinstance(held_source, dict) and held_source["compiled_from_held_bytes"] is True
+    assert held_source["runtime_identity_values_retained"] is False
+    assert isinstance(held_root, dict)
+    assert held_root["identity_derived_by_shared_code"] is True
+    assert held_root["descriptor_held_through_cleanup"] is True
+    assert held_root["runtime_identity_values_retained"] is False
+    assert checkpoint["exact_private_decision_and_evidence_identities_validated"] is True
+    assert checkpoint["private_runtime_identity_values_retained"] is False
+    assert held_evidence == {
+        "raw_attempt_bindings": 4,
+        "finalized_attempt_bindings": 4,
+        "evaluator_consumed_held_finalized_identities": True,
+        "revalidated_before_and_after_consumers": True,
+    }
+
+
+def test_live_shaped_review_failure_subreceipts_are_complete(
+    conformance: dict[str, object],
+) -> None:
+    package = conformance["temporary_package"]
+    assert isinstance(package, dict)
+    failures = package["review_failure_subreceipts"]
+    assert isinstance(failures, dict)
+    assert set(failures) == {
+        "unscored-task-a-checkpoint-stop",
+        "ambiguous-send-essential-failure",
+        "nonzero-process-exit-essential-failure",
+        "split-authorization-rejection",
+        "effect-module-replacement-rejection",
+        "symlink-transaction-root-rejection",
+        "raw-replacement-rejection",
+    }
+    assert failures["unscored-task-a-checkpoint-stop"]["task_b_condition_entries"] == 0
+    assert failures["ambiguous-send-essential-failure"]["sealed"] is True
+    assert failures["nonzero-process-exit-essential-failure"]["unscored"] is True
+    assert failures["split-authorization-rejection"]["authenticated_metadata_requests"] == 0
+    assert failures["effect-module-replacement-rejection"]["same_size_replacement_rejected"] is True
+    assert failures["symlink-transaction-root-rejection"]["root_symlink_rejected"] is True
+    assert failures["raw-replacement-rejection"]["evaluator_calls"] == 0
+
+
 def test_anti_shadow_lint_inventory_and_mutations() -> None:
     receipt = validate_anti_shadow_lint(ROOT)
     Draft202012Validator(
@@ -203,6 +278,29 @@ caps = ProviderBudgetCaps(max_model_call_attempts=1)
     findings = lint_effect_neutral_source(source, relative_path="src/giclab/control/effects.py")
     assert {item.code for item in findings} == {"T09S001", "T09S003", "T09S006", "T09S011"}
 
+    review_bypasses = """
+class PublicLiveAuthority:
+    pass
+
+resolved = supplied_root.resolve(strict=True)
+if resolved.is_symlink():
+    raise ValueError("late")
+module = importlib.util.spec_from_file_location("package_effect", effect_path)
+identity = effects.transaction_root_identity()
+decision = {"decision": "continue-to-task-b"}
+"""
+    bypass_findings = lint_effect_neutral_source(
+        review_bypasses,
+        relative_path="src/giclab/control/effects.py",
+    )
+    assert {item.code for item in bypass_findings} == {
+        "T09S012",
+        "T09S013",
+        "T09S014",
+        "T09S015",
+        "T09S016",
+    }
+
 
 def test_conformance_semantic_hash_is_exact(conformance: dict[str, object]) -> None:
     document = dict(conformance)
@@ -214,3 +312,16 @@ def test_conformance_semantic_hash_is_exact(conformance: dict[str, object]) -> N
         sort_keys=True,
     ).encode()
     assert observed == hashlib.sha256(encoded).hexdigest()
+
+
+def test_public_conformance_projection_is_byte_identical(
+    conformance: dict[str, object],
+) -> None:
+    repeated = run_live_effect_conformance(ROOT)
+    encode = lambda value: json.dumps(  # noqa: E731 - compact canonical comparison
+        value,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode()
+    assert encode(repeated) == encode(conformance)

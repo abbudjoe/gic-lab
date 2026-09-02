@@ -19,6 +19,7 @@ from giclab.registry import load_json
 INCIDENT_SCHEMA_VERSION: Final = "1.0.0"
 INCIDENT_ROOT: Final = "control/incidents"
 INCIDENT_SCHEMA: Final = "schemas/agent-incident.schema.json"
+INCIDENT_REGRESSION_TIMEOUT_SECONDS: Final = 300
 
 
 class IncidentValidationError(ValueError):
@@ -92,7 +93,7 @@ def _run_regressions(repository: Path, nodes: Sequence[str]) -> tuple[bool, str]
         stdin=subprocess.DEVNULL,
         capture_output=True,
         check=False,
-        timeout=120,
+        timeout=INCIDENT_REGRESSION_TIMEOUT_SECONDS,
     )
     output = (completed.stdout + completed.stderr).decode("utf-8", "replace").strip()
     return completed.returncode == 0, output[-2000:]

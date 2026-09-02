@@ -18,11 +18,12 @@ import subprocess
 import tarfile
 from collections import Counter
 from collections.abc import Mapping
+from contextlib import suppress
 from dataclasses import asdict
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType, ModuleType
-from typing import Final, cast
+from typing import Final, NoReturn, cast
 
 import yaml
 
@@ -32,6 +33,10 @@ from giclab.control.adapters import (
     AmbiguousProviderOutcome,
     Category3Adapters,
     CleanupInterrupted,
+    ConsumedConditionFailure,
+    EssentialFailureRecord,
+    FirstPairCheckpointDisposition,
+    FirstPairCheckpointResult,
     ImplementationFlavor,
     MetadataEnvelope,
     ReplacementEligibleFailure,
@@ -46,12 +51,20 @@ from giclab.control.consumers import (
 )
 from giclab.control.effects import (
     EFFECT_PROTOCOL_VERSION,
+    MAX_ESSENTIAL_FAILURE_BYTES,
+    MAX_ESSENTIAL_FAILURE_FILES,
     CleanupExecutionReceipt,
     CleanupExecutionRequest,
     ConditionAction,
     ConditionAmbiguousSend,
     ConditionEventObserver,
     ConditionExecutionRequest,
+    ConditionFailureClass,
+    ConditionFailureExportInterrupted,
+    ConditionFailureExportReceipt,
+    ConditionFailureExportRequest,
+    ConditionFailurePreservationRequest,
+    ConditionInfrastructureFailureOutcome,
     ConditionKnownProviderError,
     ConditionKnownTransportError,
     ConditionModelCall,
@@ -67,6 +80,9 @@ from giclab.control.effects import (
     EvaluatorExecutionRequest,
     FinalizerExecutionOutcome,
     FinalizerExecutionRequest,
+    HeldArtifact,
+    HeldEffectSource,
+    HeldTransactionRoot,
     HostPreflightReceipt,
     HostPreflightRejected,
     HostPreflightRequest,
@@ -76,14 +92,17 @@ from giclab.control.effects import (
     PackageRuntimeBudget,
     PackageStageReceipt,
     PackageStageRequest,
+    ProviderCostObservationRequest,
+    ProviderCostReceipt,
     ProviderHandle,
     RuntimeClock,
     ScientificFreezeReceipt,
     ScientificFreezeRequest,
     TrackedPackageMember,
+    ValidatedLiveEffectAuthority,
     checked_deadline,
     finite_time,
-    validate_package_effect_registration,
+    hold_sealed_artifact,
 )
 from giclab.control.registry_validation import resolve_registered_command_package
 from giclab.harness import t09_model_metadata_receipt as metadata
@@ -183,25 +202,41 @@ def _tracked(repository: Path, relative: str) -> None:
         raise ValueError("package member is not tracked")
 
 
+def _lexical_no_symlink_path(root: Path, path: Path, *, label: str) -> Path:
+    approved = Path(os.path.abspath(root))
+    candidate = Path(os.path.abspath(path))
+    try:
+        relative = candidate.relative_to(approved)
+    except ValueError as exc:
+        raise AdapterFailure(f"{label} is outside its exact effect transaction root") from exc
+    current = approved
+    for component in relative.parts:
+        current /= component
+        try:
+            metadata_value = current.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise AdapterFailure(f"{label} contains an unavailable path component") from exc
+        if stat.S_ISLNK(metadata_value.st_mode):
+            raise AdapterFailure(f"{label} contains a symlink path component")
+    return candidate
+
+
 def _safe_existing_file(root: Path, path: Path, *, label: str) -> Path:
-    approved = root.resolve(strict=True)
-    candidate = path.resolve(strict=True)
-    if approved not in candidate.parents or candidate.is_symlink() or not candidate.is_file():
-        raise AdapterFailure(f"{label} is outside its exact effect transaction root")
-    metadata_value = path.stat(follow_symlinks=False)
-    if not stat.S_ISREG(metadata_value.st_mode) or metadata_value.st_nlink != 1:
+    candidate = _lexical_no_symlink_path(root, path, label=label)
+    metadata_value = candidate.stat(follow_symlinks=False)
+    if (
+        not stat.S_ISREG(metadata_value.st_mode)
+        or metadata_value.st_uid != os.getuid()
+        or metadata_value.st_nlink != 1
+    ):
         raise AdapterFailure(f"{label} is not a single-link regular file")
     return candidate
 
 
 def _safe_directory(root: Path, path: Path, *, label: str) -> Path:
-    approved = root.resolve(strict=True)
-    candidate = path.resolve(strict=True)
-    if (
-        (candidate != approved and approved not in candidate.parents)
-        or candidate.is_symlink()
-        or not candidate.is_dir()
-    ):
+    candidate = _lexical_no_symlink_path(root, path, label=label)
+    metadata_value = candidate.stat(follow_symlinks=False)
+    if not stat.S_ISDIR(metadata_value.st_mode) or metadata_value.st_uid != os.getuid():
         raise AdapterFailure(f"{label} is outside its exact effect transaction root")
     return candidate
 
@@ -385,6 +420,7 @@ class _AccountingObserver(ConditionEventObserver):
         self.call_order: list[str] = []
         self.logical_call_order: list[str] = []
         self.action_order: list[str] = []
+        self.action_terminal_states: dict[str, str] = {}
         self.output_total_bytes: int | None = None
         self.exit_code: int | None = None
         self.completion_state: tuple[bool, str | None, str] | None = None
@@ -453,7 +489,15 @@ class _AccountingObserver(ConditionEventObserver):
             raise AdapterFailure("condition browser-action identity was reused or malformed")
         self.action_ids.add(action_id)
         self.action_order.append(action_id)
-        self.boundary.record_browser_action(before_action=perform)
+        try:
+            self.boundary.record_browser_action(before_action=perform)
+        except ProviderBudgetExceeded:
+            self.action_terminal_states[action_id] = "admission-rejected"
+            raise
+        except BaseException:
+            self.action_terminal_states[action_id] = "execution-failed"
+            raise
+        self.action_terminal_states[action_id] = "completed"
 
     def output_bytes(self, *, total_bytes: int) -> None:
         self._assert_campaign_open()
@@ -507,16 +551,23 @@ class ProductionCategory3World:
         low_level_effects: LowLevelEffects,
         authorization_context: EffectAuthorizationContext,
         authority: EffectAuthorityGrant,
+        held_transaction_root: HeldTransactionRoot,
+        held_effect_source: HeldEffectSource | None,
     ) -> None:
         self.repository = repository.resolve(strict=True)
         self.contract = contract
         self.low_level_effects = low_level_effects
         self.authorization_context = authorization_context
         self.authority = authority
+        self.held_transaction_root = held_transaction_root
+        self.held_effect_source = held_effect_source
+        self._resources_released = False
         self.clock = _ValidatedRuntimeClock(low_level_effects.runtime_clock())
-        self.root = low_level_effects.transaction_root().resolve(strict=True)
-        if self.root.is_symlink() or stat.S_IMODE(self.root.stat().st_mode) & 0o022:
-            raise ValueError("effect transaction root is symlinked or group/world writable")
+        held_transaction_root.revalidate()
+        self.root = held_transaction_root.path
+        if low_level_effects.transaction_root() != self.root:
+            raise ValueError("effect transaction root differs from the shared-held root")
+        self._root_identity_mismatch = False
         self.private_root = self.root / "control-private"
         self.public_root = self.root / "control-public"
         self.private_root.mkdir(mode=0o700)
@@ -546,19 +597,35 @@ class ProductionCategory3World:
         self._qualification: HostQualificationReceipt | None = None
         self._freeze: ScientificFreezeReceipt | None = None
         self._condition_outcomes: dict[str, ConditionProcessOutcome] = {}
+        self._condition_requests: dict[str, ConditionExecutionRequest] = {}
+        self._condition_observers: dict[str, _AccountingObserver] = {}
+        self._condition_failures: dict[str, ConditionInfrastructureFailureOutcome] = {}
+        self._essential_failure_exports: dict[str, ConditionFailureExportReceipt] = {}
+        self._essential_failure_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
+        self._essential_failure_artifact_bindings: dict[str, str] = {}
+        self._raw_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
+        self._raw_artifact_bindings: dict[str, str] = {}
         self._finalizations: dict[str, FinalizerExecutionOutcome] = {}
+        self._finalized_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
+        self._finalized_artifact_bindings: dict[str, str] = {}
         self._accounting: dict[str, dict[str, object]] = {}
         self._aggregate_usage = ProviderBudgetUsage()
         self._aggregate_observed_usage = ProviderBudgetUsage()
         self._evaluations: dict[str, dict[str, object]] = {}
         self._raw_export_acknowledgements: dict[str, str] = {}
+        self._provider_cost_receipt: ProviderCostReceipt | None = None
+        self._checkpoint_result: FirstPairCheckpointResult | None = None
+        self._checkpoint_document: dict[str, object] | None = None
         self._cleanup_handoff_bytes: bytes | None = None
         self._cleanup_receipt: CleanupExecutionReceipt | None = None
         self._cleanup_calls = 0
         self._cleanup_started_after_campaign_deadline = False
+        self._authority_launch_consumed = False
         self._stage_evidence: dict[str, object] | None = None
         self._condition_started_wall: dict[str, float] = {}
         self._condition_started_monotonic: dict[str, float] = {}
+        self._entered_run_ids: list[str] = []
+        self._raw_completed_run_ids: list[str] = []
         self._campaign_started_monotonic: float | None = None
         self._campaign_deadline_monotonic: float | None = None
         self._seen_call_ids: set[str] = set()
@@ -621,6 +688,14 @@ class ProductionCategory3World:
         }.get(operation)
 
     def _begin(self, operation: str, subject: str) -> int:
+        try:
+            self.held_transaction_root.revalidate()
+            if self.low_level_effects.transaction_root() != self.root:
+                raise ValueError("effect returned a different transaction root")
+        except ValueError as exc:
+            self._root_identity_mismatch = True
+            if operation != "host.cleanup":
+                raise AdapterFailure("held transaction root identity changed") from exc
         occurrence = self._counts[operation] + 1
         self._counts[operation] = occurrence
         limit = self._operation_limit(operation)
@@ -664,6 +739,11 @@ class ProductionCategory3World:
         provider_material: bytearray | None = None
         selected: bytearray | None = None
         try:
+            if isinstance(self.authority, ValidatedLiveEffectAuthority):
+                if not self.authority.is_valid_for(self.authorization_context):
+                    raise AdapterFailure("live authority is not valid at the secret boundary")
+                self.authority.reserve_before_secret()
+                self._primitive("reserve_live_authority_before_secret")
             model_material = self.low_level_effects.read_model_secret()
             provider_material = self.low_level_effects.read_provider_secret()
             if not model_material or not provider_material:
@@ -715,17 +795,31 @@ class ProductionCategory3World:
             not isinstance(reference, str)
             or not isinstance(self.contract.authorization_prefix, str)
             or not reference.startswith(self.contract.authorization_prefix)
-            or any(
-                _HEX64.fullmatch(value) is None
-                for value in (source_sha, price_sha, deprecation_sha)
-                if isinstance(value, str)
-            )
-            or not all(isinstance(value, str) for value in (source_sha, price_sha, deprecation_sha))
+            or not isinstance(source_sha, str)
+            or _HEX64.fullmatch(source_sha) is None
+            or not isinstance(price_sha, str)
+            or _HEX64.fullmatch(price_sha) is None
+            or not isinstance(deprecation_sha, str)
+            or _HEX64.fullmatch(deprecation_sha) is None
             or binding.get("authorized") is not True
             or binding.get("single_use") is not True
         ):
             self._record(operation, contract_version, "failed")
             raise AdapterFailure("metadata authorization binding is incomplete")
+        if isinstance(self.authority, ValidatedLiveEffectAuthority):
+            try:
+                self.contract.validate_authority(reference, source_sha)
+                self.authority.assert_phase_binding(
+                    reference=reference,
+                    source_sha256=source_sha,
+                )
+                self.authority.mark_metadata_send_attempted()
+            except (ValueError, provider.T09ProviderError) as exc:
+                self._record(operation, contract_version, "failed")
+                raise AdapterFailure(
+                    "effect and metadata authority are not one transaction"
+                ) from exc
+            self._primitive("validate_unified_live_authority:metadata")
         overlay = {
             "schema_version": metadata.MODEL_METADATA_SCHEMA_VERSION,
             "authorization_reference": reference,
@@ -755,10 +849,10 @@ class ProductionCategory3World:
                 provider_contract_version=self.contract.version,
                 host_run_id=self.contract.host_run_id,
                 authorization_reference=reference,
-                authorization_source_sha256=cast(str, source_sha),
+                authorization_source_sha256=source_sha,
                 authorization_overlay_sha256=overlay_sha,
-                public_price_contract_sha256=cast(str, price_sha),
-                public_deprecation_observation_sha256=cast(str, deprecation_sha),
+                public_price_contract_sha256=price_sha,
+                public_deprecation_observation_sha256=deprecation_sha,
                 output=self._metadata_receipt,
                 dotenv=self._dotenv,
                 authorization_overlay=self._metadata_overlay,
@@ -770,6 +864,8 @@ class ProductionCategory3World:
                 self._metadata_overlay,
                 receipt_sha256=receipt_sha,
             )
+            if isinstance(self.authority, ValidatedLiveEffectAuthority):
+                self.authority.mark_metadata_bound()
             document = metadata.validate_model_metadata_receipt(
                 self._metadata_receipt,
                 contract=self.contract,
@@ -884,6 +980,23 @@ class ProductionCategory3World:
             )
             commit, _tree = _git_identity(self.repository)
             try:
+                if isinstance(self.authority, ValidatedLiveEffectAuthority):
+                    launch_binding = dict(
+                        self.low_level_effects.metadata_authorization_binding(
+                            contract=self.contract
+                        )
+                    )
+                    self.authority.assert_phase_binding(
+                        reference=cast(str, launch_binding.get("authorization_reference")),
+                        source_sha256=cast(
+                            str,
+                            launch_binding.get("authorization_source_sha256"),
+                        ),
+                    )
+                    if not self._authority_launch_consumed:
+                        self.authority.consume_provider_launch()
+                        self._authority_launch_consumed = True
+                    self._primitive("validate_unified_live_authority:provider-launch")
                 with self.low_level_effects.campaign_scope():
                     entry_receipt = provider.launch_campaign(
                         contract=self.contract,
@@ -1991,6 +2104,7 @@ class ProductionCategory3World:
             raise AdapterFailure(f"empirical entry failed: {exc}") from exc
         self._condition_started_wall[run_id] = released_at
         self._condition_started_monotonic[run_id] = released_monotonic
+        self._entered_run_ids.append(run_id)
         self._primitive("mark_empirical_entry")
         self._record(operation, run_id, "passed")
         return release
@@ -2021,6 +2135,39 @@ class ProductionCategory3World:
         self._aggregate_observed_usage = observer.boundary.aggregate_observed_usage
         self._seen_call_ids.update(observer.call_ids)
         self._seen_logical_call_ids.update(observer.logical_call_ids)
+
+    @staticmethod
+    def _artifact_binding(artifacts: tuple[HeldArtifact, ...]) -> str:
+        return _identity([artifact.to_public_document() for artifact in artifacts])
+
+    def _hold_artifact_set(self, paths: tuple[Path, ...]) -> tuple[HeldArtifact, ...]:
+        held: list[HeldArtifact] = []
+        try:
+            for path in sorted(set(paths), key=lambda item: item.as_posix()):
+                held.append(hold_sealed_artifact(self.held_transaction_root, path))
+            identities = {(item.device, item.inode) for item in held}
+            if len(identities) != len(held):
+                raise AdapterFailure("held artifact roles share one filesystem identity")
+            return tuple(held)
+        except BaseException:
+            for artifact in held:
+                artifact.close()
+            raise
+
+    @staticmethod
+    def _revalidate_artifacts(artifacts: tuple[HeldArtifact, ...]) -> None:
+        for artifact in artifacts:
+            artifact.revalidate()
+
+    @staticmethod
+    def _load_held_json(artifact: HeldArtifact, *, label: str) -> dict[str, object]:
+        try:
+            value = json.loads(artifact.read_bytes())
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise AdapterFailure(f"{label} is not valid JSON") from exc
+        if not isinstance(value, dict):
+            raise AdapterFailure(f"{label} must contain one JSON object")
+        return cast(dict[str, object], value)
 
     @staticmethod
     def _validate_condition_ledgers(
@@ -2079,6 +2226,385 @@ class ProductionCategory3World:
                 or raw.get("terminal_state") != "completed"
             ):
                 raise AdapterFailure("condition browser ledger contradicts shared accounting")
+
+    @staticmethod
+    def _condition_failure_class(exc: BaseException) -> ConditionFailureClass:
+        if isinstance(exc, ConditionKnownProviderError):
+            return ConditionFailureClass.KNOWN_PROVIDER
+        if isinstance(exc, ConditionKnownTransportError):
+            return ConditionFailureClass.KNOWN_TRANSPORT
+        if isinstance(exc, ConditionAmbiguousSend):
+            return ConditionFailureClass.AMBIGUOUS_SEND
+        if isinstance(
+            exc,
+            (ConditionResponseAccountingIncomplete, ProviderResponseReceiptError),
+        ):
+            return ConditionFailureClass.RESPONSE_ACCOUNTING_INCOMPLETE
+        if isinstance(exc, ProviderBudgetExceeded):
+            return ConditionFailureClass.BUDGET_ADMISSION
+        if isinstance(exc, AdapterFailure):
+            return ConditionFailureClass.OUTCOME_VALIDATION
+        return ConditionFailureClass.PROCESS_CRASH
+
+    @staticmethod
+    def _failure_export_receipt_identity(receipt: ConditionFailureExportReceipt) -> str:
+        values = asdict(receipt)
+        values.pop("receipt_sha256")
+        return _identity(values)
+
+    def _validate_and_seal_condition_failure(
+        self,
+        *,
+        request: ConditionExecutionRequest,
+        observer: _AccountingObserver,
+        stopping_phase: str = "condition-execution",
+        failure_class: ConditionFailureClass,
+        process_exit_code: int | None,
+        completed: bool,
+        answer: str | None,
+        existing: ConditionInfrastructureFailureOutcome | None = None,
+    ) -> EssentialFailureRecord:
+        """Validate, seal, export, and retain one consumed infrastructure failure."""
+
+        execution = self._require_execution()
+        observer.boundary.close_in_flight(grace_seconds=0.0, sleeper=self.clock.sleep)
+        accounting = observer.boundary.accounting_document()
+        calls = accounting.get("calls")
+        unknown_call_ids = tuple(
+            cast(str, item["call_id"])
+            for item in cast(list[dict[str, object]], calls if isinstance(calls, list) else [])
+            if isinstance(item, dict)
+            and isinstance(item.get("call_id"), str)
+            and item.get("terminal_state") == "sent_outcome_unknown"
+        )
+        partial_raw_root = self.root / request.raw_output_root
+        preservation = ConditionFailurePreservationRequest(
+            execution=request,
+            failure_class=failure_class,
+            process_exit_code=process_exit_code,
+            completed=completed,
+            answer=answer,
+            error=failure_class.value,
+            partial_raw_root=partial_raw_root,
+            accounting_document=accounting,
+            call_ids=tuple(observer.call_order),
+            logical_call_ids=tuple(observer.logical_call_order),
+            browser_actions=tuple(
+                (action_id, observer.action_terminal_states[action_id])
+                for action_id in observer.action_order
+            ),
+            unknown_call_ids=unknown_call_ids,
+            output_bytes=observer.output_total_bytes or 0,
+            retry_count=0,
+        )
+        outcome = (
+            existing
+            if existing is not None
+            else self.low_level_effects.preserve_condition_failure(preservation)
+        )
+        expected_root = partial_raw_root.parent / "essential-failure"
+        root = _safe_directory(self.root, outcome.essential_root, label="essential failure root")
+        manifest_path = _safe_existing_file(
+            self.root,
+            outcome.essential_manifest_path,
+            label="essential failure manifest",
+        )
+        receipt_path = _safe_existing_file(
+            self.root,
+            outcome.essential_receipt_path,
+            label="essential failure receipt",
+        )
+        role_paths = tuple(
+            _safe_existing_file(root, path, label="essential failure role")
+            for path in (
+                outcome.call_ledger_path,
+                outcome.browser_ledger_path,
+                outcome.process_outcome_path,
+                outcome.completion_path,
+            )
+        )
+        if outcome.stdout_path is not None:
+            role_paths += (
+                _safe_existing_file(root, outcome.stdout_path, label="essential stdout"),
+            )
+        if outcome.stderr_path is not None:
+            role_paths += (
+                _safe_existing_file(root, outcome.stderr_path, label="essential stderr"),
+            )
+        evidence_paths: list[Path] = []
+        for path in sorted(root.rglob("*")):
+            metadata_value = path.stat(follow_symlinks=False)
+            if stat.S_ISDIR(metadata_value.st_mode):
+                if path.is_symlink() or stat.S_IMODE(metadata_value.st_mode) & 0o022:
+                    raise AdapterFailure("essential failure contains an unsafe directory")
+                continue
+            if (
+                path.is_symlink()
+                or not stat.S_ISREG(metadata_value.st_mode)
+                or metadata_value.st_uid != os.getuid()
+                or metadata_value.st_nlink != 1
+                or stat.S_IMODE(metadata_value.st_mode) & 0o022
+            ):
+                raise AdapterFailure("essential failure contains an unsealed artifact")
+            evidence_paths.append(path)
+        host = _host_module(self.repository)
+        if host.privacy_violations(root):
+            raise AdapterFailure("essential failure contains private or credential-like material")
+        held_failure: tuple[HeldArtifact, ...] = ()
+        try:
+            held_failure = self._hold_artifact_set(
+                (manifest_path, receipt_path, *tuple(evidence_paths))
+            )
+            by_path = {artifact.path: artifact for artifact in held_failure}
+            if len(by_path) != len(held_failure) or any(
+                path not in by_path for path in (manifest_path, receipt_path, *role_paths)
+            ):
+                raise AdapterFailure("essential failure roles lack one held artifact identity")
+            essential_artifacts = tuple(
+                artifact for artifact in held_failure if root in artifact.path.parents
+            )
+            if len(essential_artifacts) != len(evidence_paths):
+                raise AdapterFailure("essential failure held file inventory drifted")
+            files = sorted(
+                (
+                    {
+                        "path": artifact.path.relative_to(root).as_posix(),
+                        "bytes": artifact.bytes,
+                        "sha256": artifact.sha256,
+                    }
+                    for artifact in essential_artifacts
+                ),
+                key=lambda item: cast(str, item["path"]),
+            )
+            total = sum(cast(int, item["bytes"]) for item in files)
+            if total > MAX_ESSENTIAL_FAILURE_BYTES or len(files) > MAX_ESSENTIAL_FAILURE_FILES:
+                raise AdapterFailure("essential failure exceeds its independent evidence cap")
+            manifest_artifact = by_path[manifest_path]
+            receipt_artifact = by_path[receipt_path]
+            manifest = self._load_held_json(
+                manifest_artifact,
+                label="essential failure manifest",
+            )
+            receipt = self._load_held_json(
+                receipt_artifact,
+                label="essential failure receipt",
+            )
+            call_ledger = self._load_held_json(
+                by_path[outcome.call_ledger_path],
+                label="essential failure call ledger",
+            )
+            browser_ledger = self._load_held_json(
+                by_path[outcome.browser_ledger_path],
+                label="essential failure browser ledger",
+            )
+            process_document = self._load_held_json(
+                by_path[outcome.process_outcome_path],
+                label="essential failure process outcome",
+            )
+            completion_document = self._load_held_json(
+                by_path[outcome.completion_path],
+                label="essential failure completion",
+            )
+            manifest_sha = manifest_artifact.sha256
+            receipt_sha = receipt_artifact.sha256
+        except BaseException:
+            for artifact in held_failure:
+                artifact.close()
+            raise
+        if (
+            outcome.run_id != request.run_id
+            or outcome.evaluator_run_id != request.evaluator_run_id
+            or outcome.failure_class is not failure_class
+            or outcome.process_exit_code != process_exit_code
+            or outcome.completed is not completed
+            or outcome.answer != answer
+            or outcome.error != failure_class.value
+            or root != expected_root
+            or manifest_path != expected_root.parent / "essential-failure-manifest.json"
+            or receipt_path != expected_root.parent / "essential-failure-complete.json"
+            or len(set(role_paths)) != len(role_paths)
+            or outcome.essential_file_count != len(files)
+            or outcome.essential_total_bytes != total
+            or total > preservation.essential_failure_cap_bytes
+            or len(files) > preservation.essential_failure_file_cap
+            or outcome.output_bytes != preservation.output_bytes
+            or outcome.unknown_call_ids != unknown_call_ids
+            or not outcome.writers_closed
+            or not outcome.browser_descendants_closed
+            or not outcome.credential_cleanup_clean
+            or outcome.core_dump_present
+            or outcome.structural_privacy_findings
+            or not outcome.cleanup_ready
+            or outcome.retry_count != 0
+            or manifest.get("run_id") != request.run_id
+            or manifest.get("failure_class") != failure_class.value
+            or manifest.get("files") != files
+            or manifest.get("file_count") != len(files)
+            or manifest.get("total_bytes") != total
+            or manifest.get("unknown_call_ids") != list(unknown_call_ids)
+            or manifest.get("failure_reconstructable") is not True
+            or manifest.get("private_access_controlled") is not True
+            or manifest.get("publication_blocked_pending_privacy_review") is not True
+            or manifest.get("scientific_result") is not False
+            or receipt.get("run_id") != request.run_id
+            or receipt.get("essential_failure_seal_complete") is not True
+            or receipt.get("attempt_identity_consumed") is not True
+            or receipt.get("infrastructure_invalid") is not True
+            or receipt.get("unscored") is not True
+            or receipt.get("evaluator_permitted") is not False
+            or receipt.get("condition_retry_permitted") is not False
+            or receipt.get("manifest_sha256") != manifest_sha
+            or receipt.get("essential_file_count") != len(files)
+            or receipt.get("essential_total_bytes") != total
+            or call_ledger.get("accounting") != accounting
+            or call_ledger.get("call_ids") != list(observer.call_order)
+            or call_ledger.get("logical_call_ids") != list(observer.logical_call_order)
+            or call_ledger.get("unknown_call_ids") != list(unknown_call_ids)
+            or browser_ledger.get("actions")
+            != [
+                {"action_id": action_id, "terminal_state": terminal_state}
+                for action_id, terminal_state in preservation.browser_actions
+            ]
+            or process_document.get("failure_class") != failure_class.value
+            or process_document.get("exit_code") != process_exit_code
+            or process_document.get("retry_count") != 0
+            or completion_document.get("completed") is not completed
+            or completion_document.get("answer") != answer
+            or completion_document.get("error") != failure_class.value
+            or completion_document.get("evaluator_eligible") is not False
+        ):
+            raise AdapterFailure("essential failure outcome is not reconstructable")
+        pilot.mark_essential_failure_sealed(
+            self._pilot_state,
+            execution_contract_sha256=execution.sha256,
+            run_id=request.run_id,
+            manifest_sha256=manifest_sha,
+            receipt_sha256=receipt_sha,
+        )
+        export_identity = _identity(
+            {
+                "run_id": request.run_id,
+                "essential_manifest_sha256": manifest_sha,
+                "essential_receipt_sha256": receipt_sha,
+                "essential_file_count": len(files),
+                "essential_total_bytes": total,
+            }
+        )
+        export_request = ConditionFailureExportRequest(
+            run_id=request.run_id,
+            essential_root=root,
+            essential_manifest_path=manifest_path,
+            essential_receipt_path=receipt_path,
+            essential_manifest_sha256=manifest_sha,
+            essential_receipt_sha256=receipt_sha,
+            essential_file_count=len(files),
+            essential_total_bytes=total,
+            export_identity=export_identity,
+        )
+        resumed = False
+        try:
+            self._revalidate_artifacts(held_failure)
+            export = self.low_level_effects.export_condition_failure(export_request)
+        except ConditionFailureExportInterrupted:
+            resumed = True
+            self._revalidate_artifacts(held_failure)
+            export = self.low_level_effects.export_condition_failure(export_request)
+        self._revalidate_artifacts(held_failure)
+        if (
+            export.run_id != request.run_id
+            or export.export_identity != export_identity
+            or _HEX64.fullmatch(export.destination_identity) is None
+            or export.essential_manifest_sha256 != manifest_sha
+            or export.essential_receipt_sha256 != receipt_sha
+            or export.essential_file_count != len(files)
+            or export.essential_total_bytes != total
+            or not export.export_complete
+            or export.resumed is not resumed
+            or export.receipt_sha256 != self._failure_export_receipt_identity(export)
+            or by_path[manifest_path].sha256 != manifest_sha
+            or by_path[receipt_path].sha256 != receipt_sha
+        ):
+            for artifact in held_failure:
+                artifact.close()
+            raise AdapterFailure("essential failure export acknowledgement drifted")
+        self._condition_failures[request.run_id] = outcome
+        self._essential_failure_exports[request.run_id] = export
+        self._essential_failure_artifacts[request.run_id] = held_failure
+        self._essential_failure_artifact_bindings[request.run_id] = self._artifact_binding(
+            held_failure
+        )
+        self._primitive("mark_essential_failure_sealed")
+        self._primitive("validate_essential_failure_bundle")
+        self._primitive("export_essential_failure_bundle")
+        return EssentialFailureRecord(
+            run_id=request.run_id,
+            stopping_phase=stopping_phase,
+            failure_class=failure_class.value,
+            manifest_sha256=manifest_sha,
+            receipt_sha256=receipt_sha,
+            export_receipt_sha256=export.receipt_sha256,
+            evidence_binding_sha256=_identity(
+                {
+                    "manifest_sha256": manifest_sha,
+                    "receipt_sha256": receipt_sha,
+                    "export_receipt_sha256": export.receipt_sha256,
+                    "held_artifact_binding_sha256": self._essential_failure_artifact_bindings[
+                        request.run_id
+                    ],
+                    "accounting": accounting,
+                }
+            ),
+        )
+
+    def _seal_accepted_condition_failure(
+        self,
+        *,
+        run_id: str,
+        stopping_phase: str,
+        failure_class: ConditionFailureClass,
+    ) -> EssentialFailureRecord:
+        """Turn a downstream post-entry failure into one immutable stop record."""
+
+        request = self._condition_requests.get(run_id)
+        observer = self._condition_observers.get(run_id)
+        if request is None or observer is None:
+            raise AdapterFailure("post-entry failure lacks its exact condition transaction")
+        completion = observer.completion_state
+        return self._validate_and_seal_condition_failure(
+            request=request,
+            observer=observer,
+            stopping_phase=stopping_phase,
+            failure_class=failure_class,
+            process_exit_code=observer.exit_code,
+            completed=completion[0] if completion is not None else False,
+            answer=completion[1] if completion is not None else None,
+        )
+
+    def _raise_downstream_consumed_failure(
+        self,
+        *,
+        operation: str,
+        run_id: str,
+        stopping_phase: str,
+        failure_class: ConditionFailureClass,
+        message: str,
+        cause: BaseException,
+    ) -> NoReturn:
+        self._record(operation, run_id, "failed")
+        try:
+            record = self._seal_accepted_condition_failure(
+                run_id=run_id,
+                stopping_phase=stopping_phase,
+                failure_class=failure_class,
+            )
+        except BaseException as seal_exc:
+            self._record(operation, run_id, "essential-failure-unsealed")
+            raise AdapterFailure(f"{message} could not be sealed and exported") from seal_exc
+        self._record(operation, run_id, "essential-failure-sealed")
+        raise ConsumedConditionFailure(
+            f"{message} stopped with reconstructable essential evidence",
+            record=record,
+        ) from cause
 
     def run(self, run_id: str) -> str:
         operation = "condition.run"
@@ -2152,18 +2678,52 @@ class ProductionCategory3World:
         started = self.clock.monotonic()
         if started < request.condition_started_monotonic:
             raise AdapterFailure("condition monotonic start moved backward")
+        self._condition_requests[run_id] = request
+        self._condition_observers[run_id] = observer
         try:
-            outcome = self.low_level_effects.execute_condition(
+            typed_outcome = self.low_level_effects.execute_condition(
                 request,
                 observer=observer,
             )
+            if isinstance(typed_outcome, ConditionInfrastructureFailureOutcome):
+                record = self._validate_and_seal_condition_failure(
+                    request=request,
+                    observer=observer,
+                    failure_class=typed_outcome.failure_class,
+                    process_exit_code=typed_outcome.process_exit_code,
+                    completed=typed_outcome.completed,
+                    answer=typed_outcome.answer,
+                    existing=typed_outcome,
+                )
+                raise ConsumedConditionFailure(
+                    "condition returned an infrastructure-invalid outcome",
+                    record=record,
+                )
+            outcome = typed_outcome
+            if outcome.exit_code != 0:
+                record = self._validate_and_seal_condition_failure(
+                    request=request,
+                    observer=observer,
+                    failure_class=ConditionFailureClass.PROCESS_EXIT_NONZERO,
+                    process_exit_code=outcome.exit_code,
+                    completed=outcome.completed,
+                    answer=outcome.answer,
+                )
+                raise ConsumedConditionFailure(
+                    "nonzero condition process exit is infrastructure-invalid",
+                    record=record,
+                )
             completed = self.clock.monotonic()
             if (
                 completed > self._campaign_deadline_monotonic
                 or completed - started > caps.max_wall_seconds
             ):
                 raise ProviderBudgetExceeded("condition wall budget exceeded")
-            expected_raw = (self.root / attempt.raw_output_root).resolve()
+            expected_raw = _safe_directory(
+                self.root,
+                self.root / attempt.raw_output_root,
+                label="bound condition raw root",
+            )
             raw_root = _safe_directory(
                 self.root,
                 outcome.raw_root,
@@ -2255,24 +2815,66 @@ class ProductionCategory3World:
                 raise AdapterFailure("condition process outcome contradicts typed events")
             if outcome.exit_code == 0 and not outcome.completed:
                 raise AdapterFailure("successful condition process did not complete")
-        except BaseException as exc:
+            host = _host_module(self.repository)
+            raw_manifest, raw_receipt = host.validate_raw_attempt_seal(
+                attempt_root=raw_root.parent,
+                raw_root=raw_root,
+                run_id=run_id,
+                package_commit=request.package_commit,
+            )
+            if (
+                raw_manifest.get("total_bytes") != outcome.raw_total_bytes
+                or raw_receipt.get("raw_file_count") != outcome.raw_file_count
+                or raw_receipt.get("raw_total_bytes") != outcome.raw_total_bytes
+                or raw_receipt.get("condition_retry_permitted") is not False
+            ):
+                raise AdapterFailure("condition raw publication is incomplete")
+            raw_paths = (
+                manifest_path,
+                receipt_path,
+                *tuple(path for path in raw_root.rglob("*") if not path.is_dir()),
+            )
+            held_raw = self._hold_artifact_set(raw_paths)
+            self._raw_artifacts[run_id] = held_raw
+            self._raw_artifact_bindings[run_id] = self._artifact_binding(held_raw)
+        except ConsumedConditionFailure:
             self._record_boundary_state(run_id, observer)
             self._primitive("ProviderBudgetBoundary.invoke")
-            outcome_name = (
-                "admission-stopped"
-                if isinstance(exc, ProviderBudgetExceeded)
-                else "unknown"
-                if boundary.unknown_outcomes
-                else "failed"
-            )
-            self._record(operation, run_id, outcome_name)
-            if isinstance(exc, AdapterFailure):
-                raise
-            if isinstance(exc, ProviderBudgetExceeded):
+            self._record(operation, run_id, "essential-failure-sealed")
+            raise
+        except BaseException as exc:
+            failure_class = self._condition_failure_class(exc)
+            try:
+                record = self._validate_and_seal_condition_failure(
+                    request=request,
+                    observer=observer,
+                    failure_class=failure_class,
+                    process_exit_code=observer.exit_code,
+                    completed=(
+                        observer.completion_state[0]
+                        if observer.completion_state is not None
+                        else False
+                    ),
+                    answer=(
+                        observer.completion_state[1]
+                        if observer.completion_state is not None
+                        else None
+                    ),
+                )
+            except BaseException as seal_exc:
+                self._record_boundary_state(run_id, observer)
+                self._primitive("ProviderBudgetBoundary.invoke")
+                self._record(operation, run_id, "essential-failure-unsealed")
                 raise AdapterFailure(
-                    "cost/token/action/output/wall admission stopped condition"
-                ) from exc
-            raise AdapterFailure(f"condition session stopped: {type(exc).__name__}: {exc}") from exc
+                    "consumed condition failure could not be sealed and exported"
+                ) from seal_exc
+            self._record_boundary_state(run_id, observer)
+            self._primitive("ProviderBudgetBoundary.invoke")
+            self._record(operation, run_id, "essential-failure-sealed")
+            raise ConsumedConditionFailure(
+                "consumed condition stopped with reconstructable essential evidence",
+                record=record,
+            ) from exc
         self._condition_outcomes[run_id] = outcome
         self._record_boundary_state(run_id, observer)
         self._primitive("ProviderBudgetBoundary.invoke")
@@ -2283,8 +2885,17 @@ class ProductionCategory3World:
         return _identity(
             {
                 "run_id": run_id,
-                "raw_manifest_sha256": _file_sha256(outcome.raw_manifest_path),
-                "raw_receipt_sha256": _file_sha256(outcome.raw_receipt_path),
+                "raw_manifest_sha256": next(
+                    artifact.sha256
+                    for artifact in self._raw_artifacts[run_id]
+                    if artifact.path == outcome.raw_manifest_path
+                ),
+                "raw_receipt_sha256": next(
+                    artifact.sha256
+                    for artifact in self._raw_artifacts[run_id]
+                    if artifact.path == outcome.raw_receipt_path
+                ),
+                "raw_artifact_binding_sha256": self._raw_artifact_bindings[run_id],
                 "answer_sha256": (
                     hashlib.sha256(outcome.answer.encode()).hexdigest()
                     if outcome.answer is not None
@@ -2297,11 +2908,28 @@ class ProductionCategory3World:
         operation = "condition.export_raw"
         self._begin(operation, run_id)
         execution = self._require_execution()
-        outcome = self._condition_outcomes.get(run_id)
-        if outcome is None:
-            raise AdapterFailure("raw export lacks its accepted condition outcome")
-        manifest_sha = _file_sha256(outcome.raw_manifest_path)
-        receipt_sha = _file_sha256(outcome.raw_receipt_path)
+        try:
+            outcome = self._condition_outcomes.get(run_id)
+            raw_artifacts = self._raw_artifacts.get(run_id)
+            if outcome is None or raw_artifacts is None:
+                raise AdapterFailure("raw export lacks its accepted held condition outcome")
+            self._revalidate_artifacts(raw_artifacts)
+            artifact_by_path = {artifact.path: artifact for artifact in raw_artifacts}
+            manifest_artifact = artifact_by_path.get(outcome.raw_manifest_path)
+            receipt_artifact = artifact_by_path.get(outcome.raw_receipt_path)
+            if manifest_artifact is None or receipt_artifact is None:
+                raise AdapterFailure("raw export manifest or receipt is not held")
+            manifest_sha = manifest_artifact.sha256
+            receipt_sha = receipt_artifact.sha256
+        except BaseException as exc:
+            self._raise_downstream_consumed_failure(
+                operation=operation,
+                run_id=run_id,
+                stopping_phase="raw-export",
+                failure_class=ConditionFailureClass.RAW_EXPORT,
+                message="raw export",
+                cause=exc,
+            )
         try:
             host = _host_module(self.repository)
             manifest, receipt = host.validate_raw_attempt_seal(
@@ -2345,11 +2973,17 @@ class ProductionCategory3World:
                 raw_manifest_sha256=manifest_sha,
                 raw_receipt_sha256=receipt_sha,
             )
+            self._raw_completed_run_ids.append(run_id)
+            self._revalidate_artifacts(raw_artifacts)
         except BaseException as exc:
-            self._record(operation, run_id, "failed")
-            if isinstance(exc, AdapterFailure):
-                raise
-            raise AdapterFailure(f"retained raw validation/export failed: {exc}") from exc
+            self._raise_downstream_consumed_failure(
+                operation=operation,
+                run_id=run_id,
+                stopping_phase="raw-export",
+                failure_class=ConditionFailureClass.RAW_EXPORT,
+                message="raw export",
+                cause=exc,
+            )
         acknowledgement = _file_sha256(exported)
         self._raw_export_acknowledgements[run_id] = acknowledgement
         self._primitive("validate_raw_attempt_seal")
@@ -2368,6 +3002,9 @@ class ProductionCategory3World:
                 "session_sha256s": [_file_sha256(path) for path in outcome.session_paths],
                 "consumed_raw_manifest_sha256": outcome.consumed_raw_manifest_sha256,
                 "consumed_raw_receipt_sha256": outcome.consumed_raw_receipt_sha256,
+                "consumed_raw_artifact_binding_sha256": (
+                    outcome.consumed_raw_artifact_binding_sha256
+                ),
                 "infrastructure_valid": outcome.infrastructure_valid,
             }
         )
@@ -2376,45 +3013,94 @@ class ProductionCategory3World:
         operation = "condition.finalize"
         self._begin(operation, run_id)
         execution = self._require_execution()
-        raw = self._condition_outcomes.get(run_id)
-        qualification = self._qualification
-        if raw is None or qualification is None:
-            raise AdapterFailure("finalizer lacks raw or qualification authority")
-        attempt = execution.attempt(run_id)
-        manifest_sha = _file_sha256(raw.raw_manifest_path)
-        receipt_sha = _file_sha256(raw.raw_receipt_path)
-        expected_finalized = (self.root / attempt.finalized_output_root).resolve()
-        host = _host_module(self.repository)
-        request = FinalizerExecutionRequest(
-            run_id=run_id,
-            evaluator_run_id=self.contract.evaluator_run_ids[self.contract.run_ids.index(run_id)],
-            execution_mode="qualified-local",
-            runtime_qualification_id=qualification.local_finalizer_qualification_id,
-            runtime_qualification_sha256=(qualification.local_finalizer_qualification_sha256),
-            raw_root=raw.raw_root,
-            raw_manifest_path=raw.raw_manifest_path,
-            raw_receipt_path=raw.raw_receipt_path,
-            raw_manifest_sha256=manifest_sha,
-            raw_receipt_sha256=receipt_sha,
-            raw_completion_path=raw.completion_path,
-            raw_completion_sha256=_file_sha256(raw.completion_path),
-            process_outcome_path=raw.process_outcome_path,
-            process_outcome_sha256=_file_sha256(raw.process_outcome_path),
-            raw_output_root=attempt.raw_output_root,
-            finalized_root=expected_finalized,
-            finalized_output_root=attempt.finalized_output_root,
-            finalizer_source_sha256=qualification.finalizer_source_sha256,
-            finalizer_projection_source_sha256=(qualification.finalizer_projection_source_sha256),
-            finalizer_selector_sha256=qualification.finalizer_selector_sha256,
-            finalizer_schema_sha256=qualification.finalizer_schema_sha256,
-            interpreter=qualification.local_finalizer_interpreter,
-            interpreter_sha256=qualification.local_finalizer_interpreter_sha256,
-            dependency_manifest_sha256=(qualification.local_finalizer_dependency_manifest_sha256),
-            dependency_tree_sha256=(qualification.local_finalizer_dependency_tree_sha256),
-            evaluator_dependency_tree_sha256=(qualification.local_evaluator_dependency_tree_sha256),
-            evaluator_contract_sha256=execution.evaluator_contract_sha256,
-            package_commit=_git_identity(self.repository)[0],
-        )
+        try:
+            raw = self._condition_outcomes.get(run_id)
+            qualification = self._qualification
+            raw_artifacts = self._raw_artifacts.get(run_id)
+            raw_binding = self._raw_artifact_bindings.get(run_id)
+            if raw is None or qualification is None or raw_artifacts is None or raw_binding is None:
+                raise AdapterFailure(
+                    "finalizer lacks raw, held evidence, or qualification authority"
+                )
+            self._revalidate_artifacts(raw_artifacts)
+            artifact_by_path = {
+                self.root / artifact.relative_path: artifact for artifact in raw_artifacts
+            }
+            manifest_artifact = artifact_by_path.get(raw.raw_manifest_path)
+            receipt_artifact = artifact_by_path.get(raw.raw_receipt_path)
+            answer_artifact = artifact_by_path.get(raw.completion_path)
+            process_artifact = artifact_by_path.get(raw.process_outcome_path)
+            if any(
+                artifact is None
+                for artifact in (
+                    manifest_artifact,
+                    receipt_artifact,
+                    answer_artifact,
+                    process_artifact,
+                )
+            ):
+                raise AdapterFailure("finalizer input roles are absent from held raw evidence")
+            assert manifest_artifact is not None
+            assert receipt_artifact is not None
+            assert answer_artifact is not None
+            assert process_artifact is not None
+            attempt = execution.attempt(run_id)
+            manifest_sha = manifest_artifact.sha256
+            receipt_sha = receipt_artifact.sha256
+            expected_finalized = self.root / attempt.finalized_output_root
+            host = _host_module(self.repository)
+            request = FinalizerExecutionRequest(
+                run_id=run_id,
+                evaluator_run_id=self.contract.evaluator_run_ids[
+                    self.contract.run_ids.index(run_id)
+                ],
+                execution_mode="qualified-local",
+                runtime_qualification_id=qualification.local_finalizer_qualification_id,
+                runtime_qualification_sha256=(qualification.local_finalizer_qualification_sha256),
+                raw_root=raw.raw_root,
+                raw_manifest_path=raw.raw_manifest_path,
+                raw_receipt_path=raw.raw_receipt_path,
+                raw_manifest_sha256=manifest_sha,
+                raw_receipt_sha256=receipt_sha,
+                raw_completion_path=raw.completion_path,
+                raw_completion_sha256=answer_artifact.sha256,
+                raw_artifacts=raw_artifacts,
+                raw_artifact_binding_sha256=raw_binding,
+                answer_artifact=answer_artifact,
+                process_outcome_path=raw.process_outcome_path,
+                process_outcome_sha256=process_artifact.sha256,
+                raw_output_root=attempt.raw_output_root,
+                finalized_root=expected_finalized,
+                finalized_output_root=attempt.finalized_output_root,
+                finalizer_source_sha256=qualification.finalizer_source_sha256,
+                finalizer_projection_source_sha256=(
+                    qualification.finalizer_projection_source_sha256
+                ),
+                finalizer_selector_sha256=qualification.finalizer_selector_sha256,
+                finalizer_schema_sha256=qualification.finalizer_schema_sha256,
+                interpreter=qualification.local_finalizer_interpreter,
+                interpreter_sha256=qualification.local_finalizer_interpreter_sha256,
+                dependency_manifest_sha256=(
+                    qualification.local_finalizer_dependency_manifest_sha256
+                ),
+                dependency_tree_sha256=(qualification.local_finalizer_dependency_tree_sha256),
+                evaluator_dependency_tree_sha256=(
+                    qualification.local_evaluator_dependency_tree_sha256
+                ),
+                evaluator_contract_sha256=execution.evaluator_contract_sha256,
+                package_commit=_git_identity(self.repository)[0],
+            )
+        except BaseException as exc:
+            self._raise_downstream_consumed_failure(
+                operation=operation,
+                run_id=run_id,
+                stopping_phase="finalization",
+                failure_class=ConditionFailureClass.FINALIZER,
+                message="finalizer",
+                cause=exc,
+            )
+        held_finalized: tuple[HeldArtifact, ...] = ()
+        finalized_binding: str | None = None
         try:
             raw_manifest, raw_receipt = host.validate_raw_attempt_seal(
                 attempt_root=raw.raw_root.parent,
@@ -2431,7 +3117,9 @@ class ProductionCategory3World:
                 or _file_sha256(raw.raw_receipt_path) != receipt_sha
             ):
                 raise AdapterFailure("raw evidence changed before finalizer entry")
+            self._revalidate_artifacts(raw_artifacts)
             outcome = self.low_level_effects.finalize_condition(request)
+            self._revalidate_artifacts(raw_artifacts)
             post_manifest, post_receipt = host.validate_raw_attempt_seal(
                 attempt_root=raw.raw_root.parent,
                 raw_root=raw.raw_root,
@@ -2469,6 +3157,7 @@ class ProductionCategory3World:
                 "consumed_raw_receipt_sha256": receipt_sha,
                 "consumed_raw_completion_sha256": request.raw_completion_sha256,
                 "consumed_process_outcome_sha256": request.process_outcome_sha256,
+                "consumed_raw_artifact_binding_sha256": (request.raw_artifact_binding_sha256),
                 "finalizer_source_sha256": request.finalizer_source_sha256,
                 "finalizer_projection_source_sha256": (request.finalizer_projection_source_sha256),
                 "finalizer_selector_sha256": request.finalizer_selector_sha256,
@@ -2499,6 +3188,7 @@ class ProductionCategory3World:
                 or _file_sha256(completion_path) != outcome.completion_receipt_sha256
                 or outcome.consumed_raw_manifest_sha256 != manifest_sha
                 or outcome.consumed_raw_receipt_sha256 != receipt_sha
+                or outcome.consumed_raw_artifact_binding_sha256 != raw_binding
                 or _file_sha256(raw.raw_manifest_path) != manifest_sha
                 or _file_sha256(raw.raw_receipt_path) != receipt_sha
                 or _file_sha256(raw.completion_path) != request.raw_completion_sha256
@@ -2514,6 +3204,9 @@ class ProductionCategory3World:
                 )
             ):
                 raise AdapterFailure("finalizer outcome or retained source identity drifted")
+            finalized_paths = tuple(path for path in final_root.rglob("*") if not path.is_dir())
+            held_finalized = self._hold_artifact_set(finalized_paths)
+            finalized_binding = self._artifact_binding(held_finalized)
             pilot.mark_attempt_completed(
                 self._pilot_state,
                 execution_contract_sha256=execution.sha256,
@@ -2532,11 +3225,20 @@ class ProductionCategory3World:
                 finalization_complete_sha256=outcome.completion_receipt_sha256,
             )
         except BaseException as exc:
-            self._record(operation, run_id, "failed")
-            if isinstance(exc, AdapterFailure):
-                raise
-            raise AdapterFailure(f"typed infrastructure-invalid finalizer failure: {exc}") from exc
+            for artifact in held_finalized:
+                artifact.close()
+            self._raise_downstream_consumed_failure(
+                operation=operation,
+                run_id=run_id,
+                stopping_phase="finalization",
+                failure_class=ConditionFailureClass.FINALIZER,
+                message="finalizer",
+                cause=exc,
+            )
+        assert finalized_binding is not None
         self._finalizations[run_id] = outcome
+        self._finalized_artifacts[run_id] = held_finalized
+        self._finalized_artifact_bindings[run_id] = finalized_binding
         self._primitive("validate_raw_attempt_seal:pre-finalizer")
         self._primitive("validate_raw_attempt_seal:post-finalizer")
         self._primitive("validate_finalizer_source")
@@ -2552,6 +3254,9 @@ class ProductionCategory3World:
                 "run_id": outcome.run_id,
                 "evaluator_run_id": outcome.evaluator_run_id,
                 "consumed_session_sha256s": list(outcome.consumed_session_sha256s),
+                "consumed_finalized_artifact_binding_sha256": (
+                    outcome.consumed_finalized_artifact_binding_sha256
+                ),
                 "evaluator_contract_sha256": outcome.evaluator_contract_sha256,
                 "evaluator_valid": outcome.evaluator_valid,
                 "task_completed": outcome.task_completed,
@@ -2566,35 +3271,64 @@ class ProductionCategory3World:
         operation = "condition.evaluate"
         self._begin(operation, run_id)
         execution = self._require_execution()
-        finalized = self._finalizations.get(run_id)
-        if finalized is None or not finalized.infrastructure_valid:
-            self._record(operation, run_id, "failed")
-            raise AdapterFailure("infrastructure-invalid finalization remains unscored")
-        attempt = execution.attempt(run_id)
-        request = EvaluatorExecutionRequest(
-            run_id=run_id,
-            evaluator_run_id=self.contract.evaluator_run_ids[self.contract.run_ids.index(run_id)],
-            task_id=attempt.task_id,
-            task_index=attempt.task_index,
-            finalized_root=finalized.finalized_root,
-            session_paths=finalized.session_paths,
-            evaluator_contract_path=execution.evaluator_contract_path,
-            evaluator_contract_sha256=execution.evaluator_contract_sha256,
-            package_commit=_git_identity(self.repository)[0],
-        )
         try:
+            finalized = self._finalizations.get(run_id)
+            finalized_artifacts = self._finalized_artifacts.get(run_id)
+            finalized_binding = self._finalized_artifact_bindings.get(run_id)
+            if (
+                finalized is None
+                or not finalized.infrastructure_valid
+                or finalized_artifacts is None
+                or finalized_binding is None
+            ):
+                raise AdapterFailure("infrastructure-invalid finalization remains unscored")
+            self._revalidate_artifacts(finalized_artifacts)
+            artifact_paths = {
+                self.root / artifact.relative_path: artifact for artifact in finalized_artifacts
+            }
+            if any(path not in artifact_paths for path in finalized.session_paths):
+                raise AdapterFailure("evaluator sessions are absent from held finalization")
+            attempt = execution.attempt(run_id)
+            request = EvaluatorExecutionRequest(
+                run_id=run_id,
+                evaluator_run_id=self.contract.evaluator_run_ids[
+                    self.contract.run_ids.index(run_id)
+                ],
+                task_id=attempt.task_id,
+                task_index=attempt.task_index,
+                finalized_root=finalized.finalized_root,
+                session_paths=finalized.session_paths,
+                finalized_artifacts=finalized_artifacts,
+                finalized_artifact_binding_sha256=finalized_binding,
+                evaluator_contract_path=execution.evaluator_contract_path,
+                evaluator_contract_sha256=execution.evaluator_contract_sha256,
+                package_commit=_git_identity(self.repository)[0],
+            )
+        except BaseException as exc:
+            self._raise_downstream_consumed_failure(
+                operation=operation,
+                run_id=run_id,
+                stopping_phase="evaluation",
+                failure_class=ConditionFailureClass.EVALUATOR,
+                message="evaluator",
+                cause=exc,
+            )
+        try:
+            self._revalidate_artifacts(finalized_artifacts)
             outcome = self.low_level_effects.evaluate_condition(request)
-            session_hashes = tuple(_file_sha256(path) for path in request.session_paths)
+            self._revalidate_artifacts(finalized_artifacts)
+            session_hashes = tuple(artifact_paths[path].sha256 for path in request.session_paths)
             if (
                 outcome.run_id != run_id
                 or outcome.evaluator_run_id != request.evaluator_run_id
-                or outcome.consumed_finalized_root.resolve() != request.finalized_root.resolve()
+                or Path(os.path.abspath(outcome.consumed_finalized_root))
+                != Path(os.path.abspath(request.finalized_root))
                 or outcome.consumed_session_sha256s != session_hashes
+                or outcome.consumed_finalized_artifact_binding_sha256 != finalized_binding
                 or outcome.evaluator_contract_sha256 != execution.evaluator_contract_sha256
                 or outcome.receipt_sha256 != self._evaluator_outcome_identity(outcome)
                 or outcome.infrastructure_failure
                 or outcome.missing_required_evidence
-                or not outcome.evaluator_valid
                 or (
                     outcome.score is not None
                     and (
@@ -2616,10 +3350,14 @@ class ProductionCategory3World:
                 missing_required_evidence=outcome.missing_required_evidence,
             )
         except BaseException as exc:
-            self._record(operation, run_id, "failed")
-            if isinstance(exc, AdapterFailure):
-                raise
-            raise AdapterFailure(f"pinned evaluator failed: {exc}") from exc
+            self._raise_downstream_consumed_failure(
+                operation=operation,
+                run_id=run_id,
+                stopping_phase="evaluation",
+                failure_class=ConditionFailureClass.EVALUATOR,
+                message="evaluator",
+                cause=exc,
+            )
         self._evaluations[run_id] = {
             "evaluator_run_id": outcome.evaluator_run_id,
             "evaluator_valid": outcome.evaluator_valid,
@@ -2650,7 +3388,314 @@ class ProductionCategory3World:
             raise
         self._record(operation, kind, f"retained:{identity[:12]}")
 
-    def checkpoint(self, *, name: str) -> str:
+    @staticmethod
+    def _provider_cost_receipt_identity(receipt: ProviderCostReceipt) -> str:
+        values = asdict(receipt)
+        values.pop("receipt_sha256")
+        return _identity(values)
+
+    def _observe_provider_cost(
+        self,
+        *,
+        state: Mapping[str, object],
+    ) -> ProviderCostReceipt:
+        candidates = [
+            handle
+            for ordinal, handle in sorted(self._provider_handles.items())
+            if ordinal not in self._closed_launch_slots
+        ]
+        if len(candidates) != 1:
+            raise AdapterFailure("checkpoint lacks one exact active provider owner")
+        campaign_started_wall = finite_time(
+            state.get("campaign_started_at_epoch"),
+            label="campaign wall origin",
+        )
+        if self._campaign_started_monotonic is None:
+            raise AdapterFailure("checkpoint lacks its campaign monotonic origin")
+        observed_wall = self.clock.wall_time()
+        observed_monotonic = self.clock.monotonic()
+        request = ProviderCostObservationRequest(
+            provider_handle=candidates[0],
+            observed_wall_time=observed_wall,
+            observed_monotonic=observed_monotonic,
+            campaign_started_wall_time=campaign_started_wall,
+            campaign_started_monotonic=self._campaign_started_monotonic,
+        )
+        receipt = self.low_level_effects.provider_cost_receipt(request)
+        numeric = (
+            receipt.hourly_price_usd,
+            receipt.active_started_wall_time,
+            receipt.observed_wall_time,
+            receipt.prior_preflight_cost_usd,
+            receipt.current_empirical_cost_usd,
+            receipt.cumulative_provider_cost_usd,
+        )
+        effective_end = (
+            receipt.active_ended_wall_time
+            if receipt.active_ended_wall_time is not None
+            else receipt.observed_wall_time
+        )
+        expected_current = (
+            (effective_end - receipt.active_started_wall_time) * receipt.hourly_price_usd / 3600.0
+        )
+        deterministic = (
+            self.authorization_context.execution_mode
+            is EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+        )
+        if (
+            receipt.owned_instance_identity != request.provider_handle.opaque_identity
+            or receipt.launch_ordinal != request.provider_handle.launch_ordinal
+            or type(receipt.real_provider_effects) is not bool
+            or any(not math.isfinite(value) or value < 0 for value in numeric)
+            or (
+                receipt.active_ended_wall_time is not None
+                and (
+                    not math.isfinite(receipt.active_ended_wall_time)
+                    or receipt.active_ended_wall_time < receipt.active_started_wall_time
+                )
+            )
+            or receipt.active_started_wall_time > receipt.observed_wall_time
+            or receipt.observed_wall_time != observed_wall
+            or not math.isclose(
+                receipt.current_empirical_cost_usd,
+                expected_current,
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+            or not math.isclose(
+                receipt.cumulative_provider_cost_usd,
+                receipt.prior_preflight_cost_usd + receipt.current_empirical_cost_usd,
+                rel_tol=1e-12,
+                abs_tol=1e-12,
+            )
+            or receipt.receipt_sha256 != self._provider_cost_receipt_identity(receipt)
+            or (
+                deterministic
+                and (
+                    receipt.real_provider_effects
+                    or receipt.hourly_price_usd != 0.0
+                    or receipt.prior_preflight_cost_usd != 0.0
+                    or receipt.current_empirical_cost_usd != 0.0
+                    or receipt.cumulative_provider_cost_usd != 0.0
+                )
+            )
+            or (not deterministic and not receipt.real_provider_effects)
+        ):
+            raise AdapterFailure("provider lifecycle cost receipt is not exact")
+        self._provider_cost_receipt = receipt
+        return receipt
+
+    def _checkpoint_cost_projection(
+        self,
+        *,
+        actual_provider_cost_usd: float,
+    ) -> float:
+        execution = self._require_execution()
+        document = load_json(execution.path)
+        calibration = document.get("budget_calibration")
+        expected = calibration.get("expected") if isinstance(calibration, dict) else None
+        reactive = expected.get("reactive_attempt") if isinstance(expected, dict) else None
+        simulative = expected.get("simulative_attempt") if isinstance(expected, dict) else None
+        values = (
+            expected.get("aggregate_total_cost_usd") if isinstance(expected, dict) else None,
+            reactive.get("total_cost_usd") if isinstance(reactive, dict) else None,
+            simulative.get("total_cost_usd") if isinstance(simulative, dict) else None,
+        )
+        if any(
+            not isinstance(value, (int, float))
+            or isinstance(value, bool)
+            or not math.isfinite(float(value))
+            or float(value) < 0
+            for value in values
+        ):
+            raise AdapterFailure("frozen checkpoint cost projection is malformed")
+        aggregate_expected, reactive_expected, simulative_expected = (
+            float(cast(float, value)) for value in values
+        )
+        remaining_expected = reactive_expected + simulative_expected
+        actual_first_pair = self._aggregate_usage.cost_usd + actual_provider_cost_usd
+        projected = max(aggregate_expected, actual_first_pair + remaining_expected)
+        if not math.isfinite(projected) or projected < actual_first_pair:
+            raise AdapterFailure("checkpoint cost projection is not conservative")
+        return projected
+
+    def _task_a_checkpoint_evidence(
+        self,
+        *,
+        state: Mapping[str, object],
+    ) -> tuple[
+        tuple[bool, bool],
+        tuple[bool, bool],
+        tuple[bool, bool],
+        bool,
+        bool,
+        bool,
+        bool,
+        bool,
+        dict[str, object],
+    ]:
+        self._require_execution()
+        host = _host_module(self.repository)
+        run_ids = self.contract.run_ids[:2]
+        raw_bindings = state.get("raw_attempt_bindings")
+        selections = state.get("attempt_finalizations")
+        if not isinstance(raw_bindings, dict) or not isinstance(selections, dict):
+            raise AdapterFailure("checkpoint retained attempt state is malformed")
+        raw_valid: list[bool] = []
+        evaluator_valid: list[bool] = []
+        valid_scored: list[bool] = []
+        credential_issue = bool(state.get("credential_safety_stop_detected"))
+        cleanup_issue = bool(state.get("core_safety_stop_detected"))
+        evidence_bindings: dict[str, object] = {}
+        for run_id in run_ids:
+            outcome = self._condition_outcomes.get(run_id)
+            finalized = self._finalizations.get(run_id)
+            evaluation = self._evaluations.get(run_id)
+            binding = raw_bindings.get(run_id)
+            valid = False
+            raw_receipt: dict[str, object] = {}
+            manifest_identity: str | None = None
+            receipt_identity: str | None = None
+            try:
+                if outcome is None or not isinstance(binding, dict):
+                    raise AdapterFailure("Task A raw outcome is absent")
+                manifest, raw_receipt = host.validate_raw_attempt_seal(
+                    attempt_root=outcome.raw_root.parent,
+                    raw_root=outcome.raw_root,
+                    run_id=run_id,
+                    package_commit=_git_identity(self.repository)[0],
+                )
+                manifest_sha = _file_sha256(outcome.raw_manifest_path)
+                receipt_sha = _file_sha256(outcome.raw_receipt_path)
+                manifest_identity = manifest_sha
+                receipt_identity = receipt_sha
+                exported = self.public_root / (
+                    f"raw-export-{self.contract.run_ids.index(run_id):02d}.json"
+                )
+                export_document = load_json(exported)
+                valid = (
+                    binding == {"manifest_sha256": manifest_sha, "receipt_sha256": receipt_sha}
+                    and run_id in cast(list[object], state.get("raw_attempts_complete", []))
+                    and manifest.get("total_bytes") == outcome.raw_total_bytes
+                    and raw_receipt.get("raw_file_count") == outcome.raw_file_count
+                    and raw_receipt.get("raw_total_bytes") == outcome.raw_total_bytes
+                    and export_document
+                    == {
+                        "run_id": run_id,
+                        "raw_manifest_sha256": manifest_sha,
+                        "raw_receipt_sha256": receipt_sha,
+                        "raw_file_count": outcome.raw_file_count,
+                        "raw_total_bytes": outcome.raw_total_bytes,
+                    }
+                    and self._raw_export_acknowledgements.get(run_id) == _file_sha256(exported)
+                    and finalized is not None
+                    and finalized.consumed_raw_manifest_sha256 == manifest_sha
+                    and finalized.consumed_raw_receipt_sha256 == receipt_sha
+                    and finalized.infrastructure_valid
+                    and _file_sha256(finalized.completion_receipt_path)
+                    == finalized.completion_receipt_sha256
+                )
+            except (AdapterFailure, OSError, ValueError, KeyError):
+                valid = False
+            raw_valid.append(valid)
+            credential_issue = credential_issue or any(
+                raw_receipt.get(field) is True
+                for field in (
+                    "actual_credential_exposure_detected",
+                    "credential_cleanup_integrity_failure",
+                )
+            )
+            cleanup_issue = cleanup_issue or (
+                raw_receipt.get("condition_terminated") is not True
+                or raw_receipt.get("container_and_browser_cleanup_clean") is not True
+                or raw_receipt.get("credential_cleanup_clean") is not True
+                or raw_receipt.get("structural_privacy_findings") != []
+            )
+            evaluator_valid.append(
+                isinstance(evaluation, dict) and evaluation.get("evaluator_valid") is True
+            )
+            valid_scored.append(
+                isinstance(evaluation, dict)
+                and evaluation.get("valid_scored_attempt") is True
+                and isinstance(evaluation.get("score"), (int, float))
+                and not isinstance(evaluation.get("score"), bool)
+                and math.isfinite(float(cast(float, evaluation.get("score"))))
+            )
+            evidence_bindings[run_id] = {
+                "raw_valid": valid,
+                "raw_manifest_sha256": manifest_identity,
+                "raw_receipt_sha256": receipt_identity,
+                "finalization_complete_sha256": (
+                    None if finalized is None else finalized.completion_receipt_sha256
+                ),
+                "evaluator_receipt_sha256": (
+                    None if evaluation is None else evaluation.get("receipt_sha256")
+                ),
+                "evaluator_valid": evaluator_valid[-1],
+                "valid_scored_attempt": valid_scored[-1],
+            }
+        command, command_sha, _source = resolve_registered_command_package(
+            self.repository,
+            self.contract,
+        )
+        manifests = command.get("manifests")
+        pair_diffs = command.get("pair_diffs")
+        if not isinstance(manifests, list) or len(manifests) < 2:
+            raise AdapterFailure("checkpoint command pair is absent")
+        left, right = manifests[:2]
+        if not isinstance(left, dict) or not isinstance(right, dict):
+            raise AdapterFailure("checkpoint command pair is malformed")
+        recomputed_pair = pilot.diff_pair_manifests(left, right)
+        pair_match = (
+            command_sha == self._command_package_sha256
+            and isinstance(pair_diffs, list)
+            and bool(pair_diffs)
+            and pair_diffs[0] == recomputed_pair
+            and recomputed_pair.get("valid") is True
+        )
+        selection_values = [selections.get(run_id) for run_id in run_ids]
+        try:
+            closure_hashes = {
+                pilot._selection_closure_sha256(cast(dict[str, object], value))
+                for value in selection_values
+                if isinstance(value, dict)
+            }
+            finalizer_closure = (
+                all(isinstance(value, dict) for value in selection_values)
+                and len(closure_hashes) == 1
+            )
+        except (KeyError, pilot.T09PilotError):
+            finalizer_closure = False
+        scores = [
+            evaluation.get("score") if isinstance(evaluation, dict) else None
+            for evaluation in (self._evaluations.get(run_id) for run_id in run_ids)
+        ]
+        task_completed = [
+            evaluation.get("task_completed") if isinstance(evaluation, dict) else None
+            for evaluation in (self._evaluations.get(run_id) for run_id in run_ids)
+        ]
+        severe_floor_or_ceiling = all(valid_scored) and (
+            (scores == [0.0, 0.0] and task_completed == [False, False])
+            or (scores == [1.0, 1.0] and task_completed == [True, True])
+        )
+        evidence_bindings["pair"] = {
+            "command_package_sha256": command_sha,
+            "recomputed_pair_diff": recomputed_pair,
+            "finalizer_closure_valid": finalizer_closure,
+        }
+        return (
+            cast(tuple[bool, bool], tuple(raw_valid)),
+            cast(tuple[bool, bool], tuple(evaluator_valid)),
+            cast(tuple[bool, bool], tuple(valid_scored)),
+            finalizer_closure,
+            pair_match,
+            credential_issue,
+            cleanup_issue,
+            severe_floor_or_ceiling,
+            evidence_bindings,
+        )
+
+    def checkpoint(self, *, name: str) -> FirstPairCheckpointResult:
         operation = "evidence.checkpoint"
         self._begin(operation, name)
         execution = self._require_execution()
@@ -2664,19 +3709,63 @@ class ProductionCategory3World:
                 label="first-pair start",
             )
             decided = self.clock.wall_time()
-            decided_monotonic, _remaining = self._campaign_remaining()
+            decided_monotonic, remaining = self._campaign_remaining()
             first_monotonic = self._condition_started_monotonic.get(self.contract.run_ids[0])
             if (
                 first_monotonic is None
                 or decided < first_started
-                or decided_monotonic - first_monotonic > execution.limits.max_pair_wall_seconds
+                or decided_monotonic < first_monotonic
             ):
-                raise AdapterFailure("first-pair checkpoint exceeded its package wall cap")
+                raise AdapterFailure("first-pair checkpoint time origins are invalid")
+            (
+                raw_valid,
+                evaluator_valid,
+                valid_scored,
+                finalizer_closure,
+                pair_match,
+                credential_issue,
+                cleanup_issue,
+                severe_floor_or_ceiling,
+                evidence_bindings,
+            ) = self._task_a_checkpoint_evidence(state=state)
+            provider_cost = self._observe_provider_cost(state=state)
+            projected_cost = self._checkpoint_cost_projection(
+                actual_provider_cost_usd=provider_cost.cumulative_provider_cost_usd,
+            )
+            assert self._runtime_budget is not None
+            next_caps = self._runtime_budget.condition_caps.get(self.contract.run_ids[2])
+            if next_caps is None:
+                raise AdapterFailure("checkpoint lacks the next exact condition cap")
+            checkpoint_input = pilot.PairCheckpointInput(
+                plan_id=self.contract.plan_id,
+                attempt_run_ids=cast(tuple[str, str], self.contract.run_ids[:2]),
+                valid_evidence=raw_valid,
+                evaluator_succeeded=evaluator_valid,
+                pair_match_valid=pair_match,
+                credential_issue=credential_issue,
+                cleanup_issue=cleanup_issue,
+                severe_floor_or_ceiling_failure=severe_floor_or_ceiling,
+                actual_usage=self._aggregate_usage,
+                actual_pair_wall_seconds=decided_monotonic - first_monotonic,
+                projected_aggregate_cost_usd=projected_cost,
+                actual_lambda_cost_usd=provider_cost.cumulative_provider_cost_usd,
+                remaining_campaign_seconds=remaining,
+                next_attempt_hard_wall_seconds=int(next_caps.max_wall_seconds),
+                prior_t09_cost_usd=self.contract.prior_t09_cost_usd,
+                cumulative_t09_cost_cap_usd=self.contract.cumulative_t09_cost_cap_usd,
+                valid_scored_attempt=valid_scored,
+                finalizer_closure_valid=finalizer_closure,
+            )
+            retained_decision = pilot.first_pair_decision(checkpoint_input)
             decision = {
-                "decision": "continue-to-task-b",
+                **retained_decision,
                 "first_pair_started_at_epoch": first_started,
-                "second_pair_started_at_epoch": decided,
+                "second_pair_started_at_epoch": (
+                    decided if retained_decision.get("decision") == "continue-to-task-b" else None
+                ),
                 "decided_at_epoch": decided,
+                "evidence_binding_sha256": _identity(evidence_bindings),
+                "provider_cost_receipt_sha256": provider_cost.receipt_sha256,
             }
             pilot.record_first_pair_checkpoint(
                 self._pilot_state,
@@ -2684,14 +3773,41 @@ class ProductionCategory3World:
                 decision=decision,
                 decided_at_epoch=decided,
             )
+            retained_state = pilot.load_validated_pilot_state(
+                self._pilot_state,
+                execution_contract_sha256=execution.sha256,
+            )
+            binding = retained_state.get("first_pair_checkpoint_binding")
+            decision_sha = pilot.canonical_sha256(decision)
+            if (
+                retained_state.get("first_pair_decision") != retained_decision.get("decision")
+                or retained_state.get("first_pair_decision_sha256") != decision_sha
+                or not isinstance(binding, dict)
+                or binding.get("decision_sha256") != decision_sha
+            ):
+                raise AdapterFailure("persisted first-pair decision binding drifted")
         except BaseException as exc:
             self._record(operation, name, "failed")
             if isinstance(exc, AdapterFailure):
                 raise
             raise AdapterFailure(f"first-pair checkpoint failed: {exc}") from exc
+        disposition = FirstPairCheckpointDisposition(cast(str, retained_decision["decision"]))
+        reasons = retained_decision.get("reasons")
+        if not isinstance(reasons, list) or not all(isinstance(item, str) for item in reasons):
+            self._record(operation, name, "failed")
+            raise AdapterFailure("retained checkpoint reasons are malformed")
+        result = FirstPairCheckpointResult(
+            disposition=disposition,
+            reasons=tuple(reasons),
+            decision_sha256=decision_sha,
+            evidence_binding_sha256=cast(str, decision["evidence_binding_sha256"]),
+        )
+        self._checkpoint_result = result
+        self._checkpoint_document = decision
+        self._primitive("first_pair_decision")
         self._primitive("record_first_pair_checkpoint")
-        self._record(operation, name, "passed")
-        return _identity(decision)
+        self._record(operation, name, disposition.value)
+        return result
 
     @staticmethod
     def _cleanup_receipt_identity(receipt: CleanupExecutionReceipt) -> str:
@@ -2719,7 +3835,14 @@ class ProductionCategory3World:
         self._cleanup_calls += 1
         execution = self._execution_contract
         try:
-            if execution is not None and self._pilot_state.is_file():
+            state: dict[str, object]
+            if self._root_identity_mismatch:
+                state = {
+                    "empirical_attempts_entered": list(self._entered_run_ids),
+                    "raw_attempts_complete": list(self._raw_completed_run_ids),
+                }
+                self._primitive("held_in_memory_empirical_prefix:cleanup")
+            elif execution is not None and self._pilot_state.is_file():
                 state = pilot.load_validated_pilot_state(
                     self._pilot_state,
                     execution_contract_sha256=execution.sha256,
@@ -2776,6 +3899,13 @@ class ProductionCategory3World:
                 host_run_id=self.contract.host_run_id,
                 provider_handle=handle,
                 transaction_root=self.root,
+                held_transaction_root=self.held_transaction_root,
+                authorization_reference=(
+                    self.authorization_context.external_authorization_reference
+                ),
+                authorization_source_sha256=(
+                    self.authorization_context.external_authorization_source_sha256
+                ),
                 immutable_handoff_sha256=handoff_sha,
                 empirical_prefix=tuple(
                     cast(list[str], state.get("empirical_attempts_entered", []))
@@ -2787,6 +3917,26 @@ class ProductionCategory3World:
                 started_monotonic=started_monotonic,
                 cleanup_deadline_monotonic=cleanup_deadline,
             )
+            if isinstance(self.authority, ValidatedLiveEffectAuthority):
+                cleanup_binding = dict(
+                    self.low_level_effects.metadata_authorization_binding(contract=self.contract)
+                )
+                self.authority.assert_phase_binding(
+                    reference=cast(str, cleanup_binding.get("authorization_reference")),
+                    source_sha256=cast(
+                        str,
+                        cleanup_binding.get("authorization_source_sha256"),
+                    ),
+                    allow_root_path_mismatch=self._root_identity_mismatch,
+                )
+                if (
+                    request.authorization_reference
+                    != self.authority.external_authorization_reference
+                    or request.authorization_source_sha256
+                    != self.authority.external_authorization_source_sha256
+                ):
+                    raise AdapterFailure("cleanup authority differs from the live transaction")
+                self._primitive("validate_unified_live_authority:cleanup")
             receipt = self.low_level_effects.cleanup_transaction(request)
             returned_wall = self.clock.wall_time()
             returned_monotonic = self.clock.monotonic()
@@ -2811,6 +3961,9 @@ class ProductionCategory3World:
             self._record(operation, subject, "interrupted-resumable")
             raise
         except BaseException as exc:
+            if isinstance(self.authority, ValidatedLiveEffectAuthority):
+                with suppress(ValueError):
+                    self.authority.terminal_failed_nonreplayable()
             self._record(operation, subject, "failed")
             if isinstance(exc, AdapterFailure):
                 raise
@@ -2840,9 +3993,17 @@ class ProductionCategory3World:
             findings.extend(str(value) for value in host.privacy_violations(outcome.raw_root))
         self._primitive("privacy_violations")
         if findings:
+            if isinstance(self.authority, ValidatedLiveEffectAuthority):
+                self.authority.terminal_failed_nonreplayable()
             self._record(operation, "effect-evidence", "finding")
             raise StructuralPrivacyFinding("retained structural privacy scanner found a violation")
         assert receipt is not None
+        if isinstance(self.authority, ValidatedLiveEffectAuthority):
+            if self._authority_launch_consumed:
+                self.authority.terminal_complete()
+            else:
+                self.authority.terminal_failed_nonreplayable()
+            self._primitive("publish_live_authority_consumption_receipt")
         self._record(operation, "effect-evidence", "passed")
         return _identity({"privacy": "clean", "cleanup": receipt.receipt_sha256})
 
@@ -2859,6 +4020,18 @@ class ProductionCategory3World:
             "effect_protocol_version": EFFECT_PROTOCOL_VERSION,
             "effect_authority": self.authority.kind.value,
             "authority_source": self.authority.source,
+            "authority_consumption": (
+                self.authority.consumption_receipt(
+                    allow_root_path_mismatch=self._root_identity_mismatch
+                )
+                if isinstance(self.authority, ValidatedLiveEffectAuthority)
+                else {
+                    "terminal_state": "shadow-only",
+                    "single_use": False,
+                    "contains_private_overlay_contents": False,
+                }
+            ),
+            "held_transaction_root": self.held_transaction_root.to_document(),
             "authorization_context_semantic_sha256": (self.authorization_context.semantic_sha256),
             "effect_implementation": (
                 self.authorization_context.effect_implementation.to_document()
@@ -2910,6 +4083,44 @@ class ProductionCategory3World:
                 "domains_separate": True,
             },
             "evaluations": dict(self._evaluations),
+            "first_pair_checkpoint": self._checkpoint_document,
+            "provider_cost_receipt": (
+                None if self._provider_cost_receipt is None else asdict(self._provider_cost_receipt)
+            ),
+            "essential_failures": {
+                run_id: {
+                    "failure_class": outcome.failure_class.value,
+                    "manifest_sha256": next(
+                        artifact.sha256
+                        for artifact in self._essential_failure_artifacts[run_id]
+                        if artifact.path == outcome.essential_manifest_path
+                    ),
+                    "receipt_sha256": next(
+                        artifact.sha256
+                        for artifact in self._essential_failure_artifacts[run_id]
+                        if artifact.path == outcome.essential_receipt_path
+                    ),
+                    "file_count": outcome.essential_file_count,
+                    "total_bytes": outcome.essential_total_bytes,
+                    "unknown_call_ids": list(outcome.unknown_call_ids),
+                    "process_exit_code": outcome.process_exit_code,
+                    "completed": outcome.completed,
+                    "unscored": True,
+                    "retry_count": outcome.retry_count,
+                    "export_receipt_sha256": self._essential_failure_exports[run_id].receipt_sha256,
+                    "export_resumed": self._essential_failure_exports[run_id].resumed,
+                    "held_artifact_binding_sha256": (
+                        self._essential_failure_artifact_bindings[run_id]
+                    ),
+                }
+                for run_id, outcome in self._condition_failures.items()
+            },
+            "held_evidence": {
+                "raw": dict(self._raw_artifact_bindings),
+                "finalized": dict(self._finalized_artifact_bindings),
+                "essential_failure": dict(self._essential_failure_artifact_bindings),
+                "revalidated_across_consumers": True,
+            },
             "package_staging": self._stage_evidence,
             "host_receipts": {
                 "qualification": (
@@ -2939,7 +4150,31 @@ class ProductionCategory3World:
             "cleanup_receipt_sha256": (
                 self._cleanup_receipt.receipt_sha256 if self._cleanup_receipt is not None else None
             ),
+            "cleanup_used_held_root_after_path_mismatch": (
+                self._root_identity_mismatch and self._cleanup_receipt is not None
+            ),
         }
+
+    def release_resources(self) -> None:
+        """Release descriptors only after terminal evidence has been materialized."""
+
+        if self._resources_released:
+            return
+        artifact_groups = (
+            self._raw_artifacts,
+            self._finalized_artifacts,
+            self._essential_failure_artifacts,
+        )
+        for groups in artifact_groups:
+            for artifacts in groups.values():
+                for artifact in artifacts:
+                    artifact.close()
+        if isinstance(self.authority, ValidatedLiveEffectAuthority):
+            self.authority.close()
+        if self.held_effect_source is not None:
+            self.held_effect_source.close()
+        self.held_transaction_root.close()
+        self._resources_released = True
 
 
 def build_production_adapter_assembly(
@@ -2949,6 +4184,8 @@ def build_production_adapter_assembly(
     low_level_effects: LowLevelEffects,
     authorization_context: EffectAuthorizationContext,
     authority: EffectAuthorityGrant,
+    held_transaction_root: HeldTransactionRoot,
+    held_effect_source: HeldEffectSource | None = None,
 ) -> ProductionCategory3World:
     """Build the sole production assembly after exact package/grant validation."""
 
@@ -2961,31 +4198,45 @@ def build_production_adapter_assembly(
         or authorization_context.control_tree != tree
         or authorization_context.provider_contract_version != contract.version
         or authorization_context.plan_id != contract.plan_id
+        or authorization_context.plan_path != contract.plan_path
+        or authorization_context.plan_bytes != contract.expected_plan_bytes
         or authorization_context.plan_sha256 != contract.expected_plan_sha256
         or authorization_context.command_package_sha256 != command_sha
         or authorization_context.effect_implementation
         != low_level_effects.implementation_identity()
-        or authorization_context.transaction_root_identity
-        != low_level_effects.transaction_root_identity()
+        or authorization_context.transaction_root_identity != held_transaction_root.semantic_sha256
+        or authorization_context.cost_limits.preflight_provider_cost_usd
+        != contract.preflight_lambda_cost_cap_usd
+        or authorization_context.cost_limits.campaign_provider_cost_usd
+        != contract.campaign_lambda_cost_cap_usd
+        or authorization_context.cost_limits.campaign_openai_cost_usd
+        != contract.campaign_openai_cost_cap_usd
+        or authorization_context.cost_limits.campaign_aggregate_cost_usd
+        != contract.campaign_aggregate_cost_cap_usd
+        or authorization_context.cost_limits.prior_t09_cost_usd != contract.prior_t09_cost_usd
+        or authorization_context.cost_limits.cumulative_t09_cost_usd
+        != contract.cumulative_t09_cost_cap_usd
+        or authorization_context.zero_retry is not True
+        or authorization_context.interpretation != "descriptive-calibration-only"
+        or authorization_context.campaign_count != 1
         or low_level_effects.provider_contract_version != contract.version
         or low_level_effects.effect_protocol_version != EFFECT_PROTOCOL_VERSION
         or authority.kind is not authorization_context.authority_kind
         or not authority.authorizes(authorization_context)
     ):
         raise ValueError("effect authority does not bind the exact control/package context")
-    transaction_root = low_level_effects.transaction_root().resolve(strict=True)
-    registered_identity = validate_package_effect_registration(root, contract)
-    if (
-        transaction_root.is_symlink()
-        or not transaction_root.is_dir()
-        or stat.S_IMODE(transaction_root.stat().st_mode) & 0o022
+    held_transaction_root.revalidate()
+    if low_level_effects.transaction_root() != held_transaction_root.path:
+        raise ValueError("effect transaction root is not the shared-held directory")
+    if authorization_context.authority_kind is EffectAuthorityKind.LIVE_AUTHORIZED and (
+        not isinstance(authority, ValidatedLiveEffectAuthority)
+        or authority.held_transaction_root is not held_transaction_root
+        or held_effect_source is None
+        or held_effect_source.identity != authorization_context.effect_implementation
     ):
-        raise ValueError("effect transaction root is not a private exact directory")
-    if (
-        authorization_context.authority_kind is EffectAuthorityKind.LIVE_AUTHORIZED
-        and registered_identity != authorization_context.effect_implementation
-    ):
-        raise ValueError("live effect authority does not bind the registered package factory")
+        raise ValueError("live effect authority is not an opaque validator product")
+    if held_effect_source is not None:
+        held_effect_source.revalidate(root)
     probe_production_adapter_assembly(root, contract)
     return ProductionCategory3World(
         root,
@@ -2993,6 +4244,8 @@ def build_production_adapter_assembly(
         low_level_effects=low_level_effects,
         authorization_context=authorization_context,
         authority=authority,
+        held_transaction_root=held_transaction_root,
+        held_effect_source=held_effect_source,
     )
 
 

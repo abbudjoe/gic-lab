@@ -170,6 +170,10 @@ def test_capsule_remains_truthful_after_merge_pending_goal_transition() -> None:
         "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json"
         in capsule["provenance"]
     )
+    assert (
+        "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json"
+        in capsule["provenance"]
+    )
 
 
 def test_state_capsule_timestamp_is_explicitly_isolated() -> None:

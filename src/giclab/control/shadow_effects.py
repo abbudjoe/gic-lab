@@ -12,6 +12,7 @@ import io
 import json
 import os
 import shutil
+import stat
 import subprocess
 import tarfile
 import tempfile
@@ -28,7 +29,13 @@ from giclab.control.effects import (
     ConditionAmbiguousSend,
     ConditionEventObserver,
     ConditionExecutionRequest,
+    ConditionFailureExportInterrupted,
+    ConditionFailureExportReceipt,
+    ConditionFailureExportRequest,
+    ConditionFailurePreservationRequest,
+    ConditionInfrastructureFailureOutcome,
     ConditionKnownProviderError,
+    ConditionKnownTransportError,
     ConditionModelCall,
     ConditionModelResponse,
     ConditionProcessOutcome,
@@ -36,12 +43,14 @@ from giclab.control.effects import (
     EffectAuthorityGrant,
     EffectAuthorityKind,
     EffectAuthorizationContext,
+    EffectAuthorizationLimits,
     EffectExecutionMode,
     EffectImplementationIdentity,
     EvaluatorExecutionOutcome,
     EvaluatorExecutionRequest,
     FinalizerExecutionOutcome,
     FinalizerExecutionRequest,
+    HeldTransactionRoot,
     HostPreflightReceipt,
     HostPreflightRejected,
     HostPreflightRequest,
@@ -51,10 +60,14 @@ from giclab.control.effects import (
     ModelMetadataChannel,
     PackageStageReceipt,
     PackageStageRequest,
+    ProviderCostObservationRequest,
+    ProviderCostReceipt,
     ProviderHandle,
     RuntimeClock,
     ScientificFreezeReceipt,
     ScientificFreezeRequest,
+    ValidatedLiveEffectAuthority,
+    hold_transaction_root,
     mint_shadow_effect_authority,
     repository_effect_identity,
 )
@@ -130,9 +143,19 @@ class ShadowFaultPlan:
     cleanup_interruption_count: int = 0
     answer_overrides: tuple[str, str] | None = None
     model_input_tokens_over_cap: bool = False
+    model_cost_over_cap: bool = False
     browser_actions_over_cap: bool = False
     output_bytes_over_cap: bool = False
     condition_wall_over_cap: bool = False
+    failure_export_interruption_count: int = 0
+    essential_target_bytes: int | None = None
+    essential_artifact_fault: str | None = None
+    mutate_essential_during_export: bool = False
+    evaluator_unscored_run_index: int | None = None
+    evaluator_invalid_run_index: int | None = None
+    task_a_zero_scores: bool = False
+    checkpoint_missing_raw_after_task_a: bool = False
+    held_identity_fault: str | None = None
 
 
 class DeterministicRuntimeClock(RuntimeClock):
@@ -354,6 +377,7 @@ class DeterministicLowLevelEffects:
         contract: T09ProviderContract,
         fault_plan: ShadowFaultPlan,
         fixed_tick: int,
+        transaction_root: Path | None = None,
     ) -> None:
         self.repository = repository.resolve(strict=True)
         self.contract = contract
@@ -368,13 +392,30 @@ class DeterministicLowLevelEffects:
                 "fixed_tick": fixed_tick,
             }
         )
-        temporary_root = Path(tempfile.gettempdir()).resolve(strict=True)
-        self._root = temporary_root / f"giclab-t09-effects-{seed[:32]}"
-        if self._root.exists():
-            if self._root.is_symlink() or self._root.parent != temporary_root:
-                raise RuntimeError("deterministic effect root is not an exact private path")
-            shutil.rmtree(self._root)
-        self._root.mkdir(mode=0o700)
+        if transaction_root is None:
+            temporary_root = Path(tempfile.gettempdir()).resolve(strict=True)
+            self._root = temporary_root / f"giclab-t09-effects-{seed[:32]}"
+            if self._root.exists():
+                if self._root.is_symlink() or self._root.parent != temporary_root:
+                    raise RuntimeError("deterministic effect root is not an exact private path")
+                for child in self._root.iterdir():
+                    if child.is_dir() and not child.is_symlink():
+                        shutil.rmtree(child)
+                    else:
+                        child.unlink()
+            else:
+                self._root.mkdir(mode=0o700)
+        else:
+            self._root = Path(os.path.abspath(transaction_root))
+            metadata_value = self._root.stat(follow_symlinks=False)
+            if (
+                self._root != transaction_root
+                or self._root.is_symlink()
+                or not stat.S_ISDIR(metadata_value.st_mode)
+                or metadata_value.st_uid != os.getuid()
+                or stat.S_IMODE(metadata_value.st_mode) & 0o022
+            ):
+                raise RuntimeError("injected deterministic transaction root is unsafe")
         self._model_seed = f"test-model-canary-{seed[:24]}"
         self._provider_seed = f"test-provider-canary-{seed[24:48]}"
         self.model_credential_sha256 = hashlib.sha256(self._model_seed.encode()).hexdigest()
@@ -384,10 +425,12 @@ class DeterministicLowLevelEffects:
             clock=self._clock,
         )
         self._active: dict[int, ProviderHandle] = {}
+        self._provider_active_started_wall: dict[int, float] = {}
         self._ambiguous_launch = False
         self._inventory_calls = 0
         self._termination_calls = 0
         self._cleanup_calls = 0
+        self._failure_export_calls: dict[str, int] = {}
         self._effect_counts: dict[str, int] = {}
         self._public_ipv4 = "203.0.113.71"
         self._public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDeterministicNoNetworkOnly"
@@ -424,15 +467,6 @@ class DeterministicLowLevelEffects:
 
     def transaction_root(self) -> Path:
         return self._root
-
-    def transaction_root_identity(self) -> str:
-        return _identity(
-            {
-                "kind": "deterministic-no-network-transaction",
-                "contract": self.contract.version,
-                "fault": self.fault_plan.name,
-            }
-        )
 
     def read_model_secret(self) -> bytearray:
         return bytearray(self._model_seed.encode())
@@ -485,11 +519,46 @@ class DeterministicLowLevelEffects:
             launch_ordinal=launch_ordinal,
         )
         self._active[launch_ordinal] = handle
+        self._provider_active_started_wall[launch_ordinal] = self._clock.wall_time()
         return handle
 
     def provider_entry(self, handle: ProviderHandle) -> None:
         if handle.launch_ordinal not in self._active:
             raise AdapterFailure("deterministic provider entry lacks an active owner")
+
+    def provider_cost_receipt(
+        self,
+        request: ProviderCostObservationRequest,
+    ) -> ProviderCostReceipt:
+        handle = self._active.get(request.provider_handle.launch_ordinal)
+        started = self._provider_active_started_wall.get(request.provider_handle.launch_ordinal)
+        if handle is None or started is None:
+            raise AdapterFailure("deterministic provider cost lacks its active owner")
+        values = {
+            "owned_instance_identity": request.provider_handle.opaque_identity,
+            "launch_ordinal": request.provider_handle.launch_ordinal,
+            "hourly_price_usd": 0.0,
+            "active_started_wall_time": started,
+            "active_ended_wall_time": None,
+            "observed_wall_time": request.observed_wall_time,
+            "prior_preflight_cost_usd": 0.0,
+            "current_empirical_cost_usd": 0.0,
+            "cumulative_provider_cost_usd": 0.0,
+            "real_provider_effects": False,
+        }
+        return ProviderCostReceipt(
+            owned_instance_identity=request.provider_handle.opaque_identity,
+            launch_ordinal=request.provider_handle.launch_ordinal,
+            hourly_price_usd=0.0,
+            active_started_wall_time=started,
+            active_ended_wall_time=None,
+            observed_wall_time=request.observed_wall_time,
+            prior_preflight_cost_usd=0.0,
+            current_empirical_cost_usd=0.0,
+            cumulative_provider_cost_usd=0.0,
+            real_provider_effects=False,
+            receipt_sha256=_identity(values),
+        )
 
     def provider_terminate(self, handle: ProviderHandle) -> None:
         self._termination_calls += 1
@@ -989,6 +1058,258 @@ class DeterministicLowLevelEffects:
             2,
         )
 
+    def preserve_condition_failure(
+        self,
+        request: ConditionFailurePreservationRequest,
+    ) -> ConditionInfrastructureFailureOutcome:
+        """Close deterministic descendants and publish one bounded private bundle."""
+
+        execution = request.execution
+        essential_root = request.partial_raw_root.parent / "essential-failure"
+        manifest_path = request.partial_raw_root.parent / "essential-failure-manifest.json"
+        receipt_path = request.partial_raw_root.parent / "essential-failure-complete.json"
+        essential_root.mkdir(parents=True, mode=0o700, exist_ok=True)
+        call_ledger = essential_root / "provider-call-accounting.json"
+        browser_ledger = essential_root / "browser-action-ledger.json"
+        process_path = essential_root / "process-outcome.json"
+        completion_path = essential_root / "completion-state.json"
+        documents: list[tuple[Path, object]] = [
+            (
+                call_ledger,
+                {
+                    "run_id": execution.run_id,
+                    "call_ids": list(request.call_ids),
+                    "logical_call_ids": list(request.logical_call_ids),
+                    "unknown_call_ids": list(request.unknown_call_ids),
+                    "accounting": request.accounting_document,
+                },
+            ),
+            (
+                browser_ledger,
+                {
+                    "run_id": execution.run_id,
+                    "actions": [
+                        {"action_id": action_id, "terminal_state": terminal_state}
+                        for action_id, terminal_state in request.browser_actions
+                    ],
+                },
+            ),
+            (
+                process_path,
+                {
+                    "run_id": execution.run_id,
+                    "failure_class": request.failure_class.value,
+                    "exit_code": request.process_exit_code,
+                    "retry_count": request.retry_count,
+                    "command_argv": list(execution.command_argv),
+                    "command_sha256": execution.command_sha256,
+                    "condition_plan_path": execution.condition_plan_path,
+                    "condition_plan_sha256": execution.condition_plan_sha256,
+                    "writers_closed": True,
+                    "browser_descendants_closed": True,
+                },
+            ),
+            (
+                completion_path,
+                {
+                    "run_id": execution.run_id,
+                    "completed": request.completed,
+                    "answer": request.answer,
+                    "error": request.error,
+                    "evaluator_eligible": False,
+                },
+            ),
+        ]
+        for path, document in documents:
+            encoded = _canonical_bytes(document)
+            if path.exists():
+                if path.read_bytes() != encoded:
+                    raise AdapterFailure("deterministic essential-failure resume drifted")
+            else:
+                path.write_bytes(encoded)
+                path.chmod(0o400)
+        target_bytes = self.fault_plan.essential_target_bytes
+        if target_bytes is not None:
+            current = sum(path.stat().st_size for path, _document in documents)
+            padding_bytes = target_bytes - current
+            if padding_bytes < 0:
+                raise AdapterFailure("deterministic essential target is below required evidence")
+            padding = essential_root / "bounded-padding.bin"
+            if padding.exists():
+                if padding.stat().st_size != padding_bytes:
+                    raise AdapterFailure("deterministic essential padding resume drifted")
+            else:
+                descriptor = os.open(
+                    padding,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+                    0o400,
+                )
+                try:
+                    os.ftruncate(descriptor, padding_bytes)
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+        artifact_fault = self.fault_plan.essential_artifact_fault
+        if artifact_fault == "symlink":
+            (essential_root / "unsafe-symlink").symlink_to(call_ledger.name)
+        elif artifact_fault == "nonregular":
+            os.mkfifo(essential_root / "unsafe-fifo", mode=0o400)
+        elif artifact_fault == "hardlink":
+            os.link(call_ledger, essential_root / "unsafe-hardlink.json")
+        files = sorted(
+            [
+                {
+                    "path": path.relative_to(essential_root).as_posix(),
+                    "bytes": path.stat().st_size,
+                    "sha256": _file_sha256(path),
+                }
+                for path in essential_root.iterdir()
+                if path.is_file() and not path.is_symlink()
+            ],
+            key=lambda item: cast(str, item["path"]),
+        )
+        total = sum(cast(int, item["bytes"]) for item in files)
+        if (
+            total > request.essential_failure_cap_bytes
+            or len(files) > request.essential_failure_file_cap
+        ):
+            raise AdapterFailure("deterministic essential-failure bundle exceeds its cap")
+        manifest = {
+            "schema_version": "1.0.0",
+            "provider_contract_version": execution.provider_contract_version,
+            "plan_id": execution.plan_id,
+            "run_id": execution.run_id,
+            "evaluator_run_id": execution.evaluator_run_id,
+            "package_commit": execution.package_commit,
+            "execution_contract_sha256": execution.execution_contract_sha256,
+            "frozen_manifest_sha256": execution.frozen_manifest_sha256,
+            "condition_plan_sha256": execution.condition_plan_sha256,
+            "command_sha256": execution.command_sha256,
+            "failure_class": request.failure_class.value,
+            "evidence_root": "essential-failure",
+            "files": files,
+            "file_count": len(files),
+            "total_bytes": total,
+            "unknown_call_ids": list(request.unknown_call_ids),
+            "failure_reconstructable": True,
+            "private_access_controlled": True,
+            "publication_blocked_pending_privacy_review": True,
+            "scientific_result": False,
+        }
+        manifest_encoded = _canonical_bytes(manifest)
+        if manifest_path.exists():
+            if manifest_path.read_bytes() != manifest_encoded:
+                raise AdapterFailure("deterministic essential manifest resume drifted")
+        else:
+            manifest_path.write_bytes(manifest_encoded)
+            manifest_path.chmod(0o400)
+        receipt = {
+            "schema_version": "1.0.0",
+            "run_id": execution.run_id,
+            "essential_failure_seal_complete": True,
+            "attempt_identity_consumed": True,
+            "infrastructure_invalid": True,
+            "unscored": True,
+            "evaluator_permitted": False,
+            "condition_retry_permitted": False,
+            "manifest_sha256": _file_sha256(manifest_path),
+            "essential_file_count": len(files),
+            "essential_total_bytes": total,
+            "writers_closed": True,
+            "browser_descendants_closed": True,
+            "credential_cleanup_clean": True,
+            "core_dump_present": False,
+            "structural_privacy_findings": [],
+            "cleanup_ready": True,
+        }
+        receipt_encoded = _canonical_bytes(receipt)
+        if receipt_path.exists():
+            if receipt_path.read_bytes() != receipt_encoded:
+                raise AdapterFailure("deterministic essential receipt resume drifted")
+        else:
+            receipt_path.write_bytes(receipt_encoded)
+            receipt_path.chmod(0o400)
+        return ConditionInfrastructureFailureOutcome(
+            run_id=execution.run_id,
+            evaluator_run_id=execution.evaluator_run_id,
+            failure_class=request.failure_class,
+            process_exit_code=request.process_exit_code,
+            completed=request.completed,
+            answer=request.answer,
+            error=request.error,
+            essential_root=essential_root,
+            essential_manifest_path=manifest_path,
+            essential_receipt_path=receipt_path,
+            call_ledger_path=call_ledger,
+            browser_ledger_path=browser_ledger,
+            process_outcome_path=process_path,
+            completion_path=completion_path,
+            stdout_path=None,
+            stderr_path=None,
+            essential_file_count=len(files),
+            essential_total_bytes=total,
+            output_bytes=request.output_bytes,
+            unknown_call_ids=request.unknown_call_ids,
+            writers_closed=True,
+            browser_descendants_closed=True,
+            credential_cleanup_clean=True,
+            core_dump_present=False,
+            structural_privacy_findings=(),
+            cleanup_ready=True,
+            retry_count=request.retry_count,
+        )
+
+    def export_condition_failure(
+        self,
+        request: ConditionFailureExportRequest,
+    ) -> ConditionFailureExportReceipt:
+        calls = self._failure_export_calls.get(request.run_id, 0) + 1
+        self._failure_export_calls[request.run_id] = calls
+        if calls <= self.fault_plan.failure_export_interruption_count:
+            raise ConditionFailureExportInterrupted(
+                "deterministic essential-failure export interrupted"
+            )
+        if self.fault_plan.mutate_essential_during_export:
+            process_path = request.essential_root / "process-outcome.json"
+            process_path.chmod(0o600)
+            process_path.write_bytes(process_path.read_bytes() + b"\n")
+            process_path.chmod(0o400)
+        destination = self._root / "failure-exports" / f"{request.run_id}.json"
+        destination.parent.mkdir(mode=0o700, exist_ok=True)
+        destination_document = {
+            "run_id": request.run_id,
+            "export_identity": request.export_identity,
+            "essential_manifest_sha256": request.essential_manifest_sha256,
+            "essential_receipt_sha256": request.essential_receipt_sha256,
+            "essential_file_count": request.essential_file_count,
+            "essential_total_bytes": request.essential_total_bytes,
+        }
+        encoded = _canonical_bytes(destination_document)
+        if destination.exists():
+            if destination.read_bytes() != encoded:
+                raise AdapterFailure("deterministic failure export resume changed bytes")
+        else:
+            destination.write_bytes(encoded)
+            destination.chmod(0o400)
+        values = {
+            **destination_document,
+            "destination_identity": _file_sha256(destination),
+            "export_complete": True,
+            "resumed": calls > 1,
+        }
+        return ConditionFailureExportReceipt(
+            run_id=request.run_id,
+            export_identity=request.export_identity,
+            destination_identity=cast(str, values["destination_identity"]),
+            essential_manifest_sha256=request.essential_manifest_sha256,
+            essential_receipt_sha256=request.essential_receipt_sha256,
+            essential_file_count=request.essential_file_count,
+            essential_total_bytes=request.essential_total_bytes,
+            export_complete=True,
+            resumed=calls > 1,
+            receipt_sha256=_identity(values),
+        )
+
     def execute_condition(
         self,
         request: ConditionExecutionRequest,
@@ -1011,9 +1332,13 @@ class DeterministicLowLevelEffects:
                 input_tokens=(
                     request.caps.max_total_tokens + 1
                     if self.fault_plan.model_input_tokens_over_cap
-                    else 48 + call_index
+                    else (0 if self.fault_plan.model_cost_over_cap else 48 + call_index)
                 ),
-                max_output_tokens=24,
+                max_output_tokens=(
+                    request.caps.max_output_tokens + 1
+                    if self.fault_plan.model_cost_over_cap
+                    else 24
+                ),
                 service_tier=request.service_tier,
                 implicit_transport_retries=0,
                 retry_kind="initial",
@@ -1033,6 +1358,10 @@ class DeterministicLowLevelEffects:
             ) -> ConditionModelResponse:
                 if index == 1 and self.fault_plan.name == "known-provider-exception":
                     raise ConditionKnownProviderError("deterministic known provider exception")
+                if index == 1 and self.fault_plan.name == "known-transport-failure":
+                    raise ConditionKnownTransportError(
+                        "deterministic transport proved no provider acceptance"
+                    )
                 if index == 1 and self.fault_plan.name == "response-accounting-incomplete":
                     raise ConditionResponseAccountingIncomplete(
                         "deterministic response usage is incomplete"
@@ -1073,9 +1402,48 @@ class DeterministicLowLevelEffects:
                     "terminal_state": "completed",
                 }
             )
+        if self.fault_plan.name == "process-crash-before-answer":
+            raise RuntimeError("deterministic condition process crashed before answer")
         answer = self._answer_for(request)
         self._last_answers[request.run_id] = answer
         answer_bytes = len(answer.encode())
+        nonzero_mode = self.fault_plan.name in {
+            "process-exit-nonzero-before-answer",
+            "process-exit-nonzero-after-answer",
+            "process-exit-nonzero-completed",
+        }
+        if nonzero_mode:
+            before_answer = self.fault_plan.name == "process-exit-nonzero-before-answer"
+            completed_with_answer = self.fault_plan.name == "process-exit-nonzero-completed"
+            failure_answer = None if before_answer else answer
+            output_bytes = 0 if before_answer else answer_bytes
+            observer.output_bytes(total_bytes=output_bytes)
+            observer.process_exit(exit_code=23)
+            observer.completion(
+                completed=completed_with_answer,
+                answer=failure_answer,
+                error="" if completed_with_answer else "process exited 23",
+            )
+            raw_root = request.transaction_root / request.raw_output_root
+            return ConditionProcessOutcome(
+                run_id=request.run_id,
+                evaluator_run_id=request.evaluator_run_id,
+                exit_code=23,
+                completed=completed_with_answer,
+                answer=failure_answer,
+                error="" if completed_with_answer else "process exited 23",
+                raw_root=raw_root,
+                raw_manifest_path=raw_root.parent / "raw-attempt-manifest.json",
+                raw_receipt_path=raw_root.parent / "raw-attempt-complete.json",
+                raw_file_count=0,
+                raw_total_bytes=0,
+                output_bytes=output_bytes,
+                call_ledger_path=raw_root / "provider-call-ledger.json",
+                browser_ledger_path=raw_root / "browser-action-ledger.json",
+                completion_path=raw_root / "condition-answer.json",
+                process_outcome_path=raw_root / "process-outcome.json",
+                retry_count=0,
+            )
         observer.output_bytes(
             total_bytes=(
                 request.caps.max_output_bytes + 1
@@ -1085,7 +1453,15 @@ class DeterministicLowLevelEffects:
         )
         observer.process_exit(exit_code=0)
         observer.completion(completed=True, answer=answer, error="")
-        raw_root = (request.transaction_root / request.raw_output_root).resolve()
+        if self.fault_plan.name == "process-crash-after-answer":
+            raise RuntimeError("deterministic condition process crashed after answer")
+        requested_raw_root = request.transaction_root / request.raw_output_root
+        if self.fault_plan.held_identity_fault == "raw-root-symlink":
+            requested_raw_root.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            target = requested_raw_root.parent / "raw-symlink-target"
+            target.mkdir(mode=0o700)
+            requested_raw_root.symlink_to(target.name, target_is_directory=True)
+        raw_root = requested_raw_root
         attempt_root = raw_root.parent
         raw_root.mkdir(parents=True, mode=0o700)
         call_ledger = raw_root / "provider-call-ledger.json"
@@ -1122,6 +1498,8 @@ class DeterministicLowLevelEffects:
         )
         for path in (call_ledger, browser_ledger, answer_path, process_path):
             path.chmod(0o600)
+        if self.fault_plan.name == "raw-publication-failure":
+            raise RuntimeError("deterministic raw publication failed after partial files")
         host = _host_module(self.repository)
         files, total = host._raw_attempt_files(raw_root)
         manifest = {
@@ -1182,6 +1560,10 @@ class DeterministicLowLevelEffects:
         receipt_path = attempt_root / "raw-attempt-complete.json"
         receipt_path.write_bytes(_canonical_bytes(receipt))
         receipt_path.chmod(0o600)
+        if self.fault_plan.held_identity_fault == "raw-manifest-hardlink":
+            os.link(manifest_path, attempt_root / "raw-manifest-hardlink.json")
+        if self.fault_plan.held_identity_fault == "raw-receipt-hardlink":
+            os.link(receipt_path, attempt_root / "raw-receipt-hardlink.json")
         manifest_sha = _file_sha256(manifest_path)
         receipt_sha = _file_sha256(receipt_path)
         observer.raw_artifact_published(
@@ -1216,6 +1598,15 @@ class DeterministicLowLevelEffects:
     ) -> FinalizerExecutionOutcome:
         if self._declared_failure("condition.finalize"):
             raise AdapterFailure("deterministic offline finalizer failure")
+        if self.fault_plan.held_identity_fault == "raw-same-size-swap-before-finalizer":
+            answer_path = request.answer_artifact.path
+            encoded = answer_path.read_bytes()
+            displaced = answer_path.with_name(answer_path.name + ".displaced")
+            answer_path.rename(displaced)
+            answer_path.write_bytes(encoded)
+            answer_path.chmod(0o400)
+        for artifact in request.raw_artifacts:
+            artifact.revalidate()
         if (
             _file_sha256(request.raw_manifest_path) != request.raw_manifest_sha256
             or _file_sha256(request.raw_receipt_path) != request.raw_receipt_sha256
@@ -1223,13 +1614,20 @@ class DeterministicLowLevelEffects:
             or _file_sha256(request.process_outcome_path) != request.process_outcome_sha256
             or request.execution_mode != "qualified-local"
             or request.runtime_qualification_id != self.contract.local_finalizer_qualification_id
+            or request.raw_artifact_binding_sha256
+            != _identity([artifact.to_public_document() for artifact in request.raw_artifacts])
         ):
             raise AdapterFailure("deterministic finalizer received mutated raw evidence")
-        answer_document = json.loads((request.raw_root / "condition-answer.json").read_bytes())
+        answer_document = json.loads(request.answer_artifact.read_bytes())
         answer = answer_document.get("answer")
         if not isinstance(answer, str) or not answer:
             raise AdapterFailure("deterministic finalizer raw answer is absent")
-        request.finalized_root.mkdir(parents=True, mode=0o700)
+        if self.fault_plan.held_identity_fault == "finalized-root-symlink":
+            request.finalized_root.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            target = request.finalized_root.parent / "finalized-symlink-target"
+            target.mkdir(mode=0o700)
+            request.finalized_root.symlink_to(target.name, target_is_directory=True)
+        request.finalized_root.mkdir(parents=True, mode=0o700, exist_ok=True)
         task_index = self.contract.run_ids.index(request.run_id) // 2
         dataset = json.loads(
             (self.repository / "tests/fixtures/t09/fanout-two-task-fixture.json").read_bytes()
@@ -1274,6 +1672,7 @@ class DeterministicLowLevelEffects:
             "consumed_raw_receipt_sha256": request.raw_receipt_sha256,
             "consumed_raw_completion_sha256": request.raw_completion_sha256,
             "consumed_process_outcome_sha256": request.process_outcome_sha256,
+            "consumed_raw_artifact_binding_sha256": (request.raw_artifact_binding_sha256),
             "finalizer_source_sha256": request.finalizer_source_sha256,
             "finalizer_projection_source_sha256": (request.finalizer_projection_source_sha256),
             "finalizer_selector_sha256": request.finalizer_selector_sha256,
@@ -1291,6 +1690,13 @@ class DeterministicLowLevelEffects:
         completion_path = request.finalized_root / "finalization-complete.json"
         completion_path.write_bytes(_canonical_bytes(completion))
         completion_path.chmod(0o600)
+        if self.fault_plan.held_identity_fault == "raw-mutation-during-finalizer":
+            answer_path = request.answer_artifact.path
+            mutated_answer = bytearray(answer_path.read_bytes())
+            mutated_answer[-1] = 0x20 if mutated_answer[-1] != 0x20 else 0x0A
+            answer_path.chmod(0o600)
+            answer_path.write_bytes(mutated_answer)
+            answer_path.chmod(0o400)
         return FinalizerExecutionOutcome(
             run_id=request.run_id,
             finalized_root=request.finalized_root,
@@ -1300,6 +1706,7 @@ class DeterministicLowLevelEffects:
             session_paths=(session,),
             consumed_raw_manifest_sha256=request.raw_manifest_sha256,
             consumed_raw_receipt_sha256=request.raw_receipt_sha256,
+            consumed_raw_artifact_binding_sha256=(request.raw_artifact_binding_sha256),
             infrastructure_valid=True,
         )
 
@@ -1309,6 +1716,24 @@ class DeterministicLowLevelEffects:
     ) -> EvaluatorExecutionOutcome:
         if self._declared_failure("condition.evaluate"):
             raise AdapterFailure("deterministic evaluator failure")
+        if self.fault_plan.held_identity_fault == "session-swap-before-evaluator":
+            session = request.session_paths[0]
+            encoded = session.read_bytes()
+            displaced = session.with_name(session.name + ".displaced")
+            session.rename(displaced)
+            session.write_bytes(encoded)
+            session.chmod(0o400)
+        for artifact in request.finalized_artifacts:
+            artifact.revalidate()
+        if request.finalized_artifact_binding_sha256 != _identity(
+            [artifact.to_public_document() for artifact in request.finalized_artifacts]
+        ):
+            raise AdapterFailure("deterministic evaluator received split held evidence")
+        by_path = {artifact.path: artifact for artifact in request.finalized_artifacts}
+        try:
+            session_artifacts = tuple(by_path[path] for path in request.session_paths)
+        except KeyError as exc:
+            raise AdapterFailure("deterministic evaluator session identity is not held") from exc
         identity = pilot.EvaluatorIdentity(
             root=self.repository / "tests/fixtures/t09/pinned-evaluator",
             dataset_path=(self.repository / "tests/fixtures/t09/fanout-two-task-fixture.json"),
@@ -1319,24 +1744,43 @@ class DeterministicLowLevelEffects:
             result = pilot.evaluate_retained_session(identity, list(request.session_paths))
         raw_score = result.get("score")
         score = float(raw_score) if isinstance(raw_score, (int, float)) else None
-        session_hashes = tuple(_file_sha256(path) for path in request.session_paths)
+        run_index = self.contract.run_ids.index(request.run_id)
+        evaluator_valid = result.get("evaluator_valid") is True
+        task_completed = result.get("task_completed") is True
+        answer_produced = result.get("answer_produced") is True
+        if self.fault_plan.task_a_zero_scores and run_index < 2:
+            score = 0.0
+            evaluator_valid = True
+            task_completed = True
+            answer_produced = True
+        if self.fault_plan.evaluator_unscored_run_index == run_index:
+            score = None
+            evaluator_valid = False
+        if self.fault_plan.evaluator_invalid_run_index == run_index:
+            score = None
+            evaluator_valid = False
+        session_hashes = tuple(artifact.sha256 for artifact in session_artifacts)
         values = {
             "run_id": request.run_id,
             "evaluator_run_id": request.evaluator_run_id,
             "consumed_session_sha256s": list(session_hashes),
+            "consumed_finalized_artifact_binding_sha256": (
+                request.finalized_artifact_binding_sha256
+            ),
             "evaluator_contract_sha256": request.evaluator_contract_sha256,
-            "evaluator_valid": result.get("evaluator_valid") is True,
-            "task_completed": result.get("task_completed") is True,
-            "answer_produced": result.get("answer_produced") is True,
+            "evaluator_valid": evaluator_valid,
+            "task_completed": task_completed,
+            "answer_produced": answer_produced,
             "score": score,
             "infrastructure_failure": False,
             "missing_required_evidence": False,
         }
-        return EvaluatorExecutionOutcome(
+        outcome = EvaluatorExecutionOutcome(
             run_id=request.run_id,
             evaluator_run_id=request.evaluator_run_id,
             consumed_finalized_root=request.finalized_root,
             consumed_session_sha256s=session_hashes,
+            consumed_finalized_artifact_binding_sha256=(request.finalized_artifact_binding_sha256),
             evaluator_contract_sha256=request.evaluator_contract_sha256,
             evaluator_valid=cast(bool, values["evaluator_valid"]),
             task_completed=cast(bool, values["task_completed"]),
@@ -1346,6 +1790,10 @@ class DeterministicLowLevelEffects:
             missing_required_evidence=False,
             receipt_sha256=_identity(values),
         )
+        if self.fault_plan.checkpoint_missing_raw_after_task_a and run_index == 1:
+            first_manifest = sorted(self._root.rglob("raw-attempt-manifest.json"))[0]
+            first_manifest.unlink()
+        return outcome
 
     def cleanup_transaction(
         self,
@@ -1401,6 +1849,7 @@ class LiveShapedNoNetworkEffects:
         identity: EffectImplementationIdentity,
         authorization_context: EffectAuthorizationContext,
         authority: EffectAuthorityGrant,
+        held_transaction_root: HeldTransactionRoot,
     ) -> None:
         if (
             authorization_context.authority_kind is not EffectAuthorityKind.LIVE_AUTHORIZED
@@ -1408,13 +1857,18 @@ class LiveShapedNoNetworkEffects:
             is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
             or authorization_context.effect_implementation != identity
             or authorization_context.transaction_root_identity
-            != delegate.transaction_root_identity()
-            or authority.kind is not EffectAuthorityKind.LIVE_AUTHORIZED
-            or not authority.authorizes(authorization_context)
+            != held_transaction_root.semantic_sha256
+            or not isinstance(authority, ValidatedLiveEffectAuthority)
+            or not authority.is_valid_for(authorization_context)
+            or authority.held_transaction_root is not held_transaction_root
+            or delegate.transaction_root() != held_transaction_root.path
         ):
             raise ValueError("live-shaped no-network effects lack exact external authority")
         self._delegate = delegate
         self._identity = identity
+        self._authorization_context = authorization_context
+        self._authority = authority
+        self._held_transaction_root = held_transaction_root
 
     @property
     def effect_protocol_version(self) -> str:
@@ -1427,6 +1881,36 @@ class LiveShapedNoNetworkEffects:
     def implementation_identity(self) -> EffectImplementationIdentity:
         return self._identity
 
+    def metadata_authorization_binding(
+        self,
+        *,
+        contract: T09ProviderContract,
+    ) -> dict[str, object]:
+        binding = dict(self._delegate.metadata_authorization_binding(contract=contract))
+        binding["authorization_reference"] = (
+            self._authorization_context.external_authorization_reference
+        )
+        binding["authorization_source_sha256"] = (
+            self._authorization_context.external_authorization_source_sha256
+        )
+        return binding
+
+    def cleanup_transaction(
+        self,
+        request: CleanupExecutionRequest,
+    ) -> CleanupExecutionReceipt:
+        request.held_transaction_root.revalidate_descriptor()
+        if (
+            request.held_transaction_root is not self._held_transaction_root
+            or request.transaction_root != self._held_transaction_root.path
+            or request.authorization_reference
+            != self._authorization_context.external_authorization_reference
+            or request.authorization_source_sha256
+            != self._authorization_context.external_authorization_source_sha256
+        ):
+            raise AdapterFailure("live-shaped cleanup received split authority or root")
+        return self._delegate.cleanup_transaction(request)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self._delegate, name)
 
@@ -1435,10 +1919,10 @@ def build_live_shaped_no_network_effects(
     *,
     repository: Path,
     contract: T09ProviderContract,
-    implementation_path: Path,
-    factory_entry_point: str,
+    implementation_identity: EffectImplementationIdentity,
     authorization_context: EffectAuthorizationContext,
     authority: EffectAuthorityGrant,
+    held_transaction_root: HeldTransactionRoot,
 ) -> LowLevelEffects:
     """Construct the test-only live-shaped package effect by composition."""
 
@@ -1447,17 +1931,14 @@ def build_live_shaped_no_network_effects(
         contract=contract,
         fault_plan=ShadowFaultPlan("live-shaped-conformance"),
         fixed_tick=2000,
-    )
-    identity = repository_effect_identity(
-        implementation_path,
-        repository=repository,
-        factory=factory_entry_point,
+        transaction_root=held_transaction_root.path,
     )
     return LiveShapedNoNetworkEffects(
         delegate=delegate,
-        identity=identity,
+        identity=implementation_identity,
         authorization_context=authorization_context,
         authority=authority,
+        held_transaction_root=held_transaction_root,
     )
 
 
@@ -1498,6 +1979,7 @@ def build_production_shadow_assembly(
         fault_plan=fault_plan,
         fixed_tick=fixed_tick,
     )
+    held_transaction_root = hold_transaction_root(effects.transaction_root())
     commit, tree = _git_identity(repository)
     command_sha = contract.expected_command_manifest_sha256
     if command_sha is None:
@@ -1520,13 +2002,27 @@ def build_production_shadow_assembly(
         control_tree=tree,
         provider_contract_version=contract.version,
         plan_id=contract.plan_id,
+        plan_path=contract.plan_path,
+        plan_bytes=contract.expected_plan_bytes,
         plan_sha256=contract.expected_plan_sha256,
         command_package_sha256=command_sha,
         control_binding_semantic_sha256=binding_sha,
         effect_implementation=effects.implementation_identity(),
-        transaction_root_identity=effects.transaction_root_identity(),
+        transaction_root_identity=held_transaction_root.semantic_sha256,
         external_authorization_reference=None,
         external_authorization_source_sha256=None,
+        cost_limits=EffectAuthorizationLimits(
+            preflight_provider_cost_usd=contract.preflight_lambda_cost_cap_usd,
+            campaign_provider_cost_usd=contract.campaign_lambda_cost_cap_usd,
+            campaign_openai_cost_usd=contract.campaign_openai_cost_cap_usd,
+            campaign_aggregate_cost_usd=contract.campaign_aggregate_cost_cap_usd,
+            prior_t09_cost_usd=contract.prior_t09_cost_usd,
+            cumulative_t09_cost_usd=contract.cumulative_t09_cost_cap_usd,
+        ),
+        zero_retry=True,
+        interpretation="descriptive-calibration-only",
+        current_turn_scope="deterministic-shadow",
+        campaign_count=1,
     )
     authority = mint_shadow_effect_authority(
         source="validated-deterministic-production-effects",
@@ -1538,6 +2034,7 @@ def build_production_shadow_assembly(
         low_level_effects=effects,
         authorization_context=context,
         authority=authority,
+        held_transaction_root=held_transaction_root,
     )
 
 

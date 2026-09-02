@@ -8,19 +8,17 @@ assembly without subclassing or patching either of them.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import math
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from types import MappingProxyType, ModuleType
+from types import MappingProxyType
 from typing import Final, cast
 
 from giclab.control.anti_shadow_lint import validate_anti_shadow_lint
@@ -33,13 +31,13 @@ from giclab.control.composition import compose_control_plane
 from giclab.control.effects import (
     EFFECT_AUTHORITY_SCHEMA_VERSION,
     EFFECT_PROTOCOL_VERSION,
-    EffectAuthorityGrant,
-    EffectAuthorityKind,
-    EffectAuthorizationContext,
     EffectExecutionMode,
     LoadedPackageEffects,
+    hold_package_effect_registration,
+    hold_transaction_root,
     load_registered_package_effects,
-    validate_package_effect_registration,
+    project_live_authority_overlay,
+    validate_external_live_effect_authority,
 )
 from giclab.control.production import build_production_adapter_assembly
 from giclab.control.proofs import (
@@ -50,8 +48,8 @@ from giclab.control.proofs import (
 from giclab.control.registry_validation import validate_registry_completeness
 from giclab.control.shadow import run_shadow_scenario
 from giclab.control.shadow_effects import (
-    DeterministicLowLevelEffects,
     ShadowFaultPlan,
+    build_production_shadow_assembly,
 )
 from giclab.control.state_capsule import generate_state_capsule
 from giclab.control.target import resolve_selected_runtime_target
@@ -67,7 +65,7 @@ from giclab.harness.t09_provider_contracts import (
 )
 from giclab.registry import load_json
 
-LIVE_EFFECT_CONFORMANCE_SCHEMA_VERSION: Final = "1.0.0"
+LIVE_EFFECT_CONFORMANCE_SCHEMA_VERSION: Final = "2.0.0"
 TEMPORARY_EFFECT_PATH: Final = (
     "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py"
 )
@@ -103,35 +101,23 @@ def _canonical_sha256(value: object) -> str:
 
 
 def _package_effect_source() -> bytes:
-    return f'''"""Temporary package effect for the zero-real-effect conformance gate."""
+    return b'''"""Temporary package effect for the zero-real-effect conformance gate."""
 
-from pathlib import Path
-
-from giclab.control.effects import EffectAuthorityKind
 from giclab.control.shadow_effects import build_live_shaped_no_network_effects
 
 
-class PackageEffectGrant:
-    kind = EffectAuthorityKind.LIVE_AUTHORIZED
-    source = "temporary-external-conformance-validator"
-
-    def __init__(self, context):
-        self._context = context
-
-    def authorizes(self, context):
-        return context == self._context
-
-
-def build_package_effects(*, repository, contract, authorization_context, authority):
+def build_package_effects(
+    *, repository, contract, authorization_context, authority, held_transaction_root
+):
     return build_live_shaped_no_network_effects(
         repository=repository,
         contract=contract,
-        implementation_path=Path(__file__),
-        factory_entry_point="{TEMPORARY_EFFECT_FACTORY}",
+        implementation_identity=authorization_context.effect_implementation,
         authorization_context=authorization_context,
         authority=authority,
+        held_transaction_root=held_transaction_root,
     )
-'''.encode()
+'''
 
 
 def _copy_working_repository(source: Path, destination: Path) -> None:
@@ -273,21 +259,6 @@ def _temporary_contract_registry(
         t09_pragmatic_provider.PROVIDER_CONTRACTS = (  # type: ignore[attr-defined]
             original_provider_contracts
         )
-
-
-def _load_grant_module(path: Path, sha256: str) -> ModuleType:
-    module_name = "giclab_external_conformance_grant_" + sha256
-    specification = importlib.util.spec_from_file_location(module_name, path)
-    if specification is None or specification.loader is None:
-        raise ValueError("temporary package grant module is unavailable")
-    module = importlib.util.module_from_spec(specification)
-    sys.modules[module_name] = module
-    try:
-        specification.loader.exec_module(module)
-    except BaseException:
-        sys.modules.pop(module_name, None)
-        raise
-    return module
 
 
 def _condition_traces(transaction_root: Path) -> dict[str, dict[str, object]]:
@@ -460,6 +431,180 @@ def _typed_failure_accounting(
     return result
 
 
+def _execute_review_fault(
+    repository: Path,
+    contract: T09ProviderContract,
+    rehearsal: ValidatedShadowRehearsal,
+    fault_plan: ShadowFaultPlan,
+) -> dict[str, object]:
+    """Exercise one review-only deterministic failure through the shared controller."""
+
+    commit, tree = repository_identity(repository)
+    world = build_production_shadow_assembly(
+        repository,
+        contract,
+        fault_plan,
+        rehearsal=rehearsal,
+    )
+    return execute_category3_transaction(
+        Category3Request(
+            repository=repository,
+            contract=contract,
+            scenario=fault_plan.name,
+            expected_repository_commit=commit,
+            expected_repository_tree=tree,
+            control_proof=rehearsal,
+        ),
+        adapters=world.adapters(),
+    )
+
+
+def _review_failure_subreceipts(
+    repository: Path,
+    contract: T09ProviderContract,
+    rehearsal: ValidatedShadowRehearsal,
+) -> dict[str, object]:
+    """Return bounded public facts from the mandatory review failure probes."""
+
+    unscored = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan(
+            "review-unscored-task-a-checkpoint",
+            evaluator_unscored_run_index=1,
+        ),
+    )
+    ambiguous = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan("ambiguous-task-model-send"),
+    )
+    nonzero = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan("process-exit-nonzero-completed"),
+    )
+    raw_replacement = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan(
+            "review-raw-replacement",
+            held_identity_fault="raw-same-size-swap-before-finalizer",
+        ),
+    )
+
+    def counts(receipt: dict[str, object]) -> dict[str, object]:
+        value = receipt.get("call_counts")
+        if not isinstance(value, dict):
+            raise ValueError("review conformance call counts are absent")
+        return value
+
+    def production(receipt: dict[str, object]) -> dict[str, object]:
+        value = receipt.get("production_control_evidence")
+        if not isinstance(value, dict):
+            raise ValueError("review conformance production evidence is absent")
+        return value
+
+    unscored_evidence = production(unscored)
+    checkpoint = unscored_evidence.get("first_pair_checkpoint")
+    if not isinstance(checkpoint, dict):
+        raise ValueError("unscored checkpoint did not retain its exact decision")
+    checkpoint_reasons = checkpoint.get("reasons")
+    checkpoint_counts = counts(unscored)
+    if (
+        checkpoint.get("decision") != "stop-before-task-b"
+        or not isinstance(checkpoint_reasons, list)
+        or "task_a_valid_scored_attempt_missing" not in checkpoint_reasons
+        or checkpoint_counts.get("condition_entries") != 2
+        or checkpoint_counts.get("condition_reservations") != 2
+    ):
+        raise ValueError("unscored Task A checkpoint did not stop before Task B")
+
+    failure_documents: dict[str, dict[str, object]] = {}
+    for name, receipt, expected_class in (
+        ("ambiguous-send-essential-failure", ambiguous, "ambiguous-send"),
+        ("nonzero-process-exit-essential-failure", nonzero, "process-exit-nonzero"),
+    ):
+        evidence = production(receipt)
+        failures = evidence.get("essential_failures")
+        if not isinstance(failures, dict) or len(failures) != 1:
+            raise ValueError(f"{name} did not preserve one essential failure")
+        failure = next(iter(failures.values()))
+        retained = receipt.get("evidence_retained")
+        if (
+            not isinstance(failure, dict)
+            or failure.get("failure_class") != expected_class
+            or failure.get("unscored") is not True
+            or failure.get("retry_count") != 0
+            or not isinstance(failure.get("manifest_sha256"), str)
+            or not isinstance(failure.get("receipt_sha256"), str)
+            or not isinstance(failure.get("export_receipt_sha256"), str)
+            or not isinstance(retained, dict)
+            or retained.get("finalized") != []
+            or retained.get("evaluator") != []
+        ):
+            raise ValueError(f"{name} essential evidence is incomplete")
+        failure_documents[name] = {
+            "failure_class": expected_class,
+            "sealed": True,
+            "exported_and_acknowledged": True,
+            "unscored": True,
+            "zero_retry": True,
+            "cleanup_complete": receipt.get("cleanup")
+            == {
+                "state": "complete",
+                "resumed": False,
+                "provider_resources_zero": True,
+                "security_restored": True,
+                "privacy_clean": True,
+            },
+        }
+
+    raw_evidence = production(raw_replacement)
+    raw_held = raw_evidence.get("held_evidence")
+    raw_counts = counts(raw_replacement)
+    raw_retained = raw_replacement.get("evidence_retained")
+    if (
+        raw_replacement.get("earliest_stopping_phase") != "finalization"
+        or raw_counts.get("condition_entries") != 1
+        or raw_counts.get("condition_reservations") != 1
+        or not isinstance(raw_held, dict)
+        or raw_held.get("revalidated_across_consumers") is not True
+        or not isinstance(raw_retained, dict)
+        or raw_retained.get("evaluator") != []
+        or not isinstance(raw_replacement.get("stop_reason"), str)
+    ):
+        raise ValueError("same-size raw replacement was not rejected at finalization")
+
+    return {
+        "unscored-task-a-checkpoint-stop": {
+            "decision": "stop-before-task-b",
+            "reason": "task_a_valid_scored_attempt_missing",
+            "task_b_condition_reservations": 0,
+            "task_b_condition_entries": 0,
+            "cleanup_complete": unscored.get("cleanup")
+            == {
+                "state": "complete",
+                "resumed": False,
+                "provider_resources_zero": True,
+                "security_restored": True,
+                "privacy_clean": True,
+            },
+        },
+        **failure_documents,
+        "raw-replacement-rejection": {
+            "same_size_replacement_rejected": True,
+            "stopping_phase": "finalization",
+            "evaluator_calls": 0,
+            "scientific_interpretation_allowed": False,
+        },
+    }
+
+
 def _successor_artifacts(repository: Path) -> frozenset[str]:
     prohibited = (
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
@@ -534,59 +679,106 @@ def _run_temporary_package(
             contract,
             rehearsal,
         )
-        effect_identity = validate_package_effect_registration(
+        review_failure_subreceipts = _review_failure_subreceipts(
+            temporary_repository,
+            contract,
+            rehearsal,
+        )
+        held_source = hold_package_effect_registration(
             temporary_repository,
             contract,
         )
-        if effect_identity is None:
+        if held_source is None:
             raise ValueError("temporary package effect registration did not resolve")
-        probe = DeterministicLowLevelEffects(
-            repository=temporary_repository,
-            contract=contract,
-            fault_plan=ShadowFaultPlan("live-shaped-conformance"),
-            fixed_tick=2000,
+        effect_identity = held_source.identity
+        private_transaction_root = (
+            temporary_repository.parent.resolve(strict=True) / "private-live-transaction"
         )
+        private_transaction_root.mkdir(mode=0o700)
+        held_transaction_root = hold_transaction_root(private_transaction_root)
+        prefix = contract.authorization_prefix
+        if not isinstance(prefix, str):
+            raise ValueError("temporary package contract lacks its authorization prefix")
         external_reference = (
-            "AUTH-TEMPORARY-CONFORMANCE-"
+            prefix
+            + "CONFORMANCE-"
             + _canonical_sha256({"commit": temporary_commit, "effect": effect_identity.sha256})[:24]
         )
-        context = EffectAuthorizationContext(
-            authority_kind=EffectAuthorityKind.LIVE_AUTHORIZED,
-            execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
-            control_commit=temporary_commit,
-            control_tree=temporary_tree,
-            provider_contract_version=contract.version,
-            plan_id=contract.plan_id,
-            plan_sha256=contract.expected_plan_sha256,
-            command_package_sha256=cast(
-                str,
-                contract.expected_command_manifest_sha256,
-            ),
-            control_binding_semantic_sha256=rehearsal.staging.semantic_sha256,
+        current_turn_scope = "T09-PR14-EXACT-HEAD-CONFORMANCE"
+        overlay_document = project_live_authority_overlay(
+            temporary_repository,
+            contract,
+            held_transaction_root=held_transaction_root,
             effect_implementation=effect_identity,
-            transaction_root_identity=probe.transaction_root_identity(),
+            control_binding_semantic_sha256=rehearsal.staging.semantic_sha256,
             external_authorization_reference=external_reference,
-            external_authorization_source_sha256=_canonical_sha256(
-                {"external_authorization_reference": external_reference}
-            ),
+            current_turn_scope=current_turn_scope,
+            execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
         )
-        grant_module = _load_grant_module(effect_path, effect_identity.sha256)
-        grant_type = getattr(grant_module, "PackageEffectGrant", None)
-        if not isinstance(grant_type, type):
-            raise ValueError("temporary package grant implementation is absent")
-        grant = cast(EffectAuthorityGrant, grant_type(context))
+        overlay_path = temporary_repository.parent.resolve(strict=True) / "private-overlay.json"
+        overlay_path.write_bytes(_canonical_bytes(overlay_document))
+        overlay_path.chmod(0o600)
+        context, grant = validate_external_live_effect_authority(
+            temporary_repository,
+            contract,
+            overlay_path=overlay_path,
+            held_transaction_root=held_transaction_root,
+            effect_implementation=effect_identity,
+            control_binding_semantic_sha256=rehearsal.staging.semantic_sha256,
+            current_turn_scope=current_turn_scope,
+            execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
+        )
+        authorization_source_sha256 = context.external_authorization_source_sha256
+        if not isinstance(authorization_source_sha256, str):
+            raise ValueError("validated live authority lacks its exact source identity")
+        split_authority_rejected = False
+        try:
+            grant.assert_phase_binding(
+                reference=external_reference + "-SPLIT",
+                source_sha256=authorization_source_sha256,
+            )
+        except ValueError:
+            split_authority_rejected = True
+        symlink_root_target = temporary_repository.parent / "symlink-root-target"
+        symlink_root_target.mkdir(mode=0o700)
+        symlink_root = temporary_repository.parent / "symlink-transaction-root"
+        symlink_root.symlink_to(symlink_root_target, target_is_directory=True)
+        symlink_root_rejected = False
+        try:
+            hold_transaction_root(symlink_root)
+        except (OSError, ValueError):
+            symlink_root_rejected = True
         loaded: LoadedPackageEffects = load_registered_package_effects(
             temporary_repository,
             contract,
             authorization_context=context,
             authority=grant,
+            held_source=held_source,
         )
+        effect_source_replacement_rejected = False
+        displaced_effect_path = effect_path.with_name(effect_path.name + ".held-original")
+        effect_path.rename(displaced_effect_path)
+        changed_source = bytearray(effect_source)
+        changed_source[0] = ord("#") if changed_source[0] != ord("#") else ord(" ")
+        effect_path.write_bytes(changed_source)
+        effect_path.chmod(0o644)
+        try:
+            loaded.held_source.revalidate(temporary_repository)
+        except ValueError:
+            effect_source_replacement_rejected = True
+        effect_path.unlink()
+        displaced_effect_path.rename(effect_path)
+        loaded.held_source.revalidate(temporary_repository)
+        if not effect_source_replacement_rejected:
+            raise ValueError("same-size package effect source replacement was not rejected")
         world = build_production_adapter_assembly(
             temporary_repository,
             contract,
             low_level_effects=loaded.effects,
             authorization_context=context,
             authority=grant,
+            held_transaction_root=held_transaction_root,
+            held_effect_source=loaded.held_source,
         )
         world.clock.sleep(0.25)
         result = execute_category3_transaction(
@@ -634,6 +826,28 @@ def _run_temporary_package(
             "security_restored": True,
             "privacy_clean": True,
         }
+        authority_consumption = evidence.get("authority_consumption")
+        checkpoint = evidence.get("first_pair_checkpoint")
+        provider_cost = evidence.get("provider_cost_receipt")
+        held_evidence = evidence.get("held_evidence")
+        primitives = evidence.get("production_primitives")
+        replay_rejected = False
+        replay_root = hold_transaction_root(private_transaction_root)
+        try:
+            validate_external_live_effect_authority(
+                temporary_repository,
+                contract,
+                overlay_path=overlay_path,
+                held_transaction_root=replay_root,
+                effect_implementation=effect_identity,
+                control_binding_semantic_sha256=rehearsal.staging.semantic_sha256,
+                current_turn_scope=current_turn_scope,
+                execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
+            )
+        except ValueError:
+            replay_rejected = True
+        finally:
+            replay_root.close()
         checks = {
             "target": target.selected_contract == contract,
             "version_lint": lint.get("complete") is True,
@@ -669,6 +883,37 @@ def _run_temporary_package(
             "raw_finalizer": raw_chain["finalizer_consumed_raw_manifests"] is True,
             "answer_chain": raw_chain["effect_answer_reached_finalized_session"] is True,
             "cleanup": result.get("cleanup") == expected_cleanup,
+            "unified_authority": isinstance(authority_consumption, dict)
+            and authority_consumption.get("authorization_reference") == external_reference
+            and authority_consumption.get("authorization_source_sha256")
+            == context.external_authorization_source_sha256
+            and authority_consumption.get("terminal_state") == "terminal-complete",
+            "authority_replay_rejected": replay_rejected,
+            "split_authority_rejected": split_authority_rejected,
+            "symlink_root_rejected": symlink_root_rejected,
+            "retained_checkpoint": isinstance(checkpoint, dict)
+            and checkpoint.get("decision") == "continue-to-task-b"
+            and checkpoint.get("reasons") == []
+            and isinstance(checkpoint.get("checkpoint_evidence"), dict)
+            and cast(dict[str, object], checkpoint["checkpoint_evidence"]).get(
+                "valid_scored_attempt"
+            )
+            == [True, True]
+            and isinstance(primitives, list)
+            and "first_pair_decision" in primitives
+            and "record_first_pair_checkpoint" in primitives,
+            "provider_cost": isinstance(provider_cost, dict)
+            and provider_cost.get("cumulative_provider_cost_usd") == 0.0
+            and provider_cost.get("real_provider_effects") is False
+            and isinstance(checkpoint, dict)
+            and checkpoint.get("provider_cost_receipt_sha256")
+            == provider_cost.get("receipt_sha256"),
+            "held_evidence": isinstance(held_evidence, dict)
+            and held_evidence.get("revalidated_across_consumers") is True
+            and isinstance(held_evidence.get("raw"), dict)
+            and len(cast(dict[str, object], held_evidence["raw"])) == 4
+            and isinstance(held_evidence.get("finalized"), dict)
+            and len(cast(dict[str, object], held_evidence["finalized"])) == 4,
             "typed_failures": set(typed_failures)
             == {
                 "known-provider-exception",
@@ -681,6 +926,93 @@ def _run_temporary_package(
             raise ValueError(
                 "live-shaped package conformance did not close cleanly: " + ", ".join(failed)
             )
+        if not isinstance(checkpoint, dict) or not isinstance(provider_cost, dict):
+            raise ValueError("happy conformance checkpoint or provider cost is absent")
+        retained_evidence = result.get("evidence_retained")
+        if not isinstance(retained_evidence, dict):
+            raise ValueError("happy conformance retained evidence is absent")
+        checkpoint_evidence = checkpoint.get("checkpoint_evidence")
+        if not isinstance(checkpoint_evidence, dict):
+            raise ValueError("happy conformance checkpoint evidence is absent")
+        if not isinstance(held_evidence, dict):
+            raise ValueError("happy conformance held evidence is absent")
+        if (
+            not isinstance(authority_consumption, dict)
+            or authority_consumption.get("transaction_root_identity")
+            != context.transaction_root_identity
+            or authority_consumption.get("single_use") is not True
+            or authority_consumption.get("replay_permitted") is not False
+            or authority_consumption.get("contains_private_overlay_contents") is not False
+            or not isinstance(authority_consumption.get("receipt_sha256"), str)
+            or len(cast(str, authority_consumption["receipt_sha256"])) != 64
+        ):
+            raise ValueError("happy conformance authority consumption is not exact")
+        private_decision_sha256 = retained_evidence.get("pair_checkpoint_sha256")
+        private_evidence_sha256 = checkpoint.get("evidence_binding_sha256")
+        if (
+            not isinstance(private_decision_sha256, str)
+            or len(private_decision_sha256) != 64
+            or not isinstance(private_evidence_sha256, str)
+            or len(private_evidence_sha256) != 64
+        ):
+            raise ValueError("happy conformance checkpoint identities are malformed")
+        review_failure_subreceipts.update(
+            {
+                "split-authorization-rejection": {
+                    "rejected_before_metadata": split_authority_rejected,
+                    "secret_reads": 0,
+                    "authenticated_metadata_requests": 0,
+                    "provider_calls": 0,
+                    "condition_reservations": 0,
+                },
+                "effect-module-replacement-rejection": {
+                    "same_size_replacement_rejected": effect_source_replacement_rejected,
+                    "compiled_from_held_bytes": True,
+                    "path_revalidated_after_factory": True,
+                },
+                "symlink-transaction-root-rejection": {
+                    "root_symlink_rejected": symlink_root_rejected,
+                    "secret_reads": 0,
+                    "authenticated_metadata_requests": 0,
+                    "provider_calls": 0,
+                    "condition_reservations": 0,
+                },
+            }
+        )
+        authorization_context_binding: dict[str, object] = {
+            "control_commit": context.control_commit,
+            "control_tree": context.control_tree,
+            "provider_contract_version": context.provider_contract_version,
+            "plan_path": context.plan_path,
+            "plan_sha256": context.plan_sha256,
+            "command_package_sha256": context.command_package_sha256,
+            "control_binding_semantic_sha256": (context.control_binding_semantic_sha256),
+            "effect_implementation_sha256": context.effect_implementation.sha256,
+            "external_authorization_reference": external_reference,
+            "current_turn_scope": context.current_turn_scope,
+            "exact_private_source_sha256_validated": True,
+            "shared_held_transaction_root_identity_validated": True,
+            "private_runtime_identity_values_retained": False,
+        }
+        authorization_context_binding["public_binding_semantic_sha256"] = _canonical_sha256(
+            authorization_context_binding
+        )
+        public_checkpoint: dict[str, object] = {
+            "retained_first_pair_decision_invoked": True,
+            "task_a_valid_evidence": checkpoint_evidence["valid_evidence"],
+            "task_a_evaluator_succeeded": checkpoint_evidence["evaluator_succeeded"],
+            "task_a_valid_scored_attempt": checkpoint_evidence["valid_scored_attempt"],
+            "finalizer_closure_valid": checkpoint_evidence["finalizer_closure_valid"],
+            "pair_match_valid": checkpoint_evidence["pair_match_valid"],
+            "decision": checkpoint["decision"],
+            "reasons": checkpoint["reasons"],
+            "exact_private_decision_and_evidence_identities_validated": True,
+            "private_runtime_identity_values_retained": False,
+            "task_b_admitted_only_after_retained_decision": True,
+        }
+        public_checkpoint["public_checkpoint_semantic_sha256"] = _canonical_sha256(
+            public_checkpoint
+        )
         return {
             "temporary_repository_commit": temporary_commit,
             "temporary_repository_tree": temporary_tree,
@@ -688,7 +1020,41 @@ def _run_temporary_package(
             "plan_id": contract.plan_id,
             "command_package_sha256": contract.expected_command_manifest_sha256,
             "effect_implementation": effect_identity.to_document(),
-            "authorization_context_semantic_sha256": context.semantic_sha256,
+            "held_effect_source": loaded.held_source.to_public_document(),
+            "held_transaction_root": held_transaction_root.to_public_document(),
+            "authorization_context_binding": authorization_context_binding,
+            "authorization": {
+                "reference": external_reference,
+                "source_binding": {
+                    "exact_sha256_validated": True,
+                    "same_across_effect_metadata_launch_cleanup": True,
+                    "private_runtime_value_retained": False,
+                },
+                "single_use_state": {
+                    "authorization_reference": external_reference,
+                    "terminal_state": authority_consumption["terminal_state"],
+                    "single_use": authority_consumption["single_use"],
+                    "replay_permitted": authority_consumption["replay_permitted"],
+                    "contains_private_overlay_contents": authority_consumption[
+                        "contains_private_overlay_contents"
+                    ],
+                    "exact_private_source_context_root_and_receipt_validated": True,
+                    "private_runtime_identity_values_retained": False,
+                },
+                "replay_rejected": replay_rejected,
+                "private_overlay_contents_retained": False,
+                "same_reference_and_source_across_effect_metadata_launch_cleanup": True,
+            },
+            "first_pair_checkpoint": public_checkpoint,
+            "provider_cost_accounting": {
+                "owned_instance_identity": provider_cost["owned_instance_identity"],
+                "launch_ordinal": provider_cost["launch_ordinal"],
+                "prior_preflight_cost_usd": provider_cost["prior_preflight_cost_usd"],
+                "current_empirical_cost_usd": provider_cost["current_empirical_cost_usd"],
+                "cumulative_provider_cost_usd": provider_cost["cumulative_provider_cost_usd"],
+                "receipt_sha256": provider_cost["receipt_sha256"],
+                "zero_real_provider_effects": provider_cost["real_provider_effects"] is False,
+            },
             "controller_terminal_state": result["terminal_state"],
             "metadata": {
                 "noncanonical_runtime_credential_reached_channel": True,
@@ -730,6 +1096,19 @@ def _run_temporary_package(
                 "dynamic_frozen_manifest": True,
             },
             "raw_finalizer_evaluator_chain": raw_chain,
+            "held_evidence_chain": {
+                "raw_attempt_bindings": len(cast(dict[str, object], held_evidence["raw"])),
+                "finalized_attempt_bindings": len(
+                    cast(dict[str, object], held_evidence["finalized"])
+                ),
+                "evaluator_consumed_held_finalized_identities": raw_chain[
+                    "evaluator_consumed_finalized_sessions"
+                ],
+                "revalidated_before_and_after_consumers": held_evidence[
+                    "revalidated_across_consumers"
+                ],
+            },
+            "review_failure_subreceipts": review_failure_subreceipts,
             "cleanup": expected_cleanup,
             "zero_real_effects": True,
             "temporary_conformance_grant_only": True,

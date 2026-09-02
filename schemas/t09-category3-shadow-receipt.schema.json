@@ -116,7 +116,14 @@
         "required": ["run_id", "kind", "sha256", "shadow_only"],
         "properties": {
           "run_id": {"type": "string"},
-          "kind": {"enum": ["raw", "finalized", "evaluator-control-output"]},
+          "kind": {
+            "enum": [
+              "raw",
+              "finalized",
+              "evaluator-control-output",
+              "essential-infrastructure-failure"
+            ]
+          },
           "sha256": {"$ref": "#/$defs/sha256"},
           "shadow_only": {"const": true}
         }
@@ -130,7 +137,15 @@
         "raw": {"$ref": "#/$defs/stringArray"},
         "finalized": {"$ref": "#/$defs/stringArray"},
         "evaluator": {"$ref": "#/$defs/stringArray"},
+        "essential_failures": {"type": "array", "items": {"type": "object"}},
         "pair_checkpoint_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+        "pair_checkpoint_decision": {
+          "oneOf": [
+            {"enum": ["continue-to-task-b", "stop-before-task-b"]},
+            {"type": "null"}
+          ]
+        },
+        "pair_checkpoint_reasons": {"$ref": "#/$defs/stringArray"},
         "classification": {"const": "shadow-control-plane-output"}
       }
     },

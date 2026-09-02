@@ -22,7 +22,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "2.0.0"]},
     "control_implementation_commit": {"$ref": "#/$defs/git"},
     "control_implementation_tree": {"$ref": "#/$defs/git"},
     "effect_protocol_version": {"const": "1.0.0"},
@@ -42,6 +42,43 @@
     "complete": {"const": true},
     "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "1.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "temporary_package": {
+            "required": ["authorization_context_semantic_sha256"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "2.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "temporary_package": {
+            "required": [
+              "held_effect_source",
+              "held_transaction_root",
+              "authorization_context_binding",
+              "authorization",
+              "first_pair_checkpoint",
+              "provider_cost_accounting",
+              "held_evidence_chain",
+              "review_failure_subreceipts"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
@@ -55,7 +92,6 @@
         "plan_id",
         "command_package_sha256",
         "effect_implementation",
-        "authorization_context_semantic_sha256",
         "controller_terminal_state",
         "metadata",
         "clock",
@@ -91,7 +127,13 @@
             "protocol_version": {"const": "1.0.0"}
           }
         },
+        "held_effect_source": {"$ref": "#/$defs/heldEffectSource"},
+        "held_transaction_root": {"$ref": "#/$defs/heldTransactionRoot"},
         "authorization_context_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "authorization_context_binding": {"$ref": "#/$defs/authorizationContextBinding"},
+        "authorization": {"$ref": "#/$defs/authorization"},
+        "first_pair_checkpoint": {"$ref": "#/$defs/firstPairCheckpoint"},
+        "provider_cost_accounting": {"$ref": "#/$defs/providerCost"},
         "controller_terminal_state": {"const": "category3-live-complete-clean"},
         "metadata": {
           "type": "object",
@@ -221,6 +263,15 @@
             "evaluator_consumed_finalized_sessions": true
           }
         },
+        "held_evidence_chain": {
+          "const": {
+            "raw_attempt_bindings": 4,
+            "finalized_attempt_bindings": 4,
+            "evaluator_consumed_held_finalized_identities": true,
+            "revalidated_before_and_after_consumers": true
+          }
+        },
+        "review_failure_subreceipts": {"$ref": "#/$defs/reviewFailures"},
         "cleanup": {
           "const": {
             "state": "complete",
@@ -235,6 +286,239 @@
         "repository_state_grants_authority": {"const": false},
         "scientific_interpretation_allowed": {"const": false},
         "projected_real_cost_usd": {"const": "0.00"}
+      }
+    },
+    "heldEffectSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path", "bytes", "sha256", "factory_entry_point", "protocol_version",
+        "compiled_from_held_bytes", "git_blob_bytes_matched",
+        "regular_current_user_single_link_safe_mode",
+        "path_revalidated_after_execution_and_factory",
+        "runtime_identity_values_retained", "public_attestation_semantic_sha256"
+      ],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "factory_entry_point": {"const": "build_package_effects"},
+        "protocol_version": {"const": "1.0.0"},
+        "compiled_from_held_bytes": {"const": true},
+        "git_blob_bytes_matched": {"const": true},
+        "regular_current_user_single_link_safe_mode": {"const": true},
+        "path_revalidated_after_execution_and_factory": {"const": true},
+        "runtime_identity_values_retained": {"const": false},
+        "public_attestation_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "heldTransactionRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_derived_by_shared_code", "descriptor_held_through_cleanup",
+        "no_symlink_path_components_validated", "current_user_owned",
+        "group_world_write_absent", "device_inode_mode_mount_revalidated",
+        "runtime_identity_values_retained", "public_attestation_semantic_sha256"
+      ],
+      "properties": {
+        "identity_derived_by_shared_code": {"const": true},
+        "descriptor_held_through_cleanup": {"const": true},
+        "no_symlink_path_components_validated": {"const": true},
+        "current_user_owned": {"const": true},
+        "group_world_write_absent": {"const": true},
+        "device_inode_mode_mount_revalidated": {"const": true},
+        "runtime_identity_values_retained": {"const": false},
+        "public_attestation_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "authorizationContextBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_commit", "control_tree", "provider_contract_version", "plan_path",
+        "plan_sha256", "command_package_sha256", "control_binding_semantic_sha256",
+        "effect_implementation_sha256", "external_authorization_reference",
+        "current_turn_scope", "exact_private_source_sha256_validated",
+        "shared_held_transaction_root_identity_validated",
+        "private_runtime_identity_values_retained", "public_binding_semantic_sha256"
+      ],
+      "properties": {
+        "control_commit": {"$ref": "#/$defs/git"},
+        "control_tree": {"$ref": "#/$defs/git"},
+        "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+        "plan_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "command_package_sha256": {"$ref": "#/$defs/sha256"},
+        "control_binding_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "effect_implementation_sha256": {"$ref": "#/$defs/sha256"},
+        "external_authorization_reference": {
+          "type": "string", "pattern": "^AUTH-T09-V[1-9][0-9]*-"
+        },
+        "current_turn_scope": {"const": "T09-PR14-EXACT-HEAD-CONFORMANCE"},
+        "exact_private_source_sha256_validated": {"const": true},
+        "shared_held_transaction_root_identity_validated": {"const": true},
+        "private_runtime_identity_values_retained": {"const": false},
+        "public_binding_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference", "source_binding", "single_use_state", "replay_rejected",
+        "private_overlay_contents_retained",
+        "same_reference_and_source_across_effect_metadata_launch_cleanup"
+      ],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^AUTH-T09-V[1-9][0-9]*-"},
+        "source_binding": {
+          "const": {
+            "exact_sha256_validated": true,
+            "same_across_effect_metadata_launch_cleanup": true,
+            "private_runtime_value_retained": false
+          }
+        },
+        "single_use_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorization_reference", "terminal_state", "single_use",
+            "replay_permitted", "contains_private_overlay_contents",
+            "exact_private_source_context_root_and_receipt_validated",
+            "private_runtime_identity_values_retained"
+          ],
+          "properties": {
+            "authorization_reference": {"type": "string", "pattern": "^AUTH-T09-V[1-9][0-9]*-"},
+            "terminal_state": {"const": "terminal-complete"},
+            "single_use": {"const": true},
+            "replay_permitted": {"const": false},
+            "contains_private_overlay_contents": {"const": false},
+            "exact_private_source_context_root_and_receipt_validated": {"const": true},
+            "private_runtime_identity_values_retained": {"const": false}
+          }
+        },
+        "replay_rejected": {"const": true},
+        "private_overlay_contents_retained": {"const": false},
+        "same_reference_and_source_across_effect_metadata_launch_cleanup": {"const": true}
+      }
+    },
+    "firstPairCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retained_first_pair_decision_invoked", "task_a_valid_evidence",
+        "task_a_evaluator_succeeded", "task_a_valid_scored_attempt",
+        "finalizer_closure_valid", "pair_match_valid", "decision", "reasons",
+        "exact_private_decision_and_evidence_identities_validated",
+        "private_runtime_identity_values_retained", "public_checkpoint_semantic_sha256",
+        "task_b_admitted_only_after_retained_decision"
+      ],
+      "properties": {
+        "retained_first_pair_decision_invoked": {"const": true},
+        "task_a_valid_evidence": {"const": [true, true]},
+        "task_a_evaluator_succeeded": {"const": [true, true]},
+        "task_a_valid_scored_attempt": {"const": [true, true]},
+        "finalizer_closure_valid": {"const": true},
+        "pair_match_valid": {"const": true},
+        "decision": {"const": "continue-to-task-b"},
+        "reasons": {"const": []},
+        "exact_private_decision_and_evidence_identities_validated": {"const": true},
+        "private_runtime_identity_values_retained": {"const": false},
+        "public_checkpoint_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "task_b_admitted_only_after_retained_decision": {"const": true}
+      }
+    },
+    "providerCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owned_instance_identity", "launch_ordinal", "prior_preflight_cost_usd",
+        "current_empirical_cost_usd", "cumulative_provider_cost_usd",
+        "receipt_sha256", "zero_real_provider_effects"
+      ],
+      "properties": {
+        "owned_instance_identity": {"$ref": "#/$defs/sha256"},
+        "launch_ordinal": {"const": 1},
+        "prior_preflight_cost_usd": {"const": 0.0},
+        "current_empirical_cost_usd": {"const": 0.0},
+        "cumulative_provider_cost_usd": {"const": 0.0},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "zero_real_provider_effects": {"const": true}
+      }
+    },
+    "reviewFailures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unscored-task-a-checkpoint-stop", "ambiguous-send-essential-failure",
+        "nonzero-process-exit-essential-failure", "split-authorization-rejection",
+        "effect-module-replacement-rejection", "symlink-transaction-root-rejection",
+        "raw-replacement-rejection"
+      ],
+      "properties": {
+        "unscored-task-a-checkpoint-stop": {
+          "const": {
+            "decision": "stop-before-task-b",
+            "reason": "task_a_valid_scored_attempt_missing",
+            "task_b_condition_reservations": 0,
+            "task_b_condition_entries": 0,
+            "cleanup_complete": true
+          }
+        },
+        "ambiguous-send-essential-failure": {
+          "const": {
+            "failure_class": "ambiguous-send",
+            "sealed": true,
+            "exported_and_acknowledged": true,
+            "unscored": true,
+            "zero_retry": true,
+            "cleanup_complete": true
+          }
+        },
+        "nonzero-process-exit-essential-failure": {
+          "const": {
+            "failure_class": "process-exit-nonzero",
+            "sealed": true,
+            "exported_and_acknowledged": true,
+            "unscored": true,
+            "zero_retry": true,
+            "cleanup_complete": true
+          }
+        },
+        "split-authorization-rejection": {
+          "const": {
+            "rejected_before_metadata": true,
+            "secret_reads": 0,
+            "authenticated_metadata_requests": 0,
+            "provider_calls": 0,
+            "condition_reservations": 0
+          }
+        },
+        "effect-module-replacement-rejection": {
+          "const": {
+            "same_size_replacement_rejected": true,
+            "compiled_from_held_bytes": true,
+            "path_revalidated_after_factory": true
+          }
+        },
+        "symlink-transaction-root-rejection": {
+          "const": {
+            "root_symlink_rejected": true,
+            "secret_reads": 0,
+            "authenticated_metadata_requests": 0,
+            "provider_calls": 0,
+            "condition_reservations": 0
+          }
+        },
+        "raw-replacement-rejection": {
+          "const": {
+            "same_size_replacement_rejected": true,
+            "stopping_phase": "finalization",
+            "evaluator_calls": 0,
+            "scientific_interpretation_allowed": false
+          }
+        }
       }
     },
     "knownFailure": {

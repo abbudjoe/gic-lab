@@ -31,7 +31,8 @@
       "enum": [
         "INC-T09-V16-LIFECYCLE-REGISTRY",
         "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
-        "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"
+        "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
+        "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW"
       ]
     },
     "observed_package": {
@@ -190,6 +191,57 @@
             ]
           },
           "repair": {"const": "effect-neutral-live-capable-production-seams"},
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "3291af1e64ec1ea89b8773a586c97a917f1052a2"
+              }
+            }
+          },
+          "stage": {"const": "exact-head live-boundary review"},
+          "failed_invariant": {
+            "const": "Task A checkpoint policy, post-entry failure evidence, live authority, and effect/root/evidence identities must remain authoritative and held across the shared transaction"
+          },
+          "root_cause": {
+            "const": "checkpoint bypassed retained policy; post-entry failures lacked essential evidence; effect and provider authority could split; module, root, and evidence identities were pathname-reopened"
+          },
+          "earliest_detectable_stage": {
+            "const": "exact-head live-boundary review"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/first-pair-checkpoint",
+              "shared-control/essential-failure-evidence",
+              "shared-control/live-authorization-transaction",
+              "shared-control/held-identity-boundary"
+            ]
+          },
+          "repair": {
+            "const": "authoritative-checkpoint-failure-authority-and-held-identity-repair"
+          },
           "coverage": {
             "const": [
               "offline-composition",

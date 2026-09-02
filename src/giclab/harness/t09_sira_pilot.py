@@ -1829,7 +1829,10 @@ def _load_pilot_state(
             "selection_complete_sha256s",
             "semantic_projection_sha256s",
             "selected_closure_sha256",
+            "finalizer_closure_valid",
             "decision_sha256",
+            "decision_receipt_path",
+            "decision_receipt_sha256",
             "first_pair_started_at_epoch",
             "second_pair_started_at_epoch",
             "decided_at_epoch",
@@ -1846,6 +1849,7 @@ def _load_pilot_state(
         assert isinstance(checkpoint_receipt_hashes, dict)
         assert isinstance(completion_hashes, dict)
         assert isinstance(semantic_hashes, dict)
+        bound_checkpoint_selections: list[dict[str, object]] = []
         for run_id in attempt_order[:2]:
             receipt_sha256 = checkpoint_receipt_hashes.get(run_id)
             matching = [
@@ -1865,10 +1869,63 @@ def _load_pilot_state(
                 != semantic_hashes.get(run_id)
             ):
                 raise T09PilotError("pilot checkpoint is not backed by exact selection receipts")
-        for field in ("selected_closure_sha256", "decision_sha256"):
+            bound_checkpoint_selections.append(cast(dict[str, object], matching_selection))
+        for field in (
+            "selected_closure_sha256",
+            "decision_sha256",
+            "decision_receipt_sha256",
+        ):
             value = checkpoint_binding.get(field)
             if not isinstance(value, str) or _HEX64.fullmatch(value) is None:
                 raise T09PilotError("pilot checkpoint hash binding is malformed")
+        closure_valid = checkpoint_binding.get("finalizer_closure_valid")
+        selected_closures = {
+            _selection_closure_sha256(selection) for selection in bound_checkpoint_selections
+        }
+        if (
+            type(closure_valid) is not bool
+            or closure_valid is not (len(selected_closures) == 1)
+            or (checkpoint_decision == "continue-to-task-b" and not closure_valid)
+        ):
+            raise T09PilotError("pilot checkpoint finalizer closure binding drifted")
+        decision_receipt_name = checkpoint_binding.get("decision_receipt_path")
+        if decision_receipt_name != "first-pair-checkpoint-decision.json" or not isinstance(
+            decision_receipt_name, str
+        ):
+            raise T09PilotError("pilot checkpoint decision receipt path drifted")
+        decision_receipt = path.parent / decision_receipt_name
+        try:
+            decision_metadata = decision_receipt.stat(follow_symlinks=False)
+        except OSError as exc:
+            raise T09PilotError("pilot checkpoint decision receipt is unavailable") from exc
+        if (
+            decision_receipt.is_symlink()
+            or not stat.S_ISREG(decision_metadata.st_mode)
+            or decision_metadata.st_uid != os.getuid()
+            or decision_metadata.st_nlink != 1
+            or stat.S_IMODE(decision_metadata.st_mode) != 0o600
+            or file_sha256(decision_receipt) != checkpoint_binding.get("decision_receipt_sha256")
+        ):
+            raise T09PilotError("pilot checkpoint decision receipt identity drifted")
+        decision_document = load_json_object(
+            decision_receipt,
+            context="first-pair checkpoint decision receipt",
+        )
+        if (
+            canonical_sha256(decision_document) != checkpoint_binding.get("decision_sha256")
+            or (
+                state.get("first_pair_selection_drift_detected") is False
+                and decision_document.get("decision") != checkpoint_decision
+            )
+            or (
+                state.get("first_pair_selection_drift_detected") is True
+                and (
+                    decision_document.get("decision") != "continue-to-task-b"
+                    or checkpoint_decision != "stop-before-task-b"
+                )
+            )
+        ):
+            raise T09PilotError("pilot checkpoint decision receipt content drifted")
         first_pair_started = state.get("first_pair_started_at_epoch")
         second_pair_started = state.get("second_pair_started_at_epoch")
         decided_at = checkpoint_binding.get("decided_at_epoch")
@@ -2482,11 +2539,18 @@ def record_first_pair_checkpoint(
         for run_id in attempt_order[:2]
         if (item := finalizations.get(run_id)) is not None
     }
-    if len(finalizer_closures) != 1:
-        raise T09PilotError("checkpoint requires one uniform Task A finalizer closure")
     result = decision.get("decision")
     if result not in {"continue-to-task-b", "stop-before-task-b"}:
         raise T09PilotError("checkpoint decision is invalid")
+    closure_valid = len(finalizer_closures) == 1
+    evidence = decision.get("checkpoint_evidence")
+    declared_closure = (
+        evidence.get("finalizer_closure_valid") if isinstance(evidence, dict) else closure_valid
+    )
+    if declared_closure is not closure_valid or (
+        result == "continue-to-task-b" and not closure_valid
+    ):
+        raise T09PilotError("checkpoint finalizer-closure evidence is invalid")
     first_pair_started = state.get("first_pair_started_at_epoch")
     second_pair_started: float | None = decided_at_epoch if result == "continue-to-task-b" else None
     if (
@@ -2500,8 +2564,12 @@ def record_first_pair_checkpoint(
         or decision.get("decided_at_epoch") != decided_at_epoch
     ):
         raise T09PilotError("checkpoint pair-wall origin binding is invalid")
+    decision_path = path.parent / "first-pair-checkpoint-decision.json"
+    _write_json_exclusive(decision_path, decision)
+    decision_sha256 = canonical_sha256(decision)
+    decision_file_sha256 = file_sha256(decision_path)
     state["first_pair_decision"] = result
-    state["first_pair_decision_sha256"] = canonical_sha256(decision)
+    state["first_pair_decision_sha256"] = decision_sha256
     state["first_pair_checkpoint_binding"] = {
         "selection_receipt_sha256s": _current_selection_receipt_hashes(
             path,
@@ -2516,8 +2584,15 @@ def record_first_pair_checkpoint(
             run_id: finalizations[run_id]["semantic_projection_sha256"]
             for run_id in attempt_order[:2]
         },
-        "selected_closure_sha256": next(iter(finalizer_closures)),
-        "decision_sha256": canonical_sha256(decision),
+        "selected_closure_sha256": (
+            next(iter(finalizer_closures))
+            if closure_valid
+            else canonical_sha256({"nonuniform_closures": sorted(finalizer_closures)})
+        ),
+        "finalizer_closure_valid": closure_valid,
+        "decision_sha256": decision_sha256,
+        "decision_receipt_path": decision_path.name,
+        "decision_receipt_sha256": decision_file_sha256,
         "first_pair_started_at_epoch": float(first_pair_started),
         "second_pair_started_at_epoch": second_pair_started,
         "decided_at_epoch": decided_at_epoch,
@@ -2744,6 +2819,8 @@ class PairCheckpointInput:
     next_attempt_hard_wall_seconds: int
     prior_t09_cost_usd: float
     cumulative_t09_cost_cap_usd: float
+    valid_scored_attempt: tuple[bool, bool] = (True, True)
+    finalizer_closure_valid: bool = True
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
@@ -2765,6 +2842,10 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         reasons.append("task_a_valid_evidence_missing")
     if not all(value.evaluator_succeeded):
         reasons.append("task_a_evaluator_failed")
+    if not all(value.valid_scored_attempt):
+        reasons.append("task_a_valid_scored_attempt_missing")
+    if not value.finalizer_closure_valid:
+        reasons.append("task_a_finalizer_closure_invalid")
     if not value.pair_match_valid:
         reasons.append("task_a_pair_match_invalid")
     if value.credential_issue:
@@ -2802,7 +2883,7 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
     if actual_total_cost >= strict_half_caps["total_cost_usd"]:
         reasons.append("first_pair_total_cost_threshold_reached")
     if not math.isfinite(value.projected_aggregate_cost_usd) or (
-        value.projected_aggregate_cost_usd > 58.0
+        value.projected_aggregate_cost_usd > selected_contract.campaign_aggregate_cost_cap_usd
     ):
         reasons.append("projected_aggregate_cost_exceeds_hard_cap")
     projected_cumulative = value.prior_t09_cost_usd + value.projected_aggregate_cost_usd
@@ -2849,6 +2930,21 @@ def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:
         "remaining_campaign_seconds": value.remaining_campaign_seconds,
         "required_campaign_seconds_for_next_attempt": required_campaign_seconds,
         "thresholds": strict_half_caps,
+        "checkpoint_evidence": {
+            "attempt_run_ids": list(value.attempt_run_ids),
+            "valid_evidence": list(value.valid_evidence),
+            "evaluator_succeeded": list(value.evaluator_succeeded),
+            "valid_scored_attempt": list(value.valid_scored_attempt),
+            "finalizer_closure_valid": value.finalizer_closure_valid,
+            "pair_match_valid": value.pair_match_valid,
+            "credential_issue": value.credential_issue,
+            "cleanup_issue": value.cleanup_issue,
+            "severe_floor_or_ceiling_failure": value.severe_floor_or_ceiling_failure,
+            "actual_usage": usage_to_document(value.actual_usage),
+            "actual_pair_wall_seconds": value.actual_pair_wall_seconds,
+            "actual_lambda_cost_usd": value.actual_lambda_cost_usd,
+            "next_attempt_hard_wall_seconds": value.next_attempt_hard_wall_seconds,
+        },
     }
 
 

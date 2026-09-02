@@ -184,7 +184,10 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
     elif scenario in {"provider-entry-replacement", "host-preflight-replacement"}:
         _expect(authority.get("launch_count") == 2, "bounded replacement launch count drifted")
         _expect(authority.get("replacement_count") == 1, "replacement was not recorded")
-        _expect(receipt.get("earliest_stopping_phase") is None, "replacement did not recover")
+        _expect(
+            receipt.get("earliest_stopping_phase") is None,
+            "replacement did not recover: " + str(receipt.get("stop_reason")),
+        )
     elif scenario == "condition-failure":
         _expect(
             receipt.get("earliest_stopping_phase") == Category3Phase.CONDITION_EXECUTION.value,
@@ -196,10 +199,14 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
         )
     elif scenario == "raw-export-failure":
         _expect(
-            receipt.get("earliest_stopping_phase") == Category3Phase.RAW_EXPORT.value,
+            receipt.get("earliest_stopping_phase") == Category3Phase.CONDITION_EXECUTION.value,
             "raw export failure stopped at the wrong phase",
         )
         _expect(len(evidence.get("raw", [])) == 0, "failed raw export was retained as complete")
+        _expect(
+            len(evidence.get("essential_failures", [])) == 1,
+            "malformed raw publication lacked reconstructable failure evidence",
+        )
     elif scenario == "finalizer-failure":
         _expect(
             receipt.get("earliest_stopping_phase") == Category3Phase.FINALIZATION.value,
@@ -272,7 +279,10 @@ def validate_shadow_receipt(receipt: Mapping[str, object]) -> None:
                 "admission stop crossed the model send boundary",
             )
     elif scenario == HAPPY_PATH:
-        _expect(receipt.get("earliest_stopping_phase") is None, "happy path stopped")
+        _expect(
+            receipt.get("earliest_stopping_phase") is None,
+            "happy path stopped: " + str(receipt.get("stop_reason")),
+        )
         _expect(
             receipt.get("terminal_state") == "category3-shadow-complete-clean",
             "happy path did not close cleanly",

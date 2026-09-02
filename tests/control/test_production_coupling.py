@@ -231,7 +231,7 @@ def test_breaking_empirical_prefix_cleanup_handoff_fails_cleanup(
     def broken_cleanup(*args: object, **kwargs: object) -> object:
         nonlocal calls
         calls += 1
-        if calls == 2:
+        if calls == 3:
             raise RuntimeError("mutated empirical-prefix cleanup handoff")
         return retained(*args, **kwargs)
 
@@ -257,6 +257,7 @@ def test_post_export_raw_mutation_stops_before_effect_finalizer(
         if not mutated:
             outcome = world._condition_outcomes[run_id]
             answer = outcome.raw_root / "condition-answer.json"
+            answer.chmod(0o600)
             answer.write_bytes(answer.read_bytes() + b"\n")
             mutated = True
         return retained(world, run_id)
