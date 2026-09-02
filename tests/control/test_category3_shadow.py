@@ -182,7 +182,12 @@ def test_happy_path_is_byte_deterministic(
     ("scenario", "phase", "consumed"),
     [
         ("condition-failure", "condition-execution", 1),
-        ("raw-export-failure", "condition-execution", 1),
+        pytest.param(
+            "raw-export-failure",
+            "condition-execution",
+            1,
+            id="raw-export-failure-raw-export-1",
+        ),
         ("finalizer-failure", "finalization", 1),
     ],
 )
