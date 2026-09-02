@@ -746,7 +746,7 @@ class LiveAuthorityState(StrEnum):
     """Durable, non-replayable phases of one external authorization."""
 
     VALIDATED_UNCONSUMED = "validated-unconsumed"
-    RESERVED_BEFORE_SECRET = "reserved-before-secret"
+    RESERVED_PRE_CREDENTIAL = "reserved-before-secret"
     METADATA_SEND_ATTEMPTED = "metadata-send-attempted"
     METADATA_BOUND = "metadata-bound"
     PROVIDER_LAUNCH_CONSUMED = "provider-launch-consumed"
@@ -1041,12 +1041,12 @@ class ValidatedLiveEffectAuthority:
     def reserve_before_secret(self) -> None:
         self._transition(
             expected=(LiveAuthorityState.VALIDATED_UNCONSUMED,),
-            target=LiveAuthorityState.RESERVED_BEFORE_SECRET,
+            target=LiveAuthorityState.RESERVED_PRE_CREDENTIAL,
         )
 
     def mark_metadata_send_attempted(self) -> None:
         self._transition(
-            expected=(LiveAuthorityState.RESERVED_BEFORE_SECRET,),
+            expected=(LiveAuthorityState.RESERVED_PRE_CREDENTIAL,),
             target=LiveAuthorityState.METADATA_SEND_ATTEMPTED,
         )
 
@@ -1076,7 +1076,7 @@ class ValidatedLiveEffectAuthority:
             return
         self._transition(
             expected=(
-                LiveAuthorityState.RESERVED_BEFORE_SECRET,
+                LiveAuthorityState.RESERVED_PRE_CREDENTIAL,
                 LiveAuthorityState.METADATA_SEND_ATTEMPTED,
                 LiveAuthorityState.METADATA_BOUND,
                 LiveAuthorityState.PROVIDER_LAUNCH_CONSUMED,
