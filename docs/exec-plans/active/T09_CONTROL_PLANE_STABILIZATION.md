@@ -460,11 +460,15 @@ Core implementation commit `e4e65ef24b97151c09fc9ccfe1e0d0083f797a1e`, tree
 `2de4e90efa2d85b5c4662bc8f47f72375659acae`, repairs the four findings. Its ordinary
 source-closure descendant `adafa96342d0c407189cd0b260cf017fb4d79f3e`, tree
 `45562750df7fa3935c3b7b1af37e4c63bf244caa`, avoids a repository-hygiene scanner
-collision while preserving the durable authority-state value. The current 27-file
-V16 receipt root is regenerated against that exact later implementation ancestor. Its
-binding file SHA-256 is
-`b8797c42d5ac8943e6ccb2677fdb5c80d091794a2b085b21d4bb8392a7ad7fd9` and semantic
-SHA-256 is `e894458286ff3d77121b9eedccedcc715b780001055547fb2024cce43a3d5156`.
+collision while preserving the durable authority-state value. Full-suite review then
+found that Task B essential-failure export had to carry the newly authoritative
+checkpoint decision receipt. Ordinary compatibility-closure commit
+`4163cad097767f6056cb21792d3d6d5894f2ccd7`, tree
+`eb733fa3ecc5e8b306928badfe61a3c2c24e04e3`, adds that exact source, verification, and
+restoration binding and is the final immutable implementation ancestor. The current
+27-file V16 receipt root is regenerated against it. Its binding file SHA-256 is
+`001d74ac29c3ebade8c572143ce3a41a0f11e7f0ef0227b2a1716183663554c8` and semantic
+SHA-256 is `81211771320c1b7f81ecd98b62682280db1759fa239b19a5badffddcb4c5a58b`.
 
 | ID | Review-repair outcome | Evidence state |
 | --- | --- | --- |

@@ -31,6 +31,8 @@
         "tests/control/test_essential_failure_evidence.py::test_nonzero_exit_with_completed_answer_is_infrastructure_invalid",
         "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted",
         "tests/control/test_essential_failure_evidence.py::test_interrupted_failure_export_resumes_from_identical_sealed_source",
+        "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[False-2]",
+        "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[True-2]",
         "tests/control/test_live_authority_transaction.py::test_first_valid_private_overlay_mints_one_opaque_single_use_proof",
         "tests/control/test_live_authority_transaction.py::test_effect_and_metadata_authority_split_stops_before_metadata_send",
         "tests/control/test_live_authority_transaction.py::test_provider_launch_authority_split_stops_before_post",
@@ -42,7 +44,7 @@
         "tests/control/test_live_effect_conformance.py::test_live_shaped_checkpoint_authority_and_held_identity_repairs",
         "tests/control/test_live_effect_conformance.py::test_live_shaped_review_failure_subreceipts_are_complete"
       ],
-      "regression_output": "...................................................                      [100%]",
+      "regression_output": ".....................................................                    [100%]",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -80,8 +82,8 @@
       "status": "resolved"
     }
   ],
-  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
-  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
+  "repository_commit": "4163cad097767f6056cb21792d3d6d5894f2ccd7",
+  "repository_tree": "eb733fa3ecc5e8b306928badfe61a3c2c24e04e3",
   "schema_version": "1.0.0",
-  "semantic_sha256": "08a00fe21c65e9048aadc2d7c73fcb0932c3510bd0420d2c3cad01d83f65f7ac"
+  "semantic_sha256": "167f9bc82269cf1121c65fb536bcbb63b0dedc0eed1acc1f87b4e1f635c7d71e"
 }

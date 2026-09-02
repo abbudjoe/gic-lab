@@ -32,7 +32,7 @@
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "offline-composition",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "2048e9e1af76d0ca0239674be2c92d421917af8f3925b5239a4f886ad1f1c932",
+  "effect_authorization_context_sha256": "da90f3e0013f6ddfd6a59e6bef895ce7d6d1aa135eb84d1591f97dbe7367bc12",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -75,7 +75,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "2048e9e1af76d0ca0239674be2c92d421917af8f3925b5239a4f886ad1f1c932",
+    "authorization_context_semantic_sha256": "da90f3e0013f6ddfd6a59e6bef895ce7d6d1aa135eb84d1591f97dbe7367bc12",
     "cleanup_handoff_sha256": null,
     "cleanup_receipt_sha256": null,
     "cleanup_resume_byte_identical": false,
@@ -145,8 +145,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
-  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
+  "repository_commit": "4163cad097767f6056cb21792d3d6d5894f2ccd7",
+  "repository_tree": "eb733fa3ecc5e8b306928badfe61a3c2c24e04e3",
   "scenario": "lifecycle-unsupported",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -155,7 +155,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "a9ca1029980ad9655ae7f6335c2d64719a66d67499ca1ade71dedb4f477c6eb7",
+  "semantic_sha256": "33710b8a72eb92de5907d2ddaed979f73236c4a2e91453cf2f9cc6250dda2c24",
   "shadow_only": true,
   "stop_reason": "offline composition failed: provider registry completeness failed",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

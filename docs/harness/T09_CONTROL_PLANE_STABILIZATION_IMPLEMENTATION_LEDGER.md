@@ -950,40 +950,46 @@ equivalent successor repositories produce byte-identical complete receipt trees.
 The core source/test/control-input commit is
 `e4e65ef24b97151c09fc9ccfe1e0d0083f797a1e`, tree
 `2de4e90efa2d85b5c4662bc8f47f72375659acae`, directly descended from the reviewed
-head. The exact immutable implementation ancestor used for receipt generation is its
+head. The first immutable implementation ancestor used for receipt generation was its
 ordinary source-closure descendant
 `adafa96342d0c407189cd0b260cf017fb4d79f3e`, tree
 `45562750df7fa3935c3b7b1af37e4c63bf244caa`. That descendant only renames the Python
 authority-state member that collided with the repository secret scanner; the durable
-serialized state remains `reserved-before-secret`. The 27-file current V16 receipt
-root was generated from that clean later ancestor in an external staging directory
-and copied only after its file inventory matched the existing sealed root.
+serialized state remains `reserved-before-secret`. Full-suite evidence then exposed
+that a Task B essential-failure export carried checkpoint state without the newly
+authoritative checkpoint decision receipt. Ordinary compatibility-closure commit
+`4163cad097767f6056cb21792d3d6d5894f2ccd7`, tree
+`eb733fa3ecc5e8b306928badfe61a3c2c24e04e3`, adds that decision receipt to the bounded
+control snapshot, its allowlist, and the restored identity assertion. It is the final
+immutable implementation ancestor. The 27-file current V16 receipt root was generated
+from that clean ancestor in an external staging directory and copied only after its
+file inventory matched the existing sealed root.
 
 ```text
 control binding file bytes: 9288
-control binding file SHA-256: b8797c42d5ac8943e6ccb2677fdb5c80d091794a2b085b21d4bb8392a7ad7fd9
-control binding semantic SHA-256: e894458286ff3d77121b9eedccedcc715b780001055547fb2024cce43a3d5156
+control binding file SHA-256: 001d74ac29c3ebade8c572143ce3a41a0f11e7f0ef0227b2a1716183663554c8
+control binding semantic SHA-256: 81211771320c1b7f81ecd98b62682280db1759fa239b19a5badffddcb4c5a58b
 source binding bytes: 6662
-source binding file SHA-256: fdb2463f65f73ea8da3cbef8351d5ec6979612048b4026dac0b4dd45cc09d53b
-source binding semantic SHA-256: 0e33677bd69cc5d988e673d29e228cefe3bff14cf46673a94c9396e9d1604d4d
+source binding file SHA-256: 424e165e664280fee6f68df4b2a70d7ece525d64a3b2f5795d5330be99a7f3c8
+source binding semantic SHA-256: d49ee9ffdbde39677f12bcaa2f4fedd83c712927c6b6fcb3b004634a6ea76f26
 live-effect conformance bytes: 14804
-live-effect conformance file SHA-256: 7a6c1bce7e29bb112a3b5d23878a05c35089c3db10c137fc09400f9c4d7b8d0d
-live-effect conformance semantic SHA-256: e4a4d2e47ca2a07e8f3bec3ac0fd7d1fa2056c74021c1bb676f9181a8ffe0d7f
+live-effect conformance file SHA-256: 2b044358035ab2e948fa428d829fb63b3be0374d99fb3aceff95329160435558
+live-effect conformance semantic SHA-256: d85939851b6ff0dc02fe29352c5b7eb936609568438acac52cb09c01a97b4e18
 anti-shadow lint bytes: 7134
-anti-shadow lint file SHA-256: c21da9c25bf654272b388c14c23d3735980367e38e58213fb90c08094e1ad883
-anti-shadow lint semantic SHA-256: a82715415966159f0f655c78922727f59112102cb47996db76ed1abcec397137
-incident aggregate bytes: 5874
-incident aggregate file SHA-256: 035a9d275ddf26f0d523d2c11ed9e7d685c72be999302b7ffe79ebce13ee9ec8
-incident aggregate semantic SHA-256: 08a00fe21c65e9048aadc2d7c73fcb0932c3510bd0420d2c3cad01d83f65f7ac
-review incident bytes: 5429
-review incident file SHA-256: 00bd51081016fc66a9be8896f31ac6d6015910ae69d4a624f5ad4da077f0ac21
+anti-shadow lint file SHA-256: 28e5838a772615fad60e11080062e46d43f7e97aaf0420d2ce323ad5d796e59b
+anti-shadow lint semantic SHA-256: 74f338d5a94c5c429949f8534791ab7d692e7ccf71ec2766a9b52850fa12508c
+incident aggregate bytes: 6091
+incident aggregate file SHA-256: 853ec769df1101385e2da18d3ceaba9788c02a84b1cd211a459ab6e18b9dccce
+incident aggregate semantic SHA-256: 167f9bc82269cf1121c65fb536bcbb63b0dedc0eed1acc1f87b4e1f635c7d71e
+review incident bytes: 5746
+review incident file SHA-256: a78c5f9b6fe1b2274673089cab22ef325fafeebaec79a9d5e94fdca87597d112
 review incident immutable-facts SHA-256: 3718f419cb03edda7e2b781f2858caffae589dc1918ead2fa05621e1468ccd52
 ```
 
 ### Focused evidence and DoD state
 
 The consolidated checkpoint/failure/authority/loader/held/conformance/shadow/coupling
-matrix passes all 164 collected nodes. All 18 exact review-incident nodes and every
+matrix passes all 164 collected nodes. All 20 exact review-incident nodes and every
 older incident node pass. The historical receipt suite passes 11 nodes. The complete
 temporary successor path passes, and the two separate-copy successor receipt roots
 are byte-identical. Ruff format/lint, strict mypy over 86 source files, schema checks,

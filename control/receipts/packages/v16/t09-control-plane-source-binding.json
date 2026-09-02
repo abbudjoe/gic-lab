@@ -7,9 +7,9 @@
       "sha256": "45460760c3ee12e834c995d62e2b368e3ba8c55947fc75758be4324b096b0795"
     },
     {
-      "bytes": 1093152,
+      "bytes": 1093368,
       "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
-      "sha256": "99319b90c2426814f67bfb3c054a284bb1b6a2ce5ac5e35bd7c24674f2363b76"
+      "sha256": "8e2228c9d0e6317c8c396e4ec859f7651547505922494bbef546da0f20c14354"
     },
     {
       "bytes": 192,
@@ -167,9 +167,9 @@
       "sha256": "28cb11fede0136e50a3a6893ea761c779c2207da9d863f018b17b9c1eecf0665"
     },
     {
-      "bytes": 155016,
+      "bytes": 155067,
       "path": "src/giclab/harness/t09_sira_pilot.py",
-      "sha256": "3bd0140291744d189f696bae235db22f5a67188116ea6ae714a883b409243088"
+      "sha256": "700586b370ef1b2745a32fc793c4ccc14bd429fc1ebb6c789897ead70c58c27a"
     },
     {
       "bytes": 4099,
@@ -187,7 +187,7 @@
   "schema_version": "2.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "0e33677bd69cc5d988e673d29e228cefe3bff14cf46673a94c9396e9d1604d4d",
-  "source_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
-  "source_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa"
+  "semantic_sha256": "d49ee9ffdbde39677f12bcaa2f4fedd83c712927c6b6fcb3b004634a6ea76f26",
+  "source_commit": "4163cad097767f6056cb21792d3d6d5894f2ccd7",
+  "source_tree": "eb733fa3ecc5e8b306928badfe61a3c2c24e04e3"
 }

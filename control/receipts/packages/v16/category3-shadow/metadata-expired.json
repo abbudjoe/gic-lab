@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "expired",
-      "subject": "36de776d326b7953d3d869e7c299f793e5111dd68a50fb7f924cb8bd1c54ffec"
+      "subject": "86bda3d90e1129e152293641278df7d20ae6eb3c657e1573f3addc07bff81294"
     },
     {
       "adapter": "host",
@@ -84,12 +84,12 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "41d8e1113f5e637cb778397df9deff0bdd051fefc80c0b2727ef34f018e31410",
+  "composition_sha256": "293b8e8a6f1adedd138d6078be24baea65c720e11c0f757b3e6a2c5bc02803df",
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "final-metadata-freshness",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "c898db0ab9da60aa5f9f43ad879f869443e53748aa9f16ca9c2dccac2dbf71a9",
+  "effect_authorization_context_sha256": "a520862b16f54b5d3f341769d21d04ec278ee47c065d1cd15c06bd25acfc62cf",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -177,7 +177,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "c898db0ab9da60aa5f9f43ad879f869443e53748aa9f16ca9c2dccac2dbf71a9",
+    "authorization_context_semantic_sha256": "a520862b16f54b5d3f341769d21d04ec278ee47c065d1cd15c06bd25acfc62cf",
     "cleanup_handoff_sha256": "faaa56da2a6f503cdf448e2761a564400aa2a166e97ae5c1bdb8d97ce67fd26a",
     "cleanup_receipt_sha256": "30e21fd298fb052fd03c88317159fe7b15ab33f57f484c7464a7da2f9cb67635",
     "cleanup_resume_byte_identical": true,
@@ -358,8 +358,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
-  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
+  "repository_commit": "4163cad097767f6056cb21792d3d6d5894f2ccd7",
+  "repository_tree": "eb733fa3ecc5e8b306928badfe61a3c2c24e04e3",
   "scenario": "metadata-expired",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -368,7 +368,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "5e0affce211e4b1a33ad925f4e3e509c84546ebd0969bbafc832fcb50b15e357",
+  "semantic_sha256": "e2f1a5275e3aa45ca599b620f5e9b08be5f61ad62871f7208ff6501625f448f0",
   "shadow_only": true,
   "stop_reason": "metadata receipt expired",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
