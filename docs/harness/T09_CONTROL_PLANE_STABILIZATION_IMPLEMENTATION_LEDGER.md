@@ -960,27 +960,32 @@ that a Task B essential-failure export carried checkpoint state without the newl
 authoritative checkpoint decision receipt. Ordinary compatibility-closure commit
 `4163cad097767f6056cb21792d3d6d5894f2ccd7`, tree
 `eb733fa3ecc5e8b306928badfe61a3c2c24e04e3`, adds that decision receipt to the bounded
-control snapshot, its allowlist, and the restored identity assertion. It is the final
+control snapshot, its allowlist, and the restored identity assertion. Exact-base
+parity then caught that the repaired raw-export phase changed one automatic pytest
+parameter ID. Ordinary parity-identity closure commit
+`7a809850722c175d01dc1567b73680995908072e`, tree
+`909c9afe42e6ca7845aed3c5b0453b3846d78004`, preserves the exact historical node ID
+while continuing to assert the repaired `condition-execution` phase. It is the final
 immutable implementation ancestor. The 27-file current V16 receipt root was generated
 from that clean ancestor in an external staging directory and copied only after its
 file inventory matched the existing sealed root.
 
 ```text
 control binding file bytes: 9288
-control binding file SHA-256: 001d74ac29c3ebade8c572143ce3a41a0f11e7f0ef0227b2a1716183663554c8
-control binding semantic SHA-256: 81211771320c1b7f81ecd98b62682280db1759fa239b19a5badffddcb4c5a58b
+control binding file SHA-256: 472279d990fe21eac36972917622677b38af3f415c9542b17e56580c73e9e12f
+control binding semantic SHA-256: a6316e56acf4dbba20edc8695e82b3f97d47e1cc95d59a58049a3d1e155d69d0
 source binding bytes: 6662
-source binding file SHA-256: 424e165e664280fee6f68df4b2a70d7ece525d64a3b2f5795d5330be99a7f3c8
-source binding semantic SHA-256: d49ee9ffdbde39677f12bcaa2f4fedd83c712927c6b6fcb3b004634a6ea76f26
+source binding file SHA-256: 5b27d7c96cb839093b0863c0107df51c6e46011d86111331e7ebc1d024c92ccf
+source binding semantic SHA-256: 807fc0e4d05dec675784a5f79093c3fcec4c1e9e041536744a3fdac896ecbe4b
 live-effect conformance bytes: 14804
-live-effect conformance file SHA-256: 2b044358035ab2e948fa428d829fb63b3be0374d99fb3aceff95329160435558
-live-effect conformance semantic SHA-256: d85939851b6ff0dc02fe29352c5b7eb936609568438acac52cb09c01a97b4e18
+live-effect conformance file SHA-256: ae01346a70d8702e6629b7bd6fb39e7f94cc818e8aa72b44b8d17fcf5ba423a6
+live-effect conformance semantic SHA-256: 6342b6dd78fee0b5b21c85c91ae2a69ec55a0b6fb45f6cc6a6494c764e675a1a
 anti-shadow lint bytes: 7134
-anti-shadow lint file SHA-256: 28e5838a772615fad60e11080062e46d43f7e97aaf0420d2ce323ad5d796e59b
-anti-shadow lint semantic SHA-256: 74f338d5a94c5c429949f8534791ab7d692e7ccf71ec2766a9b52850fa12508c
+anti-shadow lint file SHA-256: fb176cb2967e78b5e5f11c01c5bfa21120b4c9d5b719fc761947ce3fed8a22bb
+anti-shadow lint semantic SHA-256: 7d69061004f6bb1426455bb1c2319e0c23a7cb6c90acc6355ad1c8773466bf5c
 incident aggregate bytes: 6091
-incident aggregate file SHA-256: 853ec769df1101385e2da18d3ceaba9788c02a84b1cd211a459ab6e18b9dccce
-incident aggregate semantic SHA-256: 167f9bc82269cf1121c65fb536bcbb63b0dedc0eed1acc1f87b4e1f635c7d71e
+incident aggregate file SHA-256: 78fc4a9c63ddb2299c02a50a85b9c97cd50a79d7090d015aa112c60c637417ab
+incident aggregate semantic SHA-256: 637f14d39d020d190f77d884b0fdc6c264ea5cd46273d704001727b7c4017edc
 review incident bytes: 5746
 review incident file SHA-256: a78c5f9b6fe1b2274673089cab22ef325fafeebaec79a9d5e94fdca87597d112
 review incident immutable-facts SHA-256: 3718f419cb03edda7e2b781f2858caffae589dc1918ead2fa05621e1468ccd52

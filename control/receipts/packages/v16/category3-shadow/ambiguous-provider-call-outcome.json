@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "86bda3d90e1129e152293641278df7d20ae6eb3c657e1573f3addc07bff81294"
+      "subject": "682ac562f3ee08da5ada5048217c4e6b7f438d56c8a1d819229aaa0568993643"
     },
     {
       "adapter": "provider",
@@ -91,12 +91,12 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "293b8e8a6f1adedd138d6078be24baea65c720e11c0f757b3e6a2c5bc02803df",
+  "composition_sha256": "1c817611ce8eb1a686d5c5589483020a422cac57f5ddbbcf45b4e628bb18f1a6",
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "launch",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "2c9f27a585f03ff002971f8c2e65357253ee7c8660f5c3dd4a9991e43714ff25",
+  "effect_authorization_context_sha256": "d64d8eec34cb980bf96362fa07e27e41594458d1a0cb5960a3210d05e07fbcf1",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -190,9 +190,9 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "2c9f27a585f03ff002971f8c2e65357253ee7c8660f5c3dd4a9991e43714ff25",
-    "cleanup_handoff_sha256": "4912913bcb299241cbe22c93106239b70150431add50f58b950f17e303dc2b51",
-    "cleanup_receipt_sha256": "33417453bbd9d92708277332794e3153a52e63073834be20208bc3ef3c80517d",
+    "authorization_context_semantic_sha256": "d64d8eec34cb980bf96362fa07e27e41594458d1a0cb5960a3210d05e07fbcf1",
+    "cleanup_handoff_sha256": "ac613e308daa4f34a717b848ecf86d4ed3126c311aa1d1fded575bdd07dde864",
+    "cleanup_receipt_sha256": "bd32a6bd54d84b591193e901db63f45aa87b2aec07037d8f360abe91af6df7bf",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
@@ -214,12 +214,12 @@
       "revalidated_across_consumers": true
     },
     "held_transaction_root": {
-      "device": 16777232,
-      "inode": 150430277,
+      "device": 16777230,
+      "inode": 152235195,
       "mode": 448,
-      "mount_identity": "device:16777232",
+      "mount_identity": "device:16777230",
       "path": "/private/var/folders/5s/5dk3z2k93lgfqmsn0l28_lbm0000gn/T/giclab-t09-effects-af9b009d091dde32609ea17f70e44da3",
-      "semantic_sha256": "b61fd20930035fa974d588051dbb4b57352a2e924c93accc4e470f5cd1880867",
+      "semantic_sha256": "973e8e604adfd0af3ecef1bd4d67facb0d38556e64520471d9649b0645038ae5",
       "uid": 501
     },
     "host_receipts": {
@@ -373,8 +373,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "4163cad097767f6056cb21792d3d6d5894f2ccd7",
-  "repository_tree": "eb733fa3ecc5e8b306928badfe61a3c2c24e04e3",
+  "repository_commit": "7a809850722c175d01dc1567b73680995908072e",
+  "repository_tree": "909c9afe42e6ca7845aed3c5b0453b3846d78004",
   "scenario": "ambiguous-provider-call-outcome",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -383,7 +383,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "b1ebce6b55f972739de5701131349f63f4c0d6e9dd8fb3ae5d6ef8da1b246f9e",
+  "semantic_sha256": "c2baa55e5c745560949ea5789721b995486da736f4633f58b1d793e65a4772be",
   "shadow_only": true,
   "stop_reason": "provider launch acknowledgement is ambiguous",
   "terminal_state": "category3-shadow-stopped-cleanup-unresolved",

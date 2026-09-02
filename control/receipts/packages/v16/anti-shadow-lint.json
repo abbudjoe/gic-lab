@@ -166,10 +166,10 @@
     "T09S016"
   ],
   "lint_definition_path": "src/giclab/control/anti_shadow_lint.py",
-  "repository_commit": "4163cad097767f6056cb21792d3d6d5894f2ccd7",
-  "repository_tree": "eb733fa3ecc5e8b306928badfe61a3c2c24e04e3",
+  "repository_commit": "7a809850722c175d01dc1567b73680995908072e",
+  "repository_tree": "909c9afe42e6ca7845aed3c5b0453b3846d78004",
   "schema_version": "1.0.0",
-  "semantic_sha256": "74f338d5a94c5c429949f8534791ab7d692e7ccf71ec2766a9b52850fa12508c",
+  "semantic_sha256": "7d69061004f6bb1426455bb1c2319e0c23a7cb6c90acc6355ad1c8773466bf5c",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",

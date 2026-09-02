@@ -43,10 +43,10 @@ t09_control_plane_stabilization_workstream:
   review_incident_status: resolved
   blocking_incident: null
   external_governance_gate: independent-exact-head-rereview-and-explicit-merge-authorization
-  implementation_ancestor_commit: 4163cad097767f6056cb21792d3d6d5894f2ccd7
-  implementation_ancestor_tree: eb733fa3ecc5e8b306928badfe61a3c2c24e04e3
-  current_v16_binding_file_sha256: 001d74ac29c3ebade8c572143ce3a41a0f11e7f0ef0227b2a1716183663554c8
-  current_v16_binding_semantic_sha256: 81211771320c1b7f81ecd98b62682280db1759fa239b19a5badffddcb4c5a58b
+  implementation_ancestor_commit: 7a809850722c175d01dc1567b73680995908072e
+  implementation_ancestor_tree: 909c9afe42e6ca7845aed3c5b0453b3846d78004
+  current_v16_binding_file_sha256: 472279d990fe21eac36972917622677b38af3f415c9542b17e56580c73e9e12f
+  current_v16_binding_semantic_sha256: a6316e56acf4dbba20edc8695e82b3f97d47e1cc95d59a58049a3d1e155d69d0
   selected_runtime_target_source: goal-record
   selected_runtime_package: V16
   selected_runtime_plan: PLAN-EXP0001-PILOT-V16

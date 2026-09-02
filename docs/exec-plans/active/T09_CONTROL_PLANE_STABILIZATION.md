@@ -465,10 +465,15 @@ found that Task B essential-failure export had to carry the newly authoritative
 checkpoint decision receipt. Ordinary compatibility-closure commit
 `4163cad097767f6056cb21792d3d6d5894f2ccd7`, tree
 `eb733fa3ecc5e8b306928badfe61a3c2c24e04e3`, adds that exact source, verification, and
-restoration binding and is the final immutable implementation ancestor. The current
-27-file V16 receipt root is regenerated against it. Its binding file SHA-256 is
-`001d74ac29c3ebade8c572143ce3a41a0f11e7f0ef0227b2a1716183663554c8` and semantic
-SHA-256 is `81211771320c1b7f81ecd98b62682280db1759fa239b19a5badffddcb4c5a58b`.
+restoration binding. Exact-base parity then caught an automatic pytest parameter-ID
+drift for that repaired raw-export behavior. Ordinary parity-identity closure commit
+`7a809850722c175d01dc1567b73680995908072e`, tree
+`909c9afe42e6ca7845aed3c5b0453b3846d78004`, preserves the historical node ID while
+continuing to assert the repaired condition-execution phase and is the final immutable
+implementation ancestor. The current 27-file V16 receipt root is regenerated against
+it. Its binding file SHA-256 is
+`472279d990fe21eac36972917622677b38af3f415c9542b17e56580c73e9e12f` and semantic
+SHA-256 is `a6316e56acf4dbba20edc8695e82b3f97d47e1cc95d59a58049a3d1e155d69d0`.
 
 | ID | Review-repair outcome | Evidence state |
 | --- | --- | --- |
