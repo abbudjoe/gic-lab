@@ -313,8 +313,8 @@ this work must not create V17 package artifacts or authority.
 
 ## PR 1.2 live-capable production-effects repair
 
-Assembly status: **immutable receipt rebind and local gates complete; draft-PR and
-exact-head GitHub handoff pending**
+Assembly status: **complete — draft review required; closeout descendant exact-head
+GitHub confirmation pending**
 
 The operator-supplied `T09 PR 1.2 — Make the Shared Production Controller
 Genuinely Live-Capable` contract governs this Category 1 repair. The exact base is
@@ -378,7 +378,7 @@ subagent review because the governing operator contract prohibits delegation.
 | LE-20 | No actual V17 package exists | Tracked path/identity/root scans | met |
 | LE-21 | Science and authority boundaries remain false/unchanged | Capsule/conformance/proof/privacy assertions | met |
 | LE-22 | Full/parity/static/privacy/site gates pass | Required exact-final-head local command set | met |
-| LE-23 | Draft PR open, exact-head CI green, no merge | Draft PR metadata and exact-head Actions run/job | pending |
+| LE-23 | Draft PR open, exact-head CI green, no merge | Draft PR metadata and exact-head Actions run/job | met |
 
 No item may become `met` while its implementation or required evidence is partial,
 blocked, or not started. No shadow or conformance output is scientific evidence.
@@ -416,9 +416,13 @@ The implementation incident
 `INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY` is resolved after LE-02 through LE-21
 received implementation and focused evidence. It is no longer `blocking_incident`.
 The immutable tracked V16 receipt refresh and local exact-base gates are complete.
-Independent review, the draft PR, exact-head GitHub Actions, and merge authorization
-remain distinct nontechnical/external handoff gates; none grants live or scientific
-authority.
+Draft PR #14 is open and remains draft with auto-merge disabled. Its first exact-head
+GitHub Actions run `33580584620`, job `100093827365`, passed against
+`5d047f3961c9d7ecd87c87362be07bfcf3cf2c12`; exact-base parity reported no newly
+failing or missing base nodes and no invalid outcome transitions. This
+review-state-only closeout descendant must pass the same exact-head gate before the
+terminal handoff. Independent review and explicit merge authorization remain
+distinct external governance gates; none grants live or scientific authority.
 
 The exact implementation ancestor is commit
 `cd9bed46576bd00af473af861c57800b4f350c9d`, tree

@@ -679,8 +679,8 @@ source or receipts. Final exact-head parity must be rerun after this correction.
 
 ## PR 1.2 live-capable production-effects repair assembly
 
-Status: **immutable receipt rebind and local gates complete — draft-PR review and
-exact-head GitHub Actions pending**
+Status: **complete — draft review required; closeout descendant exact-head GitHub
+confirmation pending**
 
 Target contract: the same `execute_category3_transaction` state machine and
 `build_production_adapter_assembly` must accept an effect-neutral execution context,
@@ -716,9 +716,10 @@ records external-and-not-present current authority and zero active provider inst
 
 The authoritative LE-01 through LE-23 checklist, evidence requirements, and mapping
 are in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. LE-01 through
-LE-22 are met by the exact immutable-base audit, implementation, focused conformance,
-non-circular receipt rebind, and local exact-base gates. LE-23 remains pending until
-the draft PR and exact-head GitHub Actions complete.
+LE-23 are met by the exact immutable-base audit, implementation, focused conformance,
+non-circular receipt rebind, local exact-base gates, draft PR #14, and its successful
+first exact-head GitHub Actions run. The review-state-only closeout descendant that
+records those external facts must pass the same exact-head gate before handoff.
 Direct Sol/max self-review is mandatory; no subagent, model, thread, or task may
 perform implementation, testing, review, Git, architecture, or scientific work.
 
@@ -736,7 +737,7 @@ perform implementation, testing, review, Git, architecture, or scientific work.
 | Effect separation | Scenario-free live production assembly; shadow fault plan lives only in deterministic effects | LE-12 | met |
 | Authority/loader | Fully bound authorization context plus exact path/hash/factory/protocol package-effect loading | LE-13, LE-14 | met |
 | Conformance/control proof | No-network live-shaped temporary package, anti-shadow lint, schema/receipt/agent-check binding | LE-15, LE-16, LE-17, LE-18 | met |
-| Preservation/handoff | Historical V16 proof, no-V17/false boundaries, tracked rebind, and local full/parity gates pass; draft PR/CI remain | LE-19 through LE-23 | partial |
+| Preservation/handoff | Historical V16 proof, no-V17/false boundaries, tracked rebind, local full/parity gates, draft PR, and first exact-head CI pass | LE-19 through LE-23 | met |
 
 The host transaction additionally gates bounded replacement on
 `ReplacementEligibleFailure`, which is emitted only after the production wrapper has
@@ -815,8 +816,9 @@ and immutable-facts SHA-256
 
 ### Local final-gate evidence
 
-At receipt descendant `d273910b2deb11dcd37dee33123f29bac7aeedcd`, Ruff format
-and lint, strict mypy over 86 source files, repository validation, goal-derived
+At draft-PR head `5d047f3961c9d7ecd87c87362be07bfcf3cf2c12`, tree
+`3ed1723bc985daf4680a828a9dd4cb0ed0d5cc0a`, Ruff format and lint, strict mypy over
+86 source files, repository validation, goal-derived
 agent-check, privacy/static checks, pinned Quarto 1.9.38 rendering of all 16 pages,
 site validation, and `git diff --check` pass. The raw suite reports 2,113 passed and
 23 inherited base failures plus the same five inherited private-fixture skips; it
@@ -825,6 +827,21 @@ zero missing base collected nodes, zero missing base failures, zero invalid outc
 transitions, four newly passing nodes, and five symmetrically deselected unavailable
 private-fixture nodes. The final documentation descendant must rerun this exact
 command set before push.
+
+### Draft PR and first exact-head GitHub evidence
+
+Draft PR #14, `T09: make the production controller live-capable`, is open at
+`https://github.com/abbudjoe/gic-lab/pull/14` against
+`phase-1/sira-pilot-autonomous-r2`. It remains draft, unmerged, and has no auto-merge
+request. GitHub Actions run `33580584620`, job `100093827365`, passed in 1h00m51s
+against exact head `5d047f3961c9d7ecd87c87362be07bfcf3cf2c12`. Its deterministic
+agent/control-plane gate and exact-base PR parity gate both passed; the parity result
+reported zero newly failing nodes, zero missing base collected nodes or failures,
+zero invalid outcome transitions, three newly passing nodes, and five symmetrically
+deselected unavailable private nodes. GitHub emitted only its action-runtime Node 20
+deprecation annotation. This documentation-only closeout descendant is subject to a
+fresh exact-head Actions run before terminal handoff; that final run is necessarily
+reported outside the commit it validates.
 
 ### Direct Sol/max source review
 
