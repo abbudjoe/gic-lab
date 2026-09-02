@@ -19243,9 +19243,13 @@ def _attempt_export_control_sources(
                 for path in sorted(root.rglob("*"))
                 if path.is_file()
             )
-        checkpoint = _pilot_root(artifact_root) / "first-pair-checkpoint.json"
-        if checkpoint.exists():
-            relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
+        for checkpoint_name in (
+            "first-pair-checkpoint.json",
+            "first-pair-checkpoint-decision.json",
+        ):
+            checkpoint = _pilot_root(artifact_root) / checkpoint_name
+            if checkpoint.exists():
+                relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
         aggregate = _pilot_root(artifact_root) / "runtime-budget/aggregate-budget.json"
         if aggregate.exists():
             relative_paths.append(aggregate.relative_to(artifact_root).as_posix())
@@ -20034,6 +20038,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             raise T09HostError("attempt export transition mode is unsupported")
         optional_control_names = {
             f"control/{control_root_name}/first-pair-checkpoint.json",
+            f"control/{control_root_name}/first-pair-checkpoint-decision.json",
             f"control/{control_root_name}/runtime-budget/aggregate-budget.json",
         }
         if (

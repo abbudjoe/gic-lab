@@ -74,6 +74,14 @@
     },
     {
       "kind": "test-node",
+      "reference": "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[False-2]"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[True-2]"
+    },
+    {
+      "kind": "test-node",
       "reference": "tests/control/test_live_authority_transaction.py::test_first_valid_private_overlay_mints_one_opaque_single_use_proof"
     },
     {

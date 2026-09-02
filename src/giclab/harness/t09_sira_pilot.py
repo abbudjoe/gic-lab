@@ -2550,7 +2550,9 @@ def record_first_pair_checkpoint(
     if declared_closure is not closure_valid or (
         result == "continue-to-task-b" and not closure_valid
     ):
-        raise T09PilotError("checkpoint finalizer-closure evidence is invalid")
+        raise T09PilotError(
+            "checkpoint finalizer-closure evidence is invalid; uniform closure is required"
+        )
     first_pair_started = state.get("first_pair_started_at_epoch")
     second_pair_started: float | None = decided_at_epoch if result == "continue-to-task-b" else None
     if (
