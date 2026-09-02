@@ -1,6 +1,6 @@
 # T09 control-plane stabilization implementation ledger
 
-Status: **local review repair complete; exact-head GitHub rereview pending**
+Status: **review repair complete; independent exact-head rereview and explicit merge authorization pending**
 
 Live authorization: **false**
 
@@ -899,8 +899,8 @@ agent, model, thread, or task. Its required questions close as follows:
 
 ## PR #14 exact-head review 5088727234 repair assembly
 
-Status: **implementation and receipt evidence complete; final-head gates and external
-rereview pending**
+Status: **review repair and exact-head gate evidence complete; independent external
+rereview and explicit merge authorization pending**
 
 The pre-edit audit verified PR #14 open, draft, unmerged, based on
 `f1d872d59c4952eb98467c2506850af7772f4454`, with auto-merge disabled. Both the
@@ -989,7 +989,7 @@ review incident immutable-facts SHA-256: 3718f419cb03edda7e2b781f2858caffae589dc
 ### Focused evidence and DoD state
 
 The consolidated checkpoint/failure/authority/loader/held/conformance/shadow/coupling
-matrix passes all 164 collected nodes. All 20 exact review-incident nodes and every
+matrix passes all 173 collected nodes. All 20 exact review-incident nodes and every
 older incident node pass. The historical receipt suite passes 11 nodes. The complete
 temporary successor path passes, and the two separate-copy successor receipt roots
 are byte-identical. Ruff format/lint, strict mypy over 86 source files, schema checks,
@@ -1017,8 +1017,8 @@ and `git diff --check` pass at the implementation ancestor.
 | RR-18 | Historical V16 proof remains valid | met |
 | RR-19 | No actual V17 artifact exists | met |
 | RR-20 | Science and authority remain false and unchanged | met |
-| RR-21 | Full/parity/static/privacy/site gates pass | pending final-head gates |
-| RR-22 | Draft PR updated and exact-head Actions green | pending push/Actions |
+| RR-21 | Full/parity/static/privacy/site gates pass | met — exact final-head results are recorded in the PR #14 handoff comment |
+| RR-22 | Draft PR updated and exact-head Actions green | met — exact run/job/head are recorded in the PR #14 handoff comment; rereview remains external |
 
 The linked review incident is resolved, `blocking_incident` is null, and independent
 exact-head rereview plus explicit merge authorization remains the external governance

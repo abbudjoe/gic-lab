@@ -492,11 +492,11 @@ SHA-256 is `81211771320c1b7f81ecd98b62682280db1759fa239b19a5badffddcb4c5a58b`.
 | RR-18 | Historical V16 proof remains valid | met |
 | RR-19 | No actual V17 artifact exists | met |
 | RR-20 | Science and authority remain false and unchanged | met |
-| RR-21 | Full/parity/static/privacy/site gates | pending final-head run |
-| RR-22 | Draft PR update and exact-head Actions | pending push and rereview head CI |
+| RR-21 | Full/parity/static/privacy/site gates | met — exact final-head results are recorded in the PR #14 handoff comment |
+| RR-22 | Draft PR update and exact-head Actions | met — exact run/job/head are recorded in the PR #14 handoff comment; rereview remains external |
 
 The review incident
-`INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW` is resolved after its 18 exact
+`INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW` is resolved after its 20 exact
 regression nodes pass. `blocking_incident` remains null. The external governance gate
 is independent exact-head rereview and explicit merge authorization; the next
 technical subgoal remains package-only V17 generation only after reviewed merge.
