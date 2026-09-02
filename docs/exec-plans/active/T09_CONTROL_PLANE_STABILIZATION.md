@@ -313,8 +313,8 @@ this work must not create V17 package artifacts or authority.
 
 ## PR 1.2 live-capable production-effects repair
 
-Assembly status: **implementation and focused conformance complete; immutable receipt,
-full-gate, and draft-PR handoff pending**
+Assembly status: **immutable receipt rebind and local gates complete; draft-PR and
+exact-head GitHub handoff pending**
 
 The operator-supplied `T09 PR 1.2 — Make the Shared Production Controller
 Genuinely Live-Capable` contract governs this Category 1 repair. The exact base is
@@ -377,7 +377,7 @@ subagent review because the governing operator contract prohibits delegation.
 | LE-19 | Historical V16 proof remains valid | Legacy historical validation and temporary new-root regeneration suite | met |
 | LE-20 | No actual V17 package exists | Tracked path/identity/root scans | met |
 | LE-21 | Science and authority boundaries remain false/unchanged | Capsule/conformance/proof/privacy assertions | met |
-| LE-22 | Full/parity/static/privacy/site gates pass | Required exact-final-head local command set | pending |
+| LE-22 | Full/parity/static/privacy/site gates pass | Required exact-final-head local command set | met |
 | LE-23 | Draft PR open, exact-head CI green, no merge | Draft PR metadata and exact-head Actions run/job | pending |
 
 No item may become `met` while its implementation or required evidence is partial,
@@ -415,6 +415,30 @@ blocked, or not started. No shadow or conformance output is scientific evidence.
 The implementation incident
 `INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY` is resolved after LE-02 through LE-21
 received implementation and focused evidence. It is no longer `blocking_incident`.
-The immutable tracked V16 receipt refresh, full exact-head gates, independent review,
-draft PR, and merge authorization remain distinct nontechnical/external handoff gates;
-none grants live or scientific authority.
+The immutable tracked V16 receipt refresh and local exact-base gates are complete.
+Independent review, the draft PR, exact-head GitHub Actions, and merge authorization
+remain distinct nontechnical/external handoff gates; none grants live or scientific
+authority.
+
+The exact implementation ancestor is commit
+`cd9bed46576bd00af473af861c57800b4f350c9d`, tree
+`8d34019a2d7addcf34ff35f507f82dea99ef38dd`; it contains the live-capable seams and
+the retained duplicate-root regression repair. Receipt descendant
+`d273910b2deb11dcd37dee33123f29bac7aeedcd`, tree
+`486d701590574240ee6d5abdc2b2eea3a1181256`, publishes a 27-file V16 root bound to
+that immutable ancestor. The live-effect conformance receipt is 8,623 bytes with
+file SHA-256 `eb6cb0b9e15e331063213630a1e3cdc1fb9567f041bf43edeb8e041cfea5ef98`
+and semantic SHA-256
+`2a001bb775fbf7e8755f23b1f1ed4f70bb083ac2c65cdfd7f3f180f3d6c1500a`. The
+anti-shadow receipt is 7,059 bytes with file SHA-256
+`3ebe48bf443e894fded999e9c664e511537def9402f95a17ba7f6da80b7ac7cf` and semantic
+SHA-256 `1612ceded30c71c0c46ef41e0859dce813dbed10a40aeceaa39e0758b0b7698f`.
+
+At the receipt descendant, Ruff, strict mypy, validation, agent-check, privacy/static
+checks, the 16-page pinned-Quarto render, site validation, and `git diff --check`
+pass. The raw suite reports 2,113 passed, the same 23 inherited base failures, and
+the same five inherited private-fixture skips; this change adds no skip or xfail.
+Exact-base parity passes with zero newly failing tests, zero missing
+base nodes or failures, zero invalid outcome transitions, four newly passing nodes,
+and five symmetrically deselected private nodes. The final documentation descendant
+must preserve this result before push.

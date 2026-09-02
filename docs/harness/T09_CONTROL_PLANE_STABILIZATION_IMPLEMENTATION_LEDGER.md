@@ -679,8 +679,8 @@ source or receipts. Final exact-head parity must be rerun after this correction.
 
 ## PR 1.2 live-capable production-effects repair assembly
 
-Status: **implementation/focused conformance complete — immutable receipt refresh,
-full gates, and draft-PR review pending**
+Status: **immutable receipt rebind and local gates complete — draft-PR review and
+exact-head GitHub Actions pending**
 
 Target contract: the same `execute_category3_transaction` state machine and
 `build_production_adapter_assembly` must accept an effect-neutral execution context,
@@ -716,9 +716,9 @@ records external-and-not-present current authority and zero active provider inst
 
 The authoritative LE-01 through LE-23 checklist, evidence requirements, and mapping
 are in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. LE-01 through
-LE-21 are met by the exact immutable-base audit, implementation, and focused
-conformance evidence. LE-22 and LE-23 remain pending until the immutable receipt
-descendant, final-head local gates, draft PR, and exact-head GitHub Actions complete.
+LE-22 are met by the exact immutable-base audit, implementation, focused conformance,
+non-circular receipt rebind, and local exact-base gates. LE-23 remains pending until
+the draft PR and exact-head GitHub Actions complete.
 Direct Sol/max self-review is mandatory; no subagent, model, thread, or task may
 perform implementation, testing, review, Git, architecture, or scientific work.
 
@@ -736,7 +736,7 @@ perform implementation, testing, review, Git, architecture, or scientific work.
 | Effect separation | Scenario-free live production assembly; shadow fault plan lives only in deterministic effects | LE-12 | met |
 | Authority/loader | Fully bound authorization context plus exact path/hash/factory/protocol package-effect loading | LE-13, LE-14 | met |
 | Conformance/control proof | No-network live-shaped temporary package, anti-shadow lint, schema/receipt/agent-check binding | LE-15, LE-16, LE-17, LE-18 | met |
-| Preservation/handoff | Historical V16 proof and no-V17/false boundaries pass; tracked rebind/full gates/draft PR/CI remain | LE-19 through LE-23 | partial |
+| Preservation/handoff | Historical V16 proof, no-V17/false boundaries, tracked rebind, and local full/parity gates pass; draft PR/CI remain | LE-19 through LE-23 | partial |
 
 The host transaction additionally gates bounded replacement on
 `ReplacementEligibleFailure`, which is emitted only after the production wrapper has
@@ -780,3 +780,102 @@ in `shadow_effects.py`, tests, or historical documentation.
 Current scanning classifies every retained occurrence as one of: legitimate
 deterministic effect fixture, historical test fixture, documentation, or shared
 production-wrapper defect. The last class is required to remain zero.
+
+### Immutable implementation and receipt evidence
+
+The live-capable implementation was committed without receipts as
+`3488d986f7c16adc54adbc092a0c3b8457baca82`, tree
+`e2b6260989b9a827cc543253a664df1541b50f68`. The historical duplicate-root
+regression then received an ordinary descendant repair at immutable implementation
+ancestor `cd9bed46576bd00af473af861c57800b4f350c9d`, tree
+`8d34019a2d7addcf34ff35f507f82dea99ef38dd`. No history was rewritten.
+
+Receipt descendant `d273910b2deb11dcd37dee33123f29bac7aeedcd`, tree
+`486d701590574240ee6d5abdc2b2eea3a1181256`, regenerated the current 27-file V16
+receipt root against that ancestor. Its control binding file SHA-256 is
+`eae9100ffd6380346f35255ec0dc60d1ad4f62ef8c985b18a87a72ccc5e37c98` and semantic
+SHA-256 is `bc19a164232c58a53d7ac4873917b509597a433e5967ea19a135cc2be84fef91`.
+The source-binding receipt is 6,662 bytes with file SHA-256
+`d9f9c2e75a18de569a928e4301b5cb96afb9393db1c6366eb964a6f5f8cd6dee` and semantic
+SHA-256 `24e17e26142e808ffc8eb2e603199af929ee8f19491777885adf69a56ea05f96`.
+
+`control/receipts/packages/v16/live-effect-conformance.json` is 8,623 bytes with
+file SHA-256 `eb6cb0b9e15e331063213630a1e3cdc1fb9567f041bf43edeb8e041cfea5ef98`
+and semantic SHA-256
+`2a001bb775fbf7e8755f23b1f1ed4f70bb083ac2c65cdfd7f3f180f3d6c1500a`.
+`control/receipts/packages/v16/anti-shadow-lint.json` is 7,059 bytes with file
+SHA-256 `3ebe48bf443e894fded999e9c664e511537def9402f95a17ba7f6da80b7ac7cf`
+and semantic SHA-256
+`1612ceded30c71c0c46ef41e0859dce813dbed10a40aeceaa39e0758b0b7698f`.
+The incident
+`control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json` is 3,490 bytes,
+has file SHA-256 `fe5f69d3241032e2216110d1a3a6b47f37b68efb99d54e3541d9825d2ce70a85`,
+and immutable-facts SHA-256
+`77acccfd3017357271e2d1cda5b1ac9433899a3e9dcf4377d57662381f05d442`.
+
+### Local final-gate evidence
+
+At receipt descendant `d273910b2deb11dcd37dee33123f29bac7aeedcd`, Ruff format
+and lint, strict mypy over 86 source files, repository validation, goal-derived
+agent-check, privacy/static checks, pinned Quarto 1.9.38 rendering of all 16 pages,
+site validation, and `git diff --check` pass. The raw suite reports 2,113 passed and
+23 inherited base failures plus the same five inherited private-fixture skips; it
+adds no skip or xfail. The exact-base parity harness passes: zero newly failing nodes,
+zero missing base collected nodes, zero missing base failures, zero invalid outcome
+transitions, four newly passing nodes, and five symmetrically deselected unavailable
+private-fixture nodes. The final documentation descendant must rerun this exact
+command set before push.
+
+### Direct Sol/max source review
+
+The operator-attested direct review found no unresolved item and used no delegated
+agent, model, thread, or task. Its required questions close as follows:
+
+1. **Actual credential without fake substitution — yes.** `ModelMetadataChannel`
+   accepts the mutable parser-selected credential (`effects.py:333-342`), and the
+   wrapper forwards it without value comparison while using the injected wall clock
+   (`production.py:256-273,701-806`). Success, channel rejection, one-send behavior,
+   and buffer destruction are exercised at
+   `test_effect_runtime_seams.py:151-206`.
+2. **Injected real time and sleep — yes.** `_ValidatedRuntimeClock` preserves separate
+   monotonic/wall domains and delegates sleep (`production.py:219-253`); the world,
+   metadata boundary, freeze, condition admission, checkpoint, and cleanup all use
+   that instance (`production.py:516,748-830,1815-1905,1973-1993,2152-2165,
+   2662-2686,2752-2807`). Live-shaped delegation plus backward/nonfinite/overflow
+   failures are covered at `test_effect_runtime_seams.py:109-149`.
+3. **Arbitrary valid multi-call/multi-role/multi-action conditions — yes.** The typed
+   request/event/outcome protocol is at `effects.py:543-641`; the sole authoritative
+   observer applies the retained boundary per event and reconciles exact ledgers at
+   `production.py:359-496,2025-2280`. Reactive and simulative multi-event shapes and
+   known/ambiguous/accounting-incomplete sends are asserted at
+   `test_live_effect_conformance.py:57-107`.
+4. **Exact package-derived caps — yes.** Plan, execution contract, condition plan,
+   command manifest, attempt order, model, tier, and zero retry are cross-validated at
+   `production.py:1002-1318`. Exact values, plan drift, and cross-condition
+   substitution are covered at `test_effect_runtime_seams.py:209-243` and
+   `test_live_effect_conformance.py:110-149`.
+5. **Raw evidence reaches finalizer and evaluator — yes.** Exact files and ledgers are
+   validated during condition acceptance/export; the raw seal is checked before and
+   after offline finalization; evaluation consumes only the finalized root and
+   session hashes (`production.py:2166-2639`). Raw mutation, completion/finalizer
+   drift, and effect-answer propagation are covered at
+   `test_production_coupling.py:245-411` and the complete chain at
+   `test_live_effect_conformance.py:152-175`.
+6. **A package-only successor can supply effects and authority — yes.** Registration
+   validates an exact tracked regular path/hash/size/factory/protocol before import,
+   and loading requires a package-owned live grant over the full context
+   (`effects.py:861-1023`). The production assembly then revalidates control, package,
+   implementation, transaction root, and grant (`production.py:2945-2996`). Loader
+   mutation coverage is at `test_package_effect_loader.py:97-300`.
+7. **Shadow exercises the same wrapper — yes.** Deterministic effects implement the
+   same `LowLevelEffects` protocol by composition, while both conformance and shadow
+   enter `build_production_adapter_assembly` and `execute_category3_transaction`.
+   Exact entry points and unchanged shared-source bytes are asserted at
+   `test_live_effect_conformance.py:25-55`; all retained production-wrapper scenarios
+   are asserted at `test_category3_shadow.py:69-286`.
+8. **No fake/scenario/canned-answer assumption can alter live behavior — yes.** Shared
+   production imports no fault plan and contains no deterministic credential, canned
+   answer, fake time, shadow call ID, or scenario branch (`production.py:1-7`). Those
+   values live below the boundary in `shadow_effects.py`; the narrow lint and injected
+   forbidden-token mutations are asserted at
+   `test_live_effect_conformance.py:178-204` and are bound into the V16 receipt root.

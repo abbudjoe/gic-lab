@@ -48,7 +48,7 @@ t09_control_plane_stabilization_workstream:
   anti_shadow_lint_valid: true
   live_effect_conformance_valid: true
   package_effect_factory_protocol_valid: true
-  current_control_receipt_rebind_required_before_handoff: true
+  current_control_receipt_rebind_required_before_handoff: false
   live_authorization: false
   scientific_interpretation_allowed: false
   next_runtime_package: not-created
