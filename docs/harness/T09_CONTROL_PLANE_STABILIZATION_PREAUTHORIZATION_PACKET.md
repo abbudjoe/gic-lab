@@ -74,33 +74,30 @@ Only the one root used for current preparation must additionally equal the curre
 goal-derived target. A later V17 selection must not invalidate or hide V16 proof.
 
 Those validated documents make preparation auditable but do not grant authority. A
-future live turn must supply exact current-turn authorization and separately reviewed
-low-level effects to the existing production adapter assembly and shared controller.
-PR 2 remains package-only; it must not change shared control-plane Python. All
-existing safety, budget, freshness, cleanup, evidence, and scientific-freeze gates
-still apply.
+future live turn must supply exact current-turn external overlay source material and
+separately reviewed low-level effects to the existing validator, production adapter
+assembly, and shared controller. The shared validator, not the package, mints the
+opaque single-use proof after the selected contract validates its authorization
+prefix and source. PR 2 remains package-only. All existing safety, budget, freshness,
+cleanup, evidence, and scientific-freeze gates still apply.
 
 Concretely, PR 2 may change only the central declarative V17 contract registration,
 the goal package state, V17 plans/profiles/contracts/conditions/schemas,
-package-specific live `LowLevelEffects`, a package-specific externally validated
-`EffectAuthorityGrant`, a V17 receipt root and binding, and V17 documents/tests. The
-effects and grant remain unauthorized until a separate Category 3 turn.
+package-specific live `LowLevelEffects`, package-specific external authorization
+policy/overlay schema, a V17 receipt root and binding, and V17 documents/tests. The
+effects and external overlay remain unauthorized until a separate Category 3 turn.
 
 PR 2 may not change:
 
 ```text
-src/giclab/control/agent_check.py
 src/giclab/control/adapters.py
-src/giclab/control/anti_shadow_lint.py
-src/giclab/control/cli.py
+src/giclab/control/agent_check.py
 src/giclab/control/category3.py
 src/giclab/control/production.py
+src/giclab/control/effects.py
 src/giclab/control/proofs.py
 src/giclab/control/composition.py
 src/giclab/control/consumers.py
-src/giclab/control/contracts.py
-src/giclab/control/effects.py
-src/giclab/control/live_conformance.py
 src/giclab/control/registry_validation.py
 src/giclab/control/shadow.py
 src/giclab/control/shadow_effects.py
@@ -109,11 +106,18 @@ src/giclab/control/target.py
 src/giclab/control/version_lint.py
 Makefile
 .github/workflows/ci.yml
-the shared controller state machine
-the validated-proof architecture
 ```
 
-If package preparation requires any prohibited change, it must stop and return to a
-separate Category 1 control-plane repair. The package boundary is proven with a
-temporary synthetic successor whose shared-source byte map remains unchanged; no
-tracked V17 plan, identity, run root, or receipt root is created here.
+The allowlist is exhaustive, so other shared control source is also outside PR 2 even
+when it is not repeated in the exact no-touch list above. If package preparation
+requires any prohibited change, it must stop and return to a separate Category 1
+control-plane repair. The boundary is proven with a temporary synthetic successor
+whose shared-source byte map remains unchanged; no tracked V17 plan, effect,
+authorization, identity, run root, or receipt root is created here.
+
+PR #14 review 5088727234 additionally requires the merged V16 root to prove the exact
+retained first-pair decision, bounded essential-failure export, unified single-use
+authority transaction, held module/root/artifact identities, and byte-identical
+public conformance projection. These are shared prerequisites, not files PR 2 may
+repair. If any later V17 fixture needs another shared change, package generation must
+stop.

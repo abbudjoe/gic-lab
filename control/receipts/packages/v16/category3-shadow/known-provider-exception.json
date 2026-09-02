@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "9adf53f044146352255a7c726d1cbf590eaeaef5119518984575e4292f165c38"
+      "subject": "36de776d326b7953d3d869e7c299f793e5111dd68a50fb7f924cb8bd1c54ffec"
     },
     {
       "adapter": "provider",
@@ -67,7 +67,7 @@
       "adapter": "evidence",
       "index": 10,
       "operation": "evidence.record",
-      "outcome": "retained:3aedd6b76d7d",
+      "outcome": "retained:2a1d5e5b2967",
       "subject": "qualification"
     },
     {
@@ -81,7 +81,7 @@
       "adapter": "evidence",
       "index": 12,
       "operation": "evidence.record",
-      "outcome": "retained:a40a2d6df7f5",
+      "outcome": "retained:1fd30f93cd24",
       "subject": "scientific-freeze"
     },
     {
@@ -102,7 +102,7 @@
       "adapter": "condition",
       "index": 15,
       "operation": "condition.run",
-      "outcome": "failed",
+      "outcome": "essential-failure-sealed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
@@ -161,7 +161,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "30e5e184f7e55008481093e04fab3ea1980e632da7ff4f31903ee1f135c430ac",
+  "composition_sha256": "41d8e1113f5e637cb778397df9deff0bdd051fefc80c0b2727ef34f018e31410",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -170,15 +170,37 @@
   ],
   "earliest_stopping_phase": "condition-execution",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "edcbb5e74263b43ad0dc7d2aeb3074ba0761bdd7e62be9f06cd23a3db496d683",
+  "effect_authorization_context_sha256": "ed9c03bc7bc317270f6beacd27f1d1e8ba0936b5cedc3f9a5aa90ff09fa54acb",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
+    "essential_failures": [
+      {
+        "evidence_binding_sha256": "5483ff9a43c13daafa64a8f49b6fa94a96144901da84711397239f95fcc0295a",
+        "export_receipt_sha256": "69bbfc229be10251fef194b7de42d964fada664f730b44a49a53fd4c292f5075",
+        "failure_class": "known-provider-error",
+        "infrastructure_invalid": true,
+        "manifest_sha256": "e91c427284f1cbf78fec4e6f98381b6359dce1b17aa86e0fcf1b42e300af1973",
+        "receipt_sha256": "298e33bcce87bd43de0521a341907d3d3b1534f25b96b51e8d955058b827261e",
+        "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "stopping_phase": "condition-execution",
+        "unscored": true
+      }
+    ],
     "evaluator": [],
     "finalized": [],
+    "pair_checkpoint_decision": null,
+    "pair_checkpoint_reasons": [],
     "pair_checkpoint_sha256": null,
     "raw": []
   },
-  "fake_evidence_outputs": [],
+  "fake_evidence_outputs": [
+    {
+      "kind": "essential-infrastructure-failure",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "5483ff9a43c13daafa64a8f49b6fa94a96144901da84711397239f95fcc0295a",
+      "shadow_only": true
+    }
+  ],
   "implementation_flavor": "production-wrapper",
   "ordered_state_transitions": [
     {
@@ -266,9 +288,9 @@
       "phase": "empirical-entry"
     },
     {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: condition session stopped: ConditionKnownProviderError: deterministic known provider exception",
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: known-provider-error",
       "index": 17,
-      "outcome": "failed",
+      "outcome": "essential-failure-sealed",
       "phase": "condition-execution"
     },
     {
@@ -410,25 +432,66 @@
       "unique_call_ids": 1,
       "zero_retries": true
     },
+    "authority_consumption": {
+      "contains_private_overlay_contents": false,
+      "single_use": false,
+      "terminal_state": "shadow-only"
+    },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "edcbb5e74263b43ad0dc7d2aeb3074ba0761bdd7e62be9f06cd23a3db496d683",
-    "cleanup_handoff_sha256": "7fc3fbd698068855e8d4a45264cf28cba332434b08995d619e696cceae05bc7c",
-    "cleanup_receipt_sha256": "04e3e6b8011467d09d0dfe4aa463207275c435f376d7762d9d465da51928e8fa",
+    "authorization_context_semantic_sha256": "ed9c03bc7bc317270f6beacd27f1d1e8ba0936b5cedc3f9a5aa90ff09fa54acb",
+    "cleanup_handoff_sha256": "7c3eecd6db792e89af87f850c2ad988050fdd8198a42b264c1d08c7844f19260",
+    "cleanup_receipt_sha256": "0ec0dc285df41400995787a45a082ec36c9d210c578d6976204c4a8f99bdcce3",
     "cleanup_resume_byte_identical": true,
+    "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 64415,
+      "bytes": 88875,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
       "protocol_version": "1.0.0",
-      "sha256": "15078b80727cac30ef3d46f52eee1ba6325c2ab30d76a0e6ac875ebc7ed82855"
+      "sha256": "63e4ade95c33515aa4e8abad8228c9cd8129f239ab5d4c43017792d76e9768a4"
     },
     "effect_protocol_version": "1.0.0",
+    "essential_failures": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "completed": false,
+        "export_receipt_sha256": "69bbfc229be10251fef194b7de42d964fada664f730b44a49a53fd4c292f5075",
+        "export_resumed": false,
+        "failure_class": "known-provider-error",
+        "file_count": 4,
+        "held_artifact_binding_sha256": "432f2a361126bec6b0d6c8a7f87390bdf4a199eb84534d784ae8cb47814ee8a0",
+        "manifest_sha256": "e91c427284f1cbf78fec4e6f98381b6359dce1b17aa86e0fcf1b42e300af1973",
+        "process_exit_code": null,
+        "receipt_sha256": "298e33bcce87bd43de0521a341907d3d3b1534f25b96b51e8d955058b827261e",
+        "retry_count": 0,
+        "total_bytes": 4448,
+        "unknown_call_ids": [],
+        "unscored": true
+      }
+    },
     "evaluations": {},
+    "first_pair_checkpoint": null,
+    "held_evidence": {
+      "essential_failure": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "432f2a361126bec6b0d6c8a7f87390bdf4a199eb84534d784ae8cb47814ee8a0"
+      },
+      "finalized": {},
+      "raw": {},
+      "revalidated_across_consumers": true
+    },
+    "held_transaction_root": {
+      "device": 16777232,
+      "inode": 150430292,
+      "mode": 448,
+      "mount_identity": "device:16777232",
+      "path": "/private/var/folders/5s/5dk3z2k93lgfqmsn0l28_lbm0000gn/T/giclab-t09-effects-0ebd7a6b4cb0afd7bf49197ea96b820e",
+      "semantic_sha256": "410997d5d4cd669309df3fe81a3b083f80f097054149ab663243eb5fc46e55dd",
+      "uid": 501
+    },
     "host_receipts": {
-      "frozen_manifest": "17e2908674b0482fb3cd0762de9e2e9879fd753ed8231a0b0b27bc154dc80c5b",
-      "postfreeze_validation": "467a437f0ef3f10f67c4e90427819697b1986dde1bd2e12049f362d6445a46fd",
-      "qualification": "3aedd6b76d7d4fb23c09fbf59561f970c1391c5fdba054a17088b3436f8714a5"
+      "frozen_manifest": "b865e311488ee5d30988b52b09d0c93a043bb1c765687f95ddbb512b454a03c8",
+      "postfreeze_validation": "7b55974bb5464167b5b96af86ca8429c8fab02a073a28eb2ab6ae483a9ddce62",
+      "qualification": "2a1d5e5b29675f149d6be8bdfd442bd2ddd01245ba5a2e5ec560ffc179dffc78"
     },
     "implementation_flavor": "production-wrapper",
     "package_budget": {
@@ -526,6 +589,7 @@
       "admit_model_metadata_receipt_at_prelaunch_boundary",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "create_model_metadata_receipt",
+      "export_essential_failure_bundle",
       "immutable_cleanup_export_handoff",
       "initialize_pilot_state",
       "launch_campaign",
@@ -533,6 +597,7 @@
       "load_openai_dotenv_assignment",
       "load_validated_pilot_state:cleanup",
       "mark_empirical_entry",
+      "mark_essential_failure_sealed",
       "privacy_violations",
       "publish_dynamic_frozen_run_manifest",
       "reserve_condition_start",
@@ -541,6 +606,7 @@
       "validate_campaign_launch_projection",
       "validate_cleanup_execution_receipt",
       "validate_entry_receipt_source_bound",
+      "validate_essential_failure_bundle",
       "validate_finalizer_source",
       "validate_host_preflight_receipt",
       "validate_host_qualification_receipt",
@@ -549,6 +615,7 @@
       "validate_postfreeze_receipt",
       "validate_tracked_package_archive"
     ],
+    "provider_cost_receipt": null,
     "raw_export_acknowledgements": {},
     "replacement_history": {
       "closed_launch_slots": [
@@ -588,6 +655,7 @@
         1005.0,
         1006.0,
         1006.0,
+        1011.0,
         1011.0,
         1011.0,
         1011.0,
@@ -667,8 +735,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "scenario": "known-provider-exception",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -679,9 +747,9 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "5aa878c4f1eea27a2bac75ac487cfda7a83cb3e3c3642f1e3b1097e0c29caced",
+  "semantic_sha256": "4f52a3529828fc0db2c7dfbeb30e148d6efe79fdfdd036cac9facdabc6b3e214",
   "shadow_only": true,
-  "stop_reason": "condition session stopped: ConditionKnownProviderError: deterministic known provider exception",
+  "stop_reason": "consumed condition stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
   "undeclared_adapter_calls": [],
   "zero_undeclared_calls": true

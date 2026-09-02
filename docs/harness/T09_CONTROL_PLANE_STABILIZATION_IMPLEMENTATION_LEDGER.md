@@ -896,3 +896,126 @@ agent, model, thread, or task. Its required questions close as follows:
    values live below the boundary in `shadow_effects.py`; the narrow lint and injected
    forbidden-token mutations are asserted at
    `test_live_effect_conformance.py:178-204` and are bound into the V16 receipt root.
+
+## PR #14 exact-head review 5088727234 repair assembly
+
+Status: **implementation and receipt evidence complete; final-head gates and external
+rereview pending**
+
+The pre-edit audit verified PR #14 open, draft, unmerged, based on
+`f1d872d59c4952eb98467c2506850af7772f4454`, with auto-merge disabled. Both the
+remote PR head and task branch were exactly
+`3291af1e64ec1ea89b8773a586c97a917f1052a2`, tree
+`69b7d0346456cad080ca258bc137662d7d632d26`. Exact-head Actions run
+33589428237/job 100120211545 was successful; review 5088727234 was the only review
+state and required changes. The destination, original checkout, task worktree,
+authority/science flags, and no-V17 boundary all matched the operator contract.
+
+No implementation, testing, review, Git, architecture, or scientific decision was
+delegated. The operator-attested model/effort were `gpt-5.6-sol` / `max`; runtime
+metadata was neither inspected nor used.
+
+### Four repaired findings
+
+- **Checkpoint:** `ProductionCategory3World.checkpoint` revalidates both Task A raw,
+  finalizer, evaluator, command-pair, and retained selection records. It obtains typed
+  provider lifecycle cost, authoritative aggregate usage, injected-clock wall values,
+  and conservative frozen-plan projection, then calls retained
+  `first_pair_decision`. The controller treats `stop-before-task-b` as a clean stop
+  with zero Task B reservation/entry and persists the exact returned reasons.
+- **Failure evidence:** condition execution returns typed success or infrastructure
+  failure outcomes. Every post-entry infrastructure failure is reconciled, sealed via
+  `mark_essential_failure_sealed`, bounded to 67,108,864 bytes, exported,
+  acknowledged, consumed, unscored, nonretryable, and followed by cleanup. Nonzero
+  exits never reach finalizer/evaluator, including completed outcomes with answers.
+- **Authority:** a package may supply external overlay source/policy but cannot mint a
+  trusted grant. The shared validator calls the selected contract's authorization
+  validator and alone mints opaque `ValidatedLiveEffectAuthority`. One durable private
+  state transaction binds effect, metadata, launch, cleanup, and terminal consumption;
+  reservation precedes secret access and any failure/replay is nonreplayable.
+- **Held identity:** effect bytes execute from a held no-follow descriptor and exact
+  Git blob, not `spec_from_file_location` or `.pyc`. Shared code derives and holds the
+  transaction-root device/inode/owner/mode/mount identity. Raw, finalized, and
+  evaluator artifacts remain sealed and descriptor-held across consumers. All held
+  resources are released only after cleanup and terminal evidence materialization.
+
+The authoritative condition accountant remains the production wrapper's real-time
+event observer. Deterministic fault injection remains entirely below the shared
+effect boundary. Runtime-only paths, inode values, and private authorization hashes
+are not published; the conformance receipt contains stable semantic attestations, and
+equivalent successor repositories produce byte-identical complete receipt trees.
+
+### Immutable implementation and rebound receipts
+
+The core source/test/control-input commit is
+`e4e65ef24b97151c09fc9ccfe1e0d0083f797a1e`, tree
+`2de4e90efa2d85b5c4662bc8f47f72375659acae`, directly descended from the reviewed
+head. The exact immutable implementation ancestor used for receipt generation is its
+ordinary source-closure descendant
+`adafa96342d0c407189cd0b260cf017fb4d79f3e`, tree
+`45562750df7fa3935c3b7b1af37e4c63bf244caa`. That descendant only renames the Python
+authority-state member that collided with the repository secret scanner; the durable
+serialized state remains `reserved-before-secret`. The 27-file current V16 receipt
+root was generated from that clean later ancestor in an external staging directory
+and copied only after its file inventory matched the existing sealed root.
+
+```text
+control binding file bytes: 9288
+control binding file SHA-256: b8797c42d5ac8943e6ccb2677fdb5c80d091794a2b085b21d4bb8392a7ad7fd9
+control binding semantic SHA-256: e894458286ff3d77121b9eedccedcc715b780001055547fb2024cce43a3d5156
+source binding bytes: 6662
+source binding file SHA-256: fdb2463f65f73ea8da3cbef8351d5ec6979612048b4026dac0b4dd45cc09d53b
+source binding semantic SHA-256: 0e33677bd69cc5d988e673d29e228cefe3bff14cf46673a94c9396e9d1604d4d
+live-effect conformance bytes: 14804
+live-effect conformance file SHA-256: 7a6c1bce7e29bb112a3b5d23878a05c35089c3db10c137fc09400f9c4d7b8d0d
+live-effect conformance semantic SHA-256: e4a4d2e47ca2a07e8f3bec3ac0fd7d1fa2056c74021c1bb676f9181a8ffe0d7f
+anti-shadow lint bytes: 7134
+anti-shadow lint file SHA-256: c21da9c25bf654272b388c14c23d3735980367e38e58213fb90c08094e1ad883
+anti-shadow lint semantic SHA-256: a82715415966159f0f655c78922727f59112102cb47996db76ed1abcec397137
+incident aggregate bytes: 5874
+incident aggregate file SHA-256: 035a9d275ddf26f0d523d2c11ed9e7d685c72be999302b7ffe79ebce13ee9ec8
+incident aggregate semantic SHA-256: 08a00fe21c65e9048aadc2d7c73fcb0932c3510bd0420d2c3cad01d83f65f7ac
+review incident bytes: 5429
+review incident file SHA-256: 00bd51081016fc66a9be8896f31ac6d6015910ae69d4a624f5ad4da077f0ac21
+review incident immutable-facts SHA-256: 3718f419cb03edda7e2b781f2858caffae589dc1918ead2fa05621e1468ccd52
+```
+
+### Focused evidence and DoD state
+
+The consolidated checkpoint/failure/authority/loader/held/conformance/shadow/coupling
+matrix passes all 164 collected nodes. All 18 exact review-incident nodes and every
+older incident node pass. The historical receipt suite passes 11 nodes. The complete
+temporary successor path passes, and the two separate-copy successor receipt roots
+are byte-identical. Ruff format/lint, strict mypy over 86 source files, schema checks,
+and `git diff --check` pass at the implementation ancestor.
+
+| ID | Required outcome | Status |
+| --- | --- | --- |
+| RR-01 | Exact PR/base/head verification preserved | met |
+| RR-02 | Accepted effect-neutral architecture preserved | met |
+| RR-03 | Retained `first_pair_decision` is authoritative | met |
+| RR-04 | Both Task A attempts valid and scored before Task B | met |
+| RR-05 | Pair/finalizer/cost/time/cleanup gates enforced | met |
+| RR-06 | Clean checkpoint stop remains operational and nonscientific | met |
+| RR-07 | Every post-entry failure yields bounded essential evidence | met |
+| RR-08 | Nonzero exits are infrastructure-invalid and unscored | met |
+| RR-09 | Failure evidence sealed/exported/acknowledged/nonretryable | met |
+| RR-10 | One opaque external authority transaction owns all phases | met |
+| RR-11 | Contract authorization prefix/source enforced | met |
+| RR-12 | Live authority is single-use and non-forgeable by duck typing | met |
+| RR-13 | Effect source is held and exact bytes execute | met |
+| RR-14 | Transaction-root identity is shared-derived and held | met |
+| RR-15 | Raw/finalized/evaluator paths remain held and sealed | met |
+| RR-16 | Updated conformance proves all four repairs | met |
+| RR-17 | Package-only V17 boundary remains truthful | met |
+| RR-18 | Historical V16 proof remains valid | met |
+| RR-19 | No actual V17 artifact exists | met |
+| RR-20 | Science and authority remain false and unchanged | met |
+| RR-21 | Full/parity/static/privacy/site gates pass | pending final-head gates |
+| RR-22 | Draft PR updated and exact-head Actions green | pending push/Actions |
+
+The linked review incident is resolved, `blocking_incident` is null, and independent
+exact-head rereview plus explicit merge authorization remains the external governance
+gate. The next technical subgoal is package-only V17 generation after reviewed merge.
+No live authorization, secret, provider, cloud, browser, SiRA, evaluator, condition,
+or scientific execution occurred; added OpenAI/provider cost is USD 0.00.

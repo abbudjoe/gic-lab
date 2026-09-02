@@ -1,6 +1,6 @@
 {
   "complete": true,
-  "incident_count": 3,
+  "incident_count": 4,
   "incidents": [
     {
       "complete": true,
@@ -20,6 +20,35 @@
     {
       "complete": true,
       "errors": [],
+      "incident_id": "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
+      "path": "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json",
+      "regression_nodes": [
+        "tests/control/test_checkpoint_review_repair.py::test_both_task_a_attempts_scored_zero_may_continue",
+        "tests/control/test_checkpoint_review_repair.py::test_task_a_invalid_evidence_stops_before_task_b",
+        "tests/control/test_checkpoint_review_repair.py::test_retained_first_pair_decision_enforces_every_stop_gate",
+        "tests/control/test_checkpoint_review_repair.py::test_shared_checkpoint_cannot_continue_without_retained_first_pair_decision",
+        "tests/control/test_essential_failure_evidence.py::test_every_post_entry_failure_is_sealed_exported_unscored_and_zero_retry",
+        "tests/control/test_essential_failure_evidence.py::test_nonzero_exit_with_completed_answer_is_infrastructure_invalid",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted",
+        "tests/control/test_essential_failure_evidence.py::test_interrupted_failure_export_resumes_from_identical_sealed_source",
+        "tests/control/test_live_authority_transaction.py::test_first_valid_private_overlay_mints_one_opaque_single_use_proof",
+        "tests/control/test_live_authority_transaction.py::test_effect_and_metadata_authority_split_stops_before_metadata_send",
+        "tests/control/test_live_authority_transaction.py::test_provider_launch_authority_split_stops_before_post",
+        "tests/control/test_live_authority_transaction.py::test_validator_replay_and_second_campaign_fail",
+        "tests/control/test_held_identity_boundaries.py::test_same_size_effect_source_replacement_before_load_is_rejected",
+        "tests/control/test_held_identity_boundaries.py::test_effect_source_replacement_during_factory_is_rejected",
+        "tests/control/test_held_identity_boundaries.py::test_transaction_root_itself_or_parent_symlink_is_rejected",
+        "tests/control/test_held_identity_boundaries.py::test_symlink_hardlink_swap_or_mutation_never_reaches_scientific_acceptance",
+        "tests/control/test_live_effect_conformance.py::test_live_shaped_checkpoint_authority_and_held_identity_repairs",
+        "tests/control/test_live_effect_conformance.py::test_live_shaped_review_failure_subreceipts_are_complete"
+      ],
+      "regression_output": "...................................................                      [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
       "incident_id": "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
       "path": "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json",
       "regression_nodes": [
@@ -32,7 +61,7 @@
         "tests/control/test_production_coupling.py::test_post_export_raw_mutation_stops_before_effect_finalizer",
         "tests/control/test_production_coupling.py::test_effect_produced_answer_changes_retained_evaluator_output"
       ],
-      "regression_output": ".................                                                        [100%]",
+      "regression_output": "....................                                                     [100%]",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -51,8 +80,8 @@
       "status": "resolved"
     }
   ],
-  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "schema_version": "1.0.0",
-  "semantic_sha256": "1edfd8bf93250992afbd5374f17df891077a57bcf5ee4423687b6fc4643f23b9"
+  "semantic_sha256": "08a00fe21c65e9048aadc2d7c73fcb0932c3510bd0420d2c3cad01d83f65f7ac"
 }

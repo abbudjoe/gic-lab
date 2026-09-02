@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "9adf53f044146352255a7c726d1cbf590eaeaef5119518984575e4292f165c38"
+      "subject": "36de776d326b7953d3d869e7c299f793e5111dd68a50fb7f924cb8bd1c54ffec"
     },
     {
       "adapter": "provider",
@@ -67,7 +67,7 @@
       "adapter": "evidence",
       "index": 10,
       "operation": "evidence.record",
-      "outcome": "retained:db93b9c41318",
+      "outcome": "retained:7814ae8f910d",
       "subject": "qualification"
     },
     {
@@ -81,7 +81,7 @@
       "adapter": "evidence",
       "index": 12,
       "operation": "evidence.record",
-      "outcome": "retained:3a49b3d9f093",
+      "outcome": "retained:aa7d8c8d7c90",
       "subject": "scientific-freeze"
     },
     {
@@ -102,7 +102,7 @@
       "adapter": "condition",
       "index": 15,
       "operation": "condition.run",
-      "outcome": "unknown",
+      "outcome": "essential-failure-sealed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
@@ -161,7 +161,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "30e5e184f7e55008481093e04fab3ea1980e632da7ff4f31903ee1f135c430ac",
+  "composition_sha256": "41d8e1113f5e637cb778397df9deff0bdd051fefc80c0b2727ef34f018e31410",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -170,15 +170,37 @@
   ],
   "earliest_stopping_phase": "condition-execution",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "3f6c374b4bccd088224d0cac27bd04129b0ad57aa5328a0f9d61dc29a2ecc5e9",
+  "effect_authorization_context_sha256": "5eacd3cabb0cfe61eee458e01f5ce05621391dd7171cbc415a64b557ee70ccc7",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
+    "essential_failures": [
+      {
+        "evidence_binding_sha256": "d4f95e5d9f8086134a667b6722637c5d30f952b6758dce079eb5516f53a5276a",
+        "export_receipt_sha256": "c58976e9b719642c2ec95f926ae19d461f92fca97aa2421ca4a4adf84977ee6d",
+        "failure_class": "ambiguous-send",
+        "infrastructure_invalid": true,
+        "manifest_sha256": "b35c38a4a567803090d651948cbc136f95625b4a26457e77559d72d09079a819",
+        "receipt_sha256": "e62f5228a423e9472365e2487a59191476a17ac98bfc009409cde0b23ee6f0ff",
+        "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "stopping_phase": "condition-execution",
+        "unscored": true
+      }
+    ],
     "evaluator": [],
     "finalized": [],
+    "pair_checkpoint_decision": null,
+    "pair_checkpoint_reasons": [],
     "pair_checkpoint_sha256": null,
     "raw": []
   },
-  "fake_evidence_outputs": [],
+  "fake_evidence_outputs": [
+    {
+      "kind": "essential-infrastructure-failure",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "d4f95e5d9f8086134a667b6722637c5d30f952b6758dce079eb5516f53a5276a",
+      "shadow_only": true
+    }
+  ],
   "implementation_flavor": "production-wrapper",
   "ordered_state_transitions": [
     {
@@ -266,9 +288,9 @@
       "phase": "empirical-entry"
     },
     {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: condition session stopped: ConditionAmbiguousSend: deterministic model send acknowledgement is ambiguous",
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: ambiguous-send",
       "index": 17,
-      "outcome": "failed",
+      "outcome": "essential-failure-sealed",
       "phase": "condition-execution"
     },
     {
@@ -410,25 +432,68 @@
       "unique_call_ids": 1,
       "zero_retries": true
     },
+    "authority_consumption": {
+      "contains_private_overlay_contents": false,
+      "single_use": false,
+      "terminal_state": "shadow-only"
+    },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "3f6c374b4bccd088224d0cac27bd04129b0ad57aa5328a0f9d61dc29a2ecc5e9",
-    "cleanup_handoff_sha256": "49a8a8a115686b039ebb7fc48e0fd16f95332a47a0f6552d1e917908e3176469",
-    "cleanup_receipt_sha256": "a1785604b20777463f437829298e8cc9e3692e60eb0e0569e89aa8d77e46ab37",
+    "authorization_context_semantic_sha256": "5eacd3cabb0cfe61eee458e01f5ce05621391dd7171cbc415a64b557ee70ccc7",
+    "cleanup_handoff_sha256": "fe95a21d8246ebf53ff117377bcc3b1859e83ae7aac86bcd93ffa99497bdc129",
+    "cleanup_receipt_sha256": "885857da34921b8514ccb3cee6b07d0dfaec336064bd4ca69dfb80e63342d4de",
     "cleanup_resume_byte_identical": true,
+    "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 64415,
+      "bytes": 88875,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
       "protocol_version": "1.0.0",
-      "sha256": "15078b80727cac30ef3d46f52eee1ba6325c2ab30d76a0e6ac875ebc7ed82855"
+      "sha256": "63e4ade95c33515aa4e8abad8228c9cd8129f239ab5d4c43017792d76e9768a4"
     },
     "effect_protocol_version": "1.0.0",
+    "essential_failures": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "completed": false,
+        "export_receipt_sha256": "c58976e9b719642c2ec95f926ae19d461f92fca97aa2421ca4a4adf84977ee6d",
+        "export_resumed": false,
+        "failure_class": "ambiguous-send",
+        "file_count": 4,
+        "held_artifact_binding_sha256": "1da85793fca33d1df48cda44360ceac424d0933eb395bb10c28b21591b40bb63",
+        "manifest_sha256": "b35c38a4a567803090d651948cbc136f95625b4a26457e77559d72d09079a819",
+        "process_exit_code": null,
+        "receipt_sha256": "e62f5228a423e9472365e2487a59191476a17ac98bfc009409cde0b23ee6f0ff",
+        "retry_count": 0,
+        "total_bytes": 4453,
+        "unknown_call_ids": [
+          "FX-01-0001"
+        ],
+        "unscored": true
+      }
+    },
     "evaluations": {},
+    "first_pair_checkpoint": null,
+    "held_evidence": {
+      "essential_failure": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "1da85793fca33d1df48cda44360ceac424d0933eb395bb10c28b21591b40bb63"
+      },
+      "finalized": {},
+      "raw": {},
+      "revalidated_across_consumers": true
+    },
+    "held_transaction_root": {
+      "device": 16777232,
+      "inode": 150430448,
+      "mode": 448,
+      "mount_identity": "device:16777232",
+      "path": "/private/var/folders/5s/5dk3z2k93lgfqmsn0l28_lbm0000gn/T/giclab-t09-effects-2c80293d1e9ee55ecf361ded30c75a6e",
+      "semantic_sha256": "184a4c6d8102de579b3cf48cd7c7f5807717a6bb3be1f9d88bdd6db14d6a1844",
+      "uid": 501
+    },
     "host_receipts": {
-      "frozen_manifest": "d0d447d1b64079e9c1e5ac485f14e87d877f4c5336d94ec2824b0efa3ac308ab",
-      "postfreeze_validation": "b8224a981e8a4293c7bbd9d8bc94710f87aafe2a7d0459493c8d433279b2289f",
-      "qualification": "db93b9c41318e1fda2fc0b39da97ea0127e372de09f57c645e05a1c125b0b968"
+      "frozen_manifest": "67aecaac2ca47b891613dd7c8a32ad964156e0434468e2f31c9eb9d6ace5eb0e",
+      "postfreeze_validation": "63e3e10400ae401fb00dfc75d6f85dbf9028fe3e330ffdc8d2520c09a9ef1c52",
+      "qualification": "7814ae8f910d73b1e94c8197c6f1540f2d113b1435f2974b31ecd8ce7a96e884"
     },
     "implementation_flavor": "production-wrapper",
     "package_budget": {
@@ -526,6 +591,7 @@
       "admit_model_metadata_receipt_at_prelaunch_boundary",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "create_model_metadata_receipt",
+      "export_essential_failure_bundle",
       "immutable_cleanup_export_handoff",
       "initialize_pilot_state",
       "launch_campaign",
@@ -533,6 +599,7 @@
       "load_openai_dotenv_assignment",
       "load_validated_pilot_state:cleanup",
       "mark_empirical_entry",
+      "mark_essential_failure_sealed",
       "privacy_violations",
       "publish_dynamic_frozen_run_manifest",
       "reserve_condition_start",
@@ -541,6 +608,7 @@
       "validate_campaign_launch_projection",
       "validate_cleanup_execution_receipt",
       "validate_entry_receipt_source_bound",
+      "validate_essential_failure_bundle",
       "validate_finalizer_source",
       "validate_host_preflight_receipt",
       "validate_host_qualification_receipt",
@@ -549,6 +617,7 @@
       "validate_postfreeze_receipt",
       "validate_tracked_package_archive"
     ],
+    "provider_cost_receipt": null,
     "raw_export_acknowledgements": {},
     "replacement_history": {
       "closed_launch_slots": [
@@ -588,6 +657,7 @@
         1005.0,
         1006.0,
         1006.0,
+        1011.0,
         1011.0,
         1011.0,
         1011.0,
@@ -667,8 +737,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "scenario": "ambiguous-task-model-send",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -679,9 +749,9 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "0c23e03deac9bb068d232d421d2b35ac0dc25b211a052bbfc1262ac65698d596",
+  "semantic_sha256": "49d7757f87c999d037965f6ed14aa950509efdf66cb9bad03e79a9fc1a809868",
   "shadow_only": true,
-  "stop_reason": "condition session stopped: ConditionAmbiguousSend: deterministic model send acknowledgement is ambiguous",
+  "stop_reason": "consumed condition stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
   "undeclared_adapter_calls": [],
   "zero_undeclared_calls": true

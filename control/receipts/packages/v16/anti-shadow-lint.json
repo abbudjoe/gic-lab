@@ -2,37 +2,37 @@
   "assumption_inventory": [
     {
       "classification": "documentation",
-      "line": 776,
+      "line": 777,
       "path": "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
       "token": "FakeScenario"
     },
     {
       "classification": "legitimate deterministic effect fixture",
-      "line": 395,
+      "line": 438,
       "path": "src/giclab/control/shadow_effects.py",
       "token": "production-shadow"
     },
     {
       "classification": "historical test fixture",
-      "line": 198,
+      "line": 273,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "_FAKE_OPENAI_VALUE"
     },
     {
       "classification": "historical test fixture",
-      "line": 199,
+      "line": 274,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "CALL-SHADOW"
     },
     {
       "classification": "historical test fixture",
-      "line": 200,
+      "line": 275,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "_TASK_A_ANSWER"
     },
     {
       "classification": "historical test fixture",
-      "line": 201,
+      "line": 276,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "max_model_call_attempts=1"
     }
@@ -158,13 +158,18 @@
     "T09S008",
     "T09S009",
     "T09S010",
-    "T09S011"
+    "T09S011",
+    "T09S012",
+    "T09S013",
+    "T09S014",
+    "T09S015",
+    "T09S016"
   ],
   "lint_definition_path": "src/giclab/control/anti_shadow_lint.py",
-  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "schema_version": "1.0.0",
-  "semantic_sha256": "1612ceded30c71c0c46ef41e0859dce813dbed10a40aeceaa39e0758b0b7698f",
+  "semantic_sha256": "a82715415966159f0f655c78922727f59112102cb47996db76ed1abcec397137",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",

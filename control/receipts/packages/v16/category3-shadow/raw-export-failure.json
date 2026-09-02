@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "9adf53f044146352255a7c726d1cbf590eaeaef5119518984575e4292f165c38"
+      "subject": "36de776d326b7953d3d869e7c299f793e5111dd68a50fb7f924cb8bd1c54ffec"
     },
     {
       "adapter": "provider",
@@ -67,7 +67,7 @@
       "adapter": "evidence",
       "index": 10,
       "operation": "evidence.record",
-      "outcome": "retained:3c8aac79b796",
+      "outcome": "retained:f2b122bd900d",
       "subject": "qualification"
     },
     {
@@ -81,7 +81,7 @@
       "adapter": "evidence",
       "index": 12,
       "operation": "evidence.record",
-      "outcome": "retained:d03f647fc197",
+      "outcome": "retained:09465029ed26",
       "subject": "scientific-freeze"
     },
     {
@@ -102,40 +102,33 @@
       "adapter": "condition",
       "index": 15,
       "operation": "condition.run",
-      "outcome": "passed",
-      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
-    },
-    {
-      "adapter": "condition",
-      "index": 16,
-      "operation": "condition.export_raw",
-      "outcome": "failed",
+      "outcome": "essential-failure-sealed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "host",
-      "index": 17,
+      "index": 16,
       "operation": "host.cleanup",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 18,
+      "index": 17,
       "operation": "evidence.scan_privacy",
       "outcome": "passed",
       "subject": "effect-evidence"
     },
     {
       "adapter": "provider",
-      "index": 19,
+      "index": 18,
       "operation": "provider.terminate",
       "outcome": "accepted",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "provider",
-      "index": 20,
+      "index": 19,
       "operation": "provider.inventory",
       "outcome": "zero",
       "subject": "owned-resources"
@@ -168,24 +161,46 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "30e5e184f7e55008481093e04fab3ea1980e632da7ff4f31903ee1f135c430ac",
+  "composition_sha256": "41d8e1113f5e637cb778397df9deff0bdd051fefc80c0b2727ef34f018e31410",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
   "condition_identities_reserved": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
-  "earliest_stopping_phase": "raw-export",
+  "earliest_stopping_phase": "condition-execution",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "8162226f39602cece85a000f933e0e02ab05cdf4e7c433a8c2fca26f05024d61",
+  "effect_authorization_context_sha256": "27ec81359b415d23b6a14ceedc1fbd25ae5f2234d7000cd92b26cdcf3ed739c2",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
+    "essential_failures": [
+      {
+        "evidence_binding_sha256": "8f976fa3537b974195b774b31f84b0ad0533c4f8143a9a8b8d473687eacd1195",
+        "export_receipt_sha256": "71df6730d9ae83c61219d58feb59d6612970d9fc2aa932226af9917795b8321d",
+        "failure_class": "process-crash",
+        "infrastructure_invalid": true,
+        "manifest_sha256": "000a05ce78bc4af95057eef5fd52cf75ef45f740f0098eb869f9bc872d1ff479",
+        "receipt_sha256": "4ab9efa53840e1e5f1df69162343e9384ff43bd637f4593c2715324e5ad6ff30",
+        "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "stopping_phase": "condition-execution",
+        "unscored": true
+      }
+    ],
     "evaluator": [],
     "finalized": [],
+    "pair_checkpoint_decision": null,
+    "pair_checkpoint_reasons": [],
     "pair_checkpoint_sha256": null,
     "raw": []
   },
-  "fake_evidence_outputs": [],
+  "fake_evidence_outputs": [
+    {
+      "kind": "essential-infrastructure-failure",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "8f976fa3537b974195b774b31f84b0ad0533c4f8143a9a8b8d473687eacd1195",
+      "shadow_only": true
+    }
+  ],
   "implementation_flavor": "production-wrapper",
   "ordered_state_transitions": [
     {
@@ -273,24 +288,18 @@
       "phase": "empirical-entry"
     },
     {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: process-crash",
       "index": 17,
-      "outcome": "passed",
+      "outcome": "essential-failure-sealed",
       "phase": "condition-execution"
     },
     {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: retained raw validation/export failed: raw attempt seal no longer reconstructs from exact bytes",
       "index": 18,
-      "outcome": "failed",
-      "phase": "raw-export"
-    },
-    {
-      "index": 19,
       "outcome": "passed",
       "phase": "cleanup"
     },
     {
-      "index": 20,
+      "index": 19,
       "outcome": "passed",
       "phase": "terminal-provider-security-verification"
     }
@@ -502,25 +511,66 @@
       "unique_call_ids": 3,
       "zero_retries": true
     },
+    "authority_consumption": {
+      "contains_private_overlay_contents": false,
+      "single_use": false,
+      "terminal_state": "shadow-only"
+    },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "8162226f39602cece85a000f933e0e02ab05cdf4e7c433a8c2fca26f05024d61",
-    "cleanup_handoff_sha256": "b80e98e806ef311c0e6b2e41d8bb9aa063ec9f7fdff50feb9c50e2c8d18a7b76",
-    "cleanup_receipt_sha256": "02055d352155e6282004a64d6e69bb7fa4e01e1b07b54ae860f85142972d38a9",
+    "authorization_context_semantic_sha256": "27ec81359b415d23b6a14ceedc1fbd25ae5f2234d7000cd92b26cdcf3ed739c2",
+    "cleanup_handoff_sha256": "5b35d4a0ea6643bf10fea59a940249e907df6a396229f509e3a053d4dd624824",
+    "cleanup_receipt_sha256": "86bfa7f62ea3c62046847c3bb426e99cbec13f8cf67ffc591b5af670a49c47b6",
     "cleanup_resume_byte_identical": true,
+    "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 64415,
+      "bytes": 88875,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
       "protocol_version": "1.0.0",
-      "sha256": "15078b80727cac30ef3d46f52eee1ba6325c2ab30d76a0e6ac875ebc7ed82855"
+      "sha256": "63e4ade95c33515aa4e8abad8228c9cd8129f239ab5d4c43017792d76e9768a4"
     },
     "effect_protocol_version": "1.0.0",
+    "essential_failures": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "completed": true,
+        "export_receipt_sha256": "71df6730d9ae83c61219d58feb59d6612970d9fc2aa932226af9917795b8321d",
+        "export_resumed": false,
+        "failure_class": "process-crash",
+        "file_count": 4,
+        "held_artifact_binding_sha256": "5b37f9a757a9eb35875d9fc55dc1df4dd3f85bd22a9f80d73a6bfa787d4a3281",
+        "manifest_sha256": "000a05ce78bc4af95057eef5fd52cf75ef45f740f0098eb869f9bc872d1ff479",
+        "process_exit_code": 0,
+        "receipt_sha256": "4ab9efa53840e1e5f1df69162343e9384ff43bd637f4593c2715324e5ad6ff30",
+        "retry_count": 0,
+        "total_bytes": 6108,
+        "unknown_call_ids": [],
+        "unscored": true
+      }
+    },
     "evaluations": {},
+    "first_pair_checkpoint": null,
+    "held_evidence": {
+      "essential_failure": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "5b37f9a757a9eb35875d9fc55dc1df4dd3f85bd22a9f80d73a6bfa787d4a3281"
+      },
+      "finalized": {},
+      "raw": {},
+      "revalidated_across_consumers": true
+    },
+    "held_transaction_root": {
+      "device": 16777232,
+      "inode": 150429696,
+      "mode": 448,
+      "mount_identity": "device:16777232",
+      "path": "/private/var/folders/5s/5dk3z2k93lgfqmsn0l28_lbm0000gn/T/giclab-t09-effects-e1f38ea57925eee227ab5cda22c709b1",
+      "semantic_sha256": "5d5c4b8f62b187e939ee01ca18f2401026c6df6db3a3cf6602cfba49bd889be9",
+      "uid": 501
+    },
     "host_receipts": {
-      "frozen_manifest": "58b7510f379aa206b962f1375a97fa5145cdb7046c84961e81ca7b7f1cbc3e32",
-      "postfreeze_validation": "bbef122bbd4f28eb45e7ff6861c427a89e84030b070114e1d8a6c1f23c80d258",
-      "qualification": "3c8aac79b796aca6f582f4ed25318ce1c1f021c86097c9a9c7e0f151503b5f94"
+      "frozen_manifest": "64a300ae17b8251be6f609dd84e798e19bdb019c2e68577d853f78fe8925f11c",
+      "postfreeze_validation": "c3e29c0d20e6a9fdea7a6953b993dc0fe7d0026e7e73874d76a90b49c4c6c402",
+      "qualification": "f2b122bd900d0e1441fe1d4c3f0cd20fcda4c3a06a9f6eb35188ecb1da30a199"
     },
     "implementation_flavor": "production-wrapper",
     "package_budget": {
@@ -614,13 +664,11 @@
     },
     "production_primitives": [
       "ProviderBudgetBoundary.invoke",
-      "ProviderBudgetBoundary.record_browser_action",
-      "ProviderBudgetBoundary.record_output_bytes",
       "T09ProviderContract.validate_owner",
       "admit_model_metadata_receipt_at_prelaunch_boundary",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "create_model_metadata_receipt",
-      "execute_typed_condition_session",
+      "export_essential_failure_bundle",
       "immutable_cleanup_export_handoff",
       "initialize_pilot_state",
       "launch_campaign",
@@ -628,6 +676,7 @@
       "load_openai_dotenv_assignment",
       "load_validated_pilot_state:cleanup",
       "mark_empirical_entry",
+      "mark_essential_failure_sealed",
       "privacy_violations",
       "publish_dynamic_frozen_run_manifest",
       "reserve_condition_start",
@@ -636,6 +685,7 @@
       "validate_campaign_launch_projection",
       "validate_cleanup_execution_receipt",
       "validate_entry_receipt_source_bound",
+      "validate_essential_failure_bundle",
       "validate_finalizer_source",
       "validate_host_preflight_receipt",
       "validate_host_qualification_receipt",
@@ -644,6 +694,7 @@
       "validate_postfreeze_receipt",
       "validate_tracked_package_archive"
     ],
+    "provider_cost_receipt": null,
     "raw_export_acknowledgements": {},
     "replacement_history": {
       "closed_launch_slots": [
@@ -683,6 +734,7 @@
         1005.0,
         1006.0,
         1006.0,
+        1011.0,
         1011.0,
         1011.0,
         1011.0,
@@ -787,8 +839,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "scenario": "raw-export-failure",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -799,9 +851,9 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "d7af390d7fd8fb25e07dfe150da544fa5704d847f9ce28c4f3b62468459f6818",
+  "semantic_sha256": "8146b77ae987859c22648868c91667e964aed7ca8e5a6580def8ae9532ec0966",
   "shadow_only": true,
-  "stop_reason": "retained raw validation/export failed: raw attempt seal no longer reconstructs from exact bytes",
+  "stop_reason": "consumed condition stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
   "undeclared_adapter_calls": [],
   "zero_undeclared_calls": true

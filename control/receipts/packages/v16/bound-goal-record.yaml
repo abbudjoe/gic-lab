@@ -49,6 +49,7 @@ provenance:
   - control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json
   - control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json
   - control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json
+  - control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json
   - experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 uncertainties:
   - current-turn live authority must be supplied externally in a future turn

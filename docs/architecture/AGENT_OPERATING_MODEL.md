@@ -183,3 +183,57 @@ architecture. The package-only allowlist also excludes `version_lint.py`, `Makef
 and `.github/workflows/ci.yml`; none is a V17 package-data surface. If a successor
 requires any such shared change, package generation stops and a separate Category 1
 control-plane repair is required.
+
+## Exact-head review repair
+
+Review 5088727234 of PR #14 found four remaining authority gaps at reviewed commit
+`3291af1e64ec1ea89b8773a586c97a917f1052a2`. The repair keeps the same controller,
+production assembly, effect protocol direction, and real-time event observer. It
+strengthens who decides, what survives failure, and which filesystem and authority
+identities remain held.
+
+The first-pair checkpoint now reconstructs both Task A attempts from retained raw,
+finalizer, evaluator, command-pair, and provider-lifecycle records. It passes those
+facts, authoritative aggregate usage, injected-clock wall values, and conservative
+frozen-plan projections to `t09_sira_pilot.first_pair_decision`. A score of `0.0` is
+scored; `None` is not. The exact returned decision and reasons are persisted through
+`record_first_pair_checkpoint`. `stop-before-task-b` is a clean operational stop: it
+creates no Task B reservation or entry, permits no scientific interpretation, and
+still performs cleanup.
+
+Every infrastructure failure after empirical entry is a typed consumed outcome. The
+wrapper closes descendants, reconciles known and unknown calls, validates a bounded
+no-follow essential bundle, invokes `mark_essential_failure_sealed`, and requires an
+export acknowledgement. The attempt remains consumed, unscored, nonretryable, and
+ineligible for finalization or evaluation. A nonzero process exit has this
+classification even if an answer was emitted.
+
+Live effects, metadata, launch, cleanup, and terminal consumption now share one
+opaque `ValidatedLiveEffectAuthority`. Only the shared validator can mint it, after
+calling the selected contract's authorization validator over an external private
+overlay. The exact source, control/package/effect/root context, cost caps, zero-retry
+policy, interpretation boundary, turn scope, and one-campaign limit are one durable
+single-use state machine. Reservation occurs before any secret read; replay or an
+ambiguous/replaced state fails closed. A package supplies overlay schema and policy,
+not a trusted duck-typed grant.
+
+Effect source bytes are opened once with no-follow semantics, checked against the
+declared hash and Git blob, compiled from the held bytes without `.pyc` or pathname
+reopen, and revalidated after execution and factory construction. Shared code opens
+and holds the external transaction root, derives its device/inode/owner/mode/mount
+identity, and checks every path component. Raw, finalized, and evaluator artifacts
+are sealed and held by descriptor across each consumer. Their identities are
+revalidated before and after use, and all held descriptors are released only after
+cleanup and terminal evidence materialization.
+
+The public conformance receipt records reproducible attestations rather than private
+temporary paths, inode numbers, or per-run authorization hashes. Exact values remain
+bound and validated inside the runtime transaction; stable public booleans and
+semantic projections prove which checks passed. Two equivalent successor repositories
+therefore generate byte-identical complete receipt trees without weakening the
+runtime TOCTOU checks.
+
+No V17 package, effect module, receipt root, external overlay, run root, or
+`AUTONOMOUS-0010` identity is created by this repair. Repository, Category 3, live,
+and scientific authority remain false. The exact package-only successor allowlist and
+no-touch shared-source list are maintained in the T09 preauthorization packet.

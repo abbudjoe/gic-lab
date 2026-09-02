@@ -52,12 +52,13 @@
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
     "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
     "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json",
+    "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
   ],
   "recommended_action": "complete independent exact-head review and explicit merge authorization; only after merge begin the separately authorized package-only V17 task",
   "repository": {
-    "commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-    "tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd"
+    "commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+    "tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -85,19 +86,19 @@
       "scientific_interpretation_allowed": false
     },
     "goal_record_path": "control/goals/EXP-0001.yaml",
-    "goal_record_sha256": "23ecf2c780849ac23eaf16c805ee83b672861d8fb32288ec36db725ef035bcb0",
+    "goal_record_sha256": "19e0c802b1acfcca3032972e0e336eb46d44a493a1973a44f200b6463441bdf3",
     "historical_contract_version": "V16",
     "schema_version": "1.0.0",
     "selected_command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
     "selected_package_status": "consumed-prelaunch-failure",
     "selected_plan_id": "PLAN-EXP0001-PILOT-V16",
     "selected_provider_contract_version": "V16",
-    "semantic_sha256": "e61c4011b02322b9b5c09f0cb0a62122c8f65c115ce33a038c0fa0df2001e91f",
+    "semantic_sha256": "dab78ab968fa1fcc49cff39753b5bfb3316a9f156c4ec531ea2f920b51e70344",
     "source": "goal-record",
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "a0e20715ab0501ddffa927091e670327d801d4878ba32cf38c880038264843d6",
+  "semantic_sha256": "0370720f4371f832f531c10dd94ac2808aa81f084b513dcbbe7f917726af762d",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",

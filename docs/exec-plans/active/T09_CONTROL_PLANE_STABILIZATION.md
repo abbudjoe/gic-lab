@@ -446,3 +446,53 @@ Exact-base parity passes with zero newly failing tests, zero missing
 base nodes or failures, zero invalid outcome transitions, four newly passing nodes,
 and five symmetrically deselected private nodes. The final documentation descendant
 must preserve this result before push.
+
+## PR #14 exact-head review repair
+
+Review ID 5088727234 required repair of reviewed commit
+`3291af1e64ec1ea89b8773a586c97a917f1052a2`, tree
+`69b7d0346456cad080ca258bc137662d7d632d26`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`. The accepted effect-neutral controller,
+production assembly, package-derived budgets, real-time observer accounting, typed
+host/evidence flow, and no-V17 boundary remain in force.
+
+Core implementation commit `e4e65ef24b97151c09fc9ccfe1e0d0083f797a1e`, tree
+`2de4e90efa2d85b5c4662bc8f47f72375659acae`, repairs the four findings. Its ordinary
+source-closure descendant `adafa96342d0c407189cd0b260cf017fb4d79f3e`, tree
+`45562750df7fa3935c3b7b1af37e4c63bf244caa`, avoids a repository-hygiene scanner
+collision while preserving the durable authority-state value. The current 27-file
+V16 receipt root is regenerated against that exact later implementation ancestor. Its
+binding file SHA-256 is
+`b8797c42d5ac8943e6ccb2677fdb5c80d091794a2b085b21d4bb8392a7ad7fd9` and semantic
+SHA-256 is `e894458286ff3d77121b9eedccedcc715b780001055547fb2024cce43a3d5156`.
+
+| ID | Review-repair outcome | Evidence state |
+| --- | --- | --- |
+| RR-01 | Exact PR/base/reviewed-head preflight | met |
+| RR-02 | Accepted effect-neutral architecture preserved | met |
+| RR-03 | Retained `first_pair_decision` authoritative | met |
+| RR-04 | Both Task A attempts valid and scored before Task B | met |
+| RR-05 | Pair/finalizer/cost/time/cleanup gates enforced | met |
+| RR-06 | Checkpoint stop is clean, nonscientific, and creates no Task B entry | met |
+| RR-07 | Every post-entry infrastructure failure has bounded essential evidence | met |
+| RR-08 | Nonzero exits are infrastructure-invalid and unscored | met |
+| RR-09 | Essential evidence sealed, exported, acknowledged, and nonretryable | met |
+| RR-10 | One opaque external authority transaction owns all live phases | met |
+| RR-11 | Contract authorization prefix/source enforced | met |
+| RR-12 | Live authority single-use and not duck-type forgeable | met |
+| RR-13 | Held exact effect bytes are compiled and executed | met |
+| RR-14 | Transaction-root identity is shared-derived and held | met |
+| RR-15 | Raw/finalized/evaluator identities remain held and sealed | met |
+| RR-16 | Updated conformance proves all four repairs | met |
+| RR-17 | Package-only V17 boundary remains truthful | met |
+| RR-18 | Historical V16 proof remains valid | met |
+| RR-19 | No actual V17 artifact exists | met |
+| RR-20 | Science and authority remain false and unchanged | met |
+| RR-21 | Full/parity/static/privacy/site gates | pending final-head run |
+| RR-22 | Draft PR update and exact-head Actions | pending push and rereview head CI |
+
+The review incident
+`INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW` is resolved after its 18 exact
+regression nodes pass. `blocking_incident` remains null. The external governance gate
+is independent exact-head rereview and explicit merge authorization; the next
+technical subgoal remains package-only V17 generation only after reviewed merge.

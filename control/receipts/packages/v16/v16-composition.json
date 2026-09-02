@@ -9,7 +9,7 @@
   "command_package_family": "autonomous",
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
   "control_binding_schema_sha256": "0a15d8e8beea76771bd780218530e8e04cad6af4c300c50d07df20abf1508837",
-  "downstream_source_contract_sha256": "2056be71c23cad502d67b48e9632904c6703b1b45f3c715fdf04f9147111e3a6",
+  "downstream_source_contract_sha256": "e06d8971d32ce9f283e24eab793dd2bcf48849deccd72e9c893efd9e4b058a06",
   "evidence_identity_sha256": "7103c2a33857806d0090aa6fbda04f94d9b239c0f7209f51a625cd2c69a25cae",
   "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
   "lifecycle_sha256": "f4ab34f7f8d86057e570e7a81271ca45a1c8b32ffaa803579c7b6e9d12727a04",
@@ -24,13 +24,13 @@
   "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
   "ready_for_authenticated_preflight": false,
   "ready_for_shadow": true,
-  "registry_receipt_sha256": "7d92ee00454714bcb7b0f8f4fa9f2a3beeadabddd55af6f63358aa38ea04bd53",
+  "registry_receipt_sha256": "68f0ebe0735534d06ce92187b376175d323d1dd72b5c59de0b88207fb682246a",
   "replacement_policy": "bounded-preflight",
-  "repository_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "repository_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "repository_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "repository_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "schema_version": "1.0.0",
-  "semantic_sha256": "30e5e184f7e55008481093e04fab3ea1980e632da7ff4f31903ee1f135c430ac",
+  "semantic_sha256": "41d8e1113f5e637cb778397df9deff0bdd051fefc80c0b2727ef34f018e31410",
   "static_composition_valid": true,
   "target_schema_sha256": "0337c5fdc1d1c87b3700575dd1261fdb91c1d847ccd7f53f69a59e4333eb32b1",
-  "version_lint_receipt_sha256": "544b89cae8ebde3c8cd6ed40780a8ab21dfc4a67023b12d65e7c9cbf2a675ac9"
+  "version_lint_receipt_sha256": "c2a0494f3dea339f1ca1a59fed948f672a1ea42f96dc47ce4d7a7fb4abea9a31"
 }

@@ -2,19 +2,54 @@
   "actual_v17_artifacts_created": false,
   "actual_v17_artifacts_present": false,
   "complete": true,
-  "control_implementation_commit": "cd9bed46576bd00af473af861c57800b4f350c9d",
-  "control_implementation_tree": "8d34019a2d7addcf34ff35f507f82dea99ef38dd",
+  "control_implementation_commit": "adafa96342d0c407189cd0b260cf017fb4d79f3e",
+  "control_implementation_tree": "45562750df7fa3935c3b7b1af37e4c63bf244caa",
   "effect_protocol_version": "1.0.0",
   "live_authority_created": false,
   "network_provider_cloud_browser_science_effects": 0,
   "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
-  "schema_version": "1.0.0",
+  "schema_version": "2.0.0",
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "2a001bb775fbf7e8755f23b1f1ed4f70bb083ac2c65cdfd7f3f180f3d6c1500a",
+  "semantic_sha256": "e4a4d2e47ca2a07e8f3bec3ac0fd7d1fa2056c74021c1bb676f9181a8ffe0d7f",
   "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
   "shared_source_byte_map_unchanged": true,
   "temporary_package": {
-    "authorization_context_semantic_sha256": "eca9affab5da636a2fa21afe48f081c5fde2a4c59faf371ae101ba519255796c",
+    "authorization": {
+      "private_overlay_contents_retained": false,
+      "reference": "AUTH-T09-V16-CONFORMANCE-4006a202ccc7098d7202ae65",
+      "replay_rejected": true,
+      "same_reference_and_source_across_effect_metadata_launch_cleanup": true,
+      "single_use_state": {
+        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-4006a202ccc7098d7202ae65",
+        "contains_private_overlay_contents": false,
+        "exact_private_source_context_root_and_receipt_validated": true,
+        "private_runtime_identity_values_retained": false,
+        "replay_permitted": false,
+        "single_use": true,
+        "terminal_state": "terminal-complete"
+      },
+      "source_binding": {
+        "exact_sha256_validated": true,
+        "private_runtime_value_retained": false,
+        "same_across_effect_metadata_launch_cleanup": true
+      }
+    },
+    "authorization_context_binding": {
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "control_binding_semantic_sha256": "f835cbba42179ab7f8dd6fcd6e0567f6ce60427f3298e531435ed7825aa78660",
+      "control_commit": "e506f0affcf956bca9e3c4507eb9f725e065396d",
+      "control_tree": "0a7f19fd702361da03fea0fe4ab7c7f2710345c7",
+      "current_turn_scope": "T09-PR14-EXACT-HEAD-CONFORMANCE",
+      "effect_implementation_sha256": "3d3e566bf576b90bee1ad51c48069e759bddf3372c950e615f75dcdc3c6644d8",
+      "exact_private_source_sha256_validated": true,
+      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-4006a202ccc7098d7202ae65",
+      "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "private_runtime_identity_values_retained": false,
+      "provider_contract_version": "V16",
+      "public_binding_semantic_sha256": "23afcf89a8fd4312b830dbb0783a526d884c825c440659a9a8d9fd5b8cb65bfc",
+      "shared_held_transaction_root_identity_validated": true
+    },
     "browser_accounting": {
       "multiple_actions_per_condition": true,
       "total_actions": 8
@@ -29,7 +64,7 @@
     "clock": {
       "domains_separate": true,
       "injected": true,
-      "monotonic_sample_count": 177,
+      "monotonic_sample_count": 178,
       "sleep_calls": [
         0.25,
         1.0,
@@ -40,7 +75,7 @@
         1.0,
         5.0
       ],
-      "wall_sample_count": 54
+      "wall_sample_count": 55
     },
     "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
     "condition_traces": {
@@ -95,11 +130,63 @@
     },
     "controller_terminal_state": "category3-live-complete-clean",
     "effect_implementation": {
-      "bytes": 888,
+      "bytes": 596,
       "factory_entry_point": "build_package_effects",
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
       "protocol_version": "1.0.0",
-      "sha256": "1e7ff01bde5c21c83c6ba4fb49c62422b42ce81679f3420bb40e309e6d2fb411"
+      "sha256": "3d3e566bf576b90bee1ad51c48069e759bddf3372c950e615f75dcdc3c6644d8"
+    },
+    "first_pair_checkpoint": {
+      "decision": "continue-to-task-b",
+      "exact_private_decision_and_evidence_identities_validated": true,
+      "finalizer_closure_valid": true,
+      "pair_match_valid": true,
+      "private_runtime_identity_values_retained": false,
+      "public_checkpoint_semantic_sha256": "d7a2cd083990db78eb80bcd9d1742387e1711f6869b7abca18449666879edf63",
+      "reasons": [],
+      "retained_first_pair_decision_invoked": true,
+      "task_a_evaluator_succeeded": [
+        true,
+        true
+      ],
+      "task_a_valid_evidence": [
+        true,
+        true
+      ],
+      "task_a_valid_scored_attempt": [
+        true,
+        true
+      ],
+      "task_b_admitted_only_after_retained_decision": true
+    },
+    "held_effect_source": {
+      "bytes": 596,
+      "compiled_from_held_bytes": true,
+      "factory_entry_point": "build_package_effects",
+      "git_blob_bytes_matched": true,
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
+      "path_revalidated_after_execution_and_factory": true,
+      "protocol_version": "1.0.0",
+      "public_attestation_semantic_sha256": "ea47b4c4ab7fd2b239c899437ae033aac68cecfc514e9038c9b57bcf433785ba",
+      "regular_current_user_single_link_safe_mode": true,
+      "runtime_identity_values_retained": false,
+      "sha256": "3d3e566bf576b90bee1ad51c48069e759bddf3372c950e615f75dcdc3c6644d8"
+    },
+    "held_evidence_chain": {
+      "evaluator_consumed_held_finalized_identities": true,
+      "finalized_attempt_bindings": 4,
+      "raw_attempt_bindings": 4,
+      "revalidated_before_and_after_consumers": true
+    },
+    "held_transaction_root": {
+      "current_user_owned": true,
+      "descriptor_held_through_cleanup": true,
+      "device_inode_mode_mount_revalidated": true,
+      "group_world_write_absent": true,
+      "identity_derived_by_shared_code": true,
+      "no_symlink_path_components_validated": true,
+      "public_attestation_semantic_sha256": "acaa9f688fc4409739fed1c33841d77cda264c9c73dcf347bf3f9560452e5ad6",
+      "runtime_identity_values_retained": false
     },
     "host_transaction": {
       "dynamic_frozen_manifest": true,
@@ -202,6 +289,15 @@
     "plan_id": "PLAN-EXP0001-PILOT-V16",
     "projected_real_cost_usd": "0.00",
     "provider_contract_version": "V16",
+    "provider_cost_accounting": {
+      "cumulative_provider_cost_usd": 0.0,
+      "current_empirical_cost_usd": 0.0,
+      "launch_ordinal": 1,
+      "owned_instance_identity": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176",
+      "prior_preflight_cost_usd": 0.0,
+      "receipt_sha256": "5314672366fbc63dab6988ff991e02897a64383c62cd21f5144bccb83fd93e59",
+      "zero_real_provider_effects": true
+    },
     "raw_finalizer_evaluator_chain": {
       "attempt_count": 4,
       "effect_answer_reached_finalized_session": true,
@@ -210,10 +306,60 @@
       "raw_files_hash_validated": true
     },
     "repository_state_grants_authority": false,
+    "review_failure_subreceipts": {
+      "ambiguous-send-essential-failure": {
+        "cleanup_complete": true,
+        "exported_and_acknowledged": true,
+        "failure_class": "ambiguous-send",
+        "sealed": true,
+        "unscored": true,
+        "zero_retry": true
+      },
+      "effect-module-replacement-rejection": {
+        "compiled_from_held_bytes": true,
+        "path_revalidated_after_factory": true,
+        "same_size_replacement_rejected": true
+      },
+      "nonzero-process-exit-essential-failure": {
+        "cleanup_complete": true,
+        "exported_and_acknowledged": true,
+        "failure_class": "process-exit-nonzero",
+        "sealed": true,
+        "unscored": true,
+        "zero_retry": true
+      },
+      "raw-replacement-rejection": {
+        "evaluator_calls": 0,
+        "same_size_replacement_rejected": true,
+        "scientific_interpretation_allowed": false,
+        "stopping_phase": "finalization"
+      },
+      "split-authorization-rejection": {
+        "authenticated_metadata_requests": 0,
+        "condition_reservations": 0,
+        "provider_calls": 0,
+        "rejected_before_metadata": true,
+        "secret_reads": 0
+      },
+      "symlink-transaction-root-rejection": {
+        "authenticated_metadata_requests": 0,
+        "condition_reservations": 0,
+        "provider_calls": 0,
+        "root_symlink_rejected": true,
+        "secret_reads": 0
+      },
+      "unscored-task-a-checkpoint-stop": {
+        "cleanup_complete": true,
+        "decision": "stop-before-task-b",
+        "reason": "task_a_valid_scored_attempt_missing",
+        "task_b_condition_entries": 0,
+        "task_b_condition_reservations": 0
+      }
+    },
     "scientific_interpretation_allowed": false,
     "temporary_conformance_grant_only": true,
-    "temporary_repository_commit": "c0b8c18a6bd71298e5edfd7d5baa828e316ca5b6",
-    "temporary_repository_tree": "064808e1409b96878e29b9a2279e0ce960042eff",
+    "temporary_repository_commit": "e506f0affcf956bca9e3c4507eb9f725e065396d",
+    "temporary_repository_tree": "0a7f19fd702361da03fea0fe4ab7c7f2710345c7",
     "typed_failure_accounting": {
       "ambiguous-task-model-send": {
         "model_call_attempts": 1,

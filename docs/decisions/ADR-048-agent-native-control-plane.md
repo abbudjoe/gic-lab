@@ -127,3 +127,37 @@ allowlist excludes `version_lint.py`, `Makefile`, and `.github/workflows/ci.yml`
 well. It also must not introduce a second controller, infer authority from Git, or
 reuse the stopped V16 metadata/authorization reference. Needing a prohibited shared
 change returns the work to a separate Category 1 repair.
+
+## Exact-head review amendment: checkpoint, failure evidence, authority, and identity
+
+Review 5088727234 showed that effect-neutral interfaces alone were insufficient. The
+controller could still bypass the retained first-pair policy, infrastructure failures
+could lose essential evidence, live authorization could split across phases, and
+validated filesystem paths could be replaced before use.
+
+This ADR therefore adds four decisions:
+
+1. `t09_sira_pilot.first_pair_decision` is the sole Task A continuation policy. The
+   production wrapper derives every input from retained evidence and package budgets;
+   the controller consumes its typed continue/stop result. A policy stop is not an
+   infrastructure exception.
+2. Any post-entry infrastructure failure is a consumed typed transaction. Bounded
+   essential evidence must be sealed, exported, and acknowledged before a clean
+   evidence stop can be claimed. Nonzero exits are always unscored.
+3. One opaque validator-minted, external, single-use authorization transaction binds
+   effect loading, metadata, provider launch, cleanup, and terminal consumption. The
+   selected provider contract validates the reference and source. Structural or
+   equality-returning grant objects are not authority.
+4. Effect source, transaction root, and downstream artifacts use held descriptors and
+   exact byte/inode identities across use. Pathname resolution is not a security
+   identity. Descriptors are released only after terminal evidence is complete.
+
+The conformance receipt publishes deterministic redacted attestations for runtime-only
+inode and private authorization identities, while the runtime validator retains and
+cross-checks the exact values. This keeps equivalent receipt trees byte-identical and
+does not turn repository evidence into live authority.
+
+The amendment preserves Option A accounting: the production wrapper's real-time event
+observer remains the only authoritative condition accountant. It also preserves all
+EXP-0001 science, ordering, retry, cost, and descriptive-only interpretation
+contracts. No live execution or V17 artifact is part of this decision.

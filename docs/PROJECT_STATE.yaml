@@ -32,8 +32,21 @@ t09_v16_stopped_checkpoint:
   incident: INC-T09-V16-LIFECYCLE-REGISTRY
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 t09_control_plane_stabilization_workstream:
-  status: live-capable-production-effects-complete-independent-review-required
+  status: live-capable-production-effects-review-repair-complete-rereview-required
   branch: codex/t09-live-capable-production-effects
+  pull_request: 14
+  reviewed_head: 3291af1e64ec1ea89b8773a586c97a917f1052a2
+  reviewed_tree: 69b7d0346456cad080ca258bc137662d7d632d26
+  review_id: 5088727234
+  review_disposition: changes-required-not-approved
+  review_incident: INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW
+  review_incident_status: resolved
+  blocking_incident: null
+  external_governance_gate: independent-exact-head-rereview-and-explicit-merge-authorization
+  implementation_ancestor_commit: adafa96342d0c407189cd0b260cf017fb4d79f3e
+  implementation_ancestor_tree: 45562750df7fa3935c3b7b1af37e4c63bf244caa
+  current_v16_binding_file_sha256: b8797c42d5ac8943e6ccb2677fdb5c80d091794a2b085b21d4bb8392a7ad7fd9
+  current_v16_binding_semantic_sha256: e894458286ff3d77121b9eedccedcc715b780001055547fb2024cce43a3d5156
   selected_runtime_target_source: goal-record
   selected_runtime_package: V16
   selected_runtime_plan: PLAN-EXP0001-PILOT-V16
@@ -44,6 +57,10 @@ t09_control_plane_stabilization_workstream:
   required_failure_matrix_valid: true
   effect_protocol_version: 1.0.0
   production_effect_seams_live_capable: true
+  retained_first_pair_decision_authoritative: true
+  post_entry_essential_failure_evidence_required: true
+  unified_single_use_live_authority_protocol_valid: true
+  held_module_root_evidence_identity_protocol_valid: true
   authoritative_condition_accounting: real-time-typed-event-observer
   anti_shadow_lint_valid: true
   live_effect_conformance_valid: true
@@ -486,4 +503,4 @@ t09_autonomous_retry2_v9_checkpoint:
   scientific_result_claimed: false
   experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: '2026-08-31'
+last_updated: '2026-09-02'
