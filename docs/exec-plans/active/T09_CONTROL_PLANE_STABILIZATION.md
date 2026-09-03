@@ -562,7 +562,7 @@ and semantic SHA-256
 
 ## PR #14 third exact-head rereview repair
 
-Assembly status: **in-progress**
+Assembly status: **repair complete; independent exact-head rereview and explicit merge authorization required**
 
 Review `5101177903` examined exact head
 `b73acefd41bf129a7e0264b93995b36249bc0270`, tree
@@ -597,9 +597,9 @@ Docker, SiRA, evaluator, condition, paid-compute, or scientific effect is permit
 | TR-16 | No actual V17 survives | met |
 | TR-17 | Incident and state capsule are truthful | met |
 | TR-18 | V16 receipts are non-circularly rebound | met |
-| TR-19 | Full/parity/static/privacy/site gates pass | not-started |
-| TR-20 | PR body reflects exact final identities | not-started |
-| TR-21 | PR remains open, draft, unmerged, auto-merge disabled | not-started |
+| TR-19 | Full/parity/static/privacy/site gates pass | met — exact outcomes are attached to the final PR head rather than circularly embedded here |
+| TR-20 | PR body reflects exact final identities | met — byte-verified on the final PR head |
+| TR-21 | PR remains open, draft, unmerged, auto-merge disabled | met |
 | TR-22 | Authority/science/live-effect flags remain false | met |
 
 Implementation mapping: held descriptor admission and race tests map to TR-03 through
@@ -612,14 +612,17 @@ select a versioned public receipt root.
 Focused implementation evidence: all post-enumeration acknowledgement, payload JSON,
 non-JSON, and replacement races fail before a clean essential record; exact JSON and
 complete-envelope limits pass at the cap and reject one byte above it; the held-derived
-count/total cross-bind every retained projection. The 19-node historical/successor
+count/total cross-bind every retained projection. The 20-node historical/successor
 module passed with a normally generated selected V17 receipt, rejected selected-root
-JSON/field/goal/omission/extra mutations, revalidated V16 independently, and destroyed
+JSON/field/goal/omission/extra mutations, proved that the scanner's own marker list
+cannot hide topology in another field, revalidated V16 independently, and destroyed
 the temporary successor. The V16 root was regenerated against immutable implementation
-ancestor `75b62c2f51c9ba126ca48a8d802f88115eb5ce82`, tree
-`727fb4c58eec5bddcb17459575b980de5064fca4`, and committed as descendant
-`01a8cfd7c5cbed01e60a75a620e5956f2f696fba`. Its binding file SHA-256 is
-`41c5b9b56c203d8758fe2aba7d9e679a4e024b4d3000dbd45e3888b9517e03ef` and
+ancestor `f5c19404c483fea7ed4b47235e5a1763213e017f`, tree
+`52aba08c58342ab714ccb548b1049cb3685c5574`, and committed as descendant
+`11265fc8aeeea8be9307ca680b490e129822ce71`, tree
+`4611063c81782a4b20050280387bd8f1d34fbdae`. Its binding file SHA-256 is
+`cbc730e2ac14a41efc679681d686f97a38d370a8b9eaa902ebe4b3d33f854ea8` and
 semantic SHA-256 is
-`e9858312de753db95294e16c348efde49292c6001d3733ffc019e2deed241929`.
-Full/parity/site gates and exact-head PR/CI handoff remain pending TR-19 through TR-21.
+`4f7bbf53565fcf4db2d12a90669b4c2c4f2ad9af57c5cdcd4416b11ff18826f1`.
+The final exact-head gate outcomes and GitHub run/job identities are recorded on PR
+#14 so these tracked documents do not make the proof self-referential.

@@ -1160,7 +1160,7 @@ they are not circularly embedded into this tracked ledger.
 
 ## PR #14 third exact-head rereview 5101177903 repair assembly
 
-Status: **in-progress**
+Status: **repair complete; independent exact-head rereview and explicit merge authorization required**
 
 Pre-edit evidence: PR #14 is open, draft, unmerged, based on exact
 `f1d872d59c4952eb98467c2506850af7772f4454`, and has auto-merge disabled. Local,
@@ -1191,30 +1191,35 @@ controller record, public evidence, and evidence-binding SHA-256.
 
 The target-driven scanner derives the exact selected root, validates every sealed root
 under its own binding, and compares the full bound inventory against every regular
-member. The 19-node historical/successor module passed in 265.68 seconds: its normal
+member. The 20-node historical/successor module passed: its normal
 receipt generator selected V17, emitted a V17 anti-shadow receipt naming
 `control/receipts/packages/v17`, scanned `bound-goal-record.yaml`, rejected V17-only
-path/device/inode/UID injection plus omission and unbound-extra mutations, and retained
+path/device/inode/UID injection plus omission and unbound-extra mutations, rejected a
+second marker hidden outside the scanner's own declared marker list, and retained
 independent V16 validity. The shared-source byte-map successor test passed separately;
 no V17 artifact survived in the actual repository. Incident
 `INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY` is resolved by the exact listed
-nodes with no live environment, authority, provider, or scientific effect. TR-18
-TR-18 is now met. The immutable implementation ancestor is
-`75b62c2f51c9ba126ca48a8d802f88115eb5ce82`, tree
-`727fb4c58eec5bddcb17459575b980de5064fca4`. Receipt generation initially exposed and
+nodes with no live environment, authority, provider, or scientific effect. TR-18 is
+met. The immutable implementation ancestor is
+`f5c19404c483fea7ed4b47235e5a1763213e017f`, tree
+`52aba08c58342ab714ccb548b1049cb3685c5574`. Receipt generation initially exposed and
 fixed two exact publication-state assumptions: conformance/test repository copies now
 recover only intentionally absent tracked receipt bytes from the immutable ancestor,
 and the source-lint regression distinguishes exact selected-root unavailability from
-source or topology findings. The missing-root selected-V17 incident node then passed,
-and the normal generator published 27 V16 receipts with all incident regressions
-executed. Receipt descendant `01a8cfd7c5cbed01e60a75a620e5956f2f696fba`, tree
-`ef548260b6b9d914c30bd159a380284cacf5c8a2`, contains binding file SHA-256
-`41c5b9b56c203d8758fe2aba7d9e679a4e024b4d3000dbd45e3888b9517e03ef`, binding
-semantic SHA-256 `e9858312de753db95294e16c348efde49292c6001d3733ffc019e2deed241929`,
+source or topology findings. Direct self-review additionally narrowed the scanner's
+self-declaration exception to one validated occurrence per marker. The missing-root
+selected-V17 incident node and narrowed-exception node then passed, and the normal
+generator published 27 V16 receipts with all six incident groups executed. Receipt
+descendant `11265fc8aeeea8be9307ca680b490e129822ce71`, tree
+`4611063c81782a4b20050280387bd8f1d34fbdae`, contains binding file SHA-256
+`cbc730e2ac14a41efc679681d686f97a38d370a8b9eaa902ebe4b3d33f854ea8`, binding
+semantic SHA-256 `4f7bbf53565fcf4db2d12a90669b4c2c4f2ad9af57c5cdcd4416b11ff18826f1`,
 anti-shadow file/semantic SHA-256
-`e9b85ad941c9a1fe364afea8b1c5e473a1858ec4dc234204bd1bb1382ece00f5` /
-`e1430bb16ff4555d8409b7111868cd93e7b70d300df14323c5881fe10038cccc`, and
+`cf9b0aa4229a4e7d8f682035317daf3e1799e40ddfe5ffbfc1d25b4aca07e4a3` /
+`ac55e6d2740f9831a92e0517f0d4a0ec736fa6e96f7748ee32d939a757d63d6f`, and
 conformance file/semantic SHA-256
-`4ac3215d81529f85ccd5ca00c1e919fdb693add59b12b090e10bbf4b2f492d5e` /
-`286072cbfc8b24370fa03830edd182ae00c6216c9fb5370230a68a550bf58029`.
-TR-19 through TR-21 remain pending complete gates and exact PR/CI publication.
+`a0e8d41ab4b7e3173c425778690a03c444831104ef31b00005db0fb92fb96bee` /
+`3580d9f6f093df431b4cb6ae426a79cd12096c775e77964e8fccacc75b86cdd0`.
+Local formatting, Ruff, mypy, validation, agent-check, Quarto/site, focused successor,
+and diff gates pass. Exact-base parity, final PR body verification, and GitHub run/job
+identities are attached to the final PR head rather than embedded circularly here.
