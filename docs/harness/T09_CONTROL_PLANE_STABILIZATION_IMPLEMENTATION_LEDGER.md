@@ -1199,5 +1199,22 @@ independent V16 validity. The shared-source byte-map successor test passed separ
 no V17 artifact survived in the actual repository. Incident
 `INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY` is resolved by the exact listed
 nodes with no live environment, authority, provider, or scientific effect. TR-18
-through TR-21 remain pending immutable-ancestor receipt regeneration, complete gates,
-and exact PR/CI publication.
+TR-18 is now met. The immutable implementation ancestor is
+`75b62c2f51c9ba126ca48a8d802f88115eb5ce82`, tree
+`727fb4c58eec5bddcb17459575b980de5064fca4`. Receipt generation initially exposed and
+fixed two exact publication-state assumptions: conformance/test repository copies now
+recover only intentionally absent tracked receipt bytes from the immutable ancestor,
+and the source-lint regression distinguishes exact selected-root unavailability from
+source or topology findings. The missing-root selected-V17 incident node then passed,
+and the normal generator published 27 V16 receipts with all incident regressions
+executed. Receipt descendant `01a8cfd7c5cbed01e60a75a620e5956f2f696fba`, tree
+`ef548260b6b9d914c30bd159a380284cacf5c8a2`, contains binding file SHA-256
+`41c5b9b56c203d8758fe2aba7d9e679a4e024b4d3000dbd45e3888b9517e03ef`, binding
+semantic SHA-256 `e9858312de753db95294e16c348efde49292c6001d3733ffc019e2deed241929`,
+anti-shadow file/semantic SHA-256
+`e9b85ad941c9a1fe364afea8b1c5e473a1858ec4dc234204bd1bb1382ece00f5` /
+`e1430bb16ff4555d8409b7111868cd93e7b70d300df14323c5881fe10038cccc`, and
+conformance file/semantic SHA-256
+`4ac3215d81529f85ccd5ca00c1e919fdb693add59b12b090e10bbf4b2f492d5e` /
+`286072cbfc8b24370fa03830edd182ae00c6216c9fb5370230a68a550bf58029`.
+TR-19 through TR-21 remain pending complete gates and exact PR/CI publication.

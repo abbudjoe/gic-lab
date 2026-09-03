@@ -596,7 +596,7 @@ Docker, SiRA, evaluator, condition, paid-compute, or scientific effect is permit
 | TR-15 | Synthetic successor leaves shared source unchanged | met |
 | TR-16 | No actual V17 survives | met |
 | TR-17 | Incident and state capsule are truthful | met |
-| TR-18 | V16 receipts are non-circularly rebound | not-started |
+| TR-18 | V16 receipts are non-circularly rebound | met |
 | TR-19 | Full/parity/static/privacy/site gates pass | not-started |
 | TR-20 | PR body reflects exact final identities | not-started |
 | TR-21 | PR remains open, draft, unmerged, auto-merge disabled | not-started |
@@ -615,5 +615,11 @@ complete-envelope limits pass at the cap and reject one byte above it; the held-
 count/total cross-bind every retained projection. The 19-node historical/successor
 module passed with a normally generated selected V17 receipt, rejected selected-root
 JSON/field/goal/omission/extra mutations, revalidated V16 independently, and destroyed
-the temporary successor. Receipt regeneration, full/parity/site gates, and exact-head
-PR/CI handoff remain pending TR-18 through TR-21.
+the temporary successor. The V16 root was regenerated against immutable implementation
+ancestor `75b62c2f51c9ba126ca48a8d802f88115eb5ce82`, tree
+`727fb4c58eec5bddcb17459575b980de5064fca4`, and committed as descendant
+`01a8cfd7c5cbed01e60a75a620e5956f2f696fba`. Its binding file SHA-256 is
+`41c5b9b56c203d8758fe2aba7d9e679a4e024b4d3000dbd45e3888b9517e03ef` and
+semantic SHA-256 is
+`e9858312de753db95294e16c348efde49292c6001d3733ffc019e2deed241929`.
+Full/parity/site gates and exact-head PR/CI handoff remain pending TR-19 through TR-21.

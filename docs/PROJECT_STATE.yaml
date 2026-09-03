@@ -32,29 +32,29 @@ t09_v16_stopped_checkpoint:
   incident: INC-T09-V16-LIFECYCLE-REGISTRY
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 t09_control_plane_stabilization_workstream:
-  status: live-capable-production-effects-second-rereview-repair-complete-rereview-required
+  status: live-capable-production-effects-third-rereview-repair-validation-in-progress
   branch: codex/t09-live-capable-production-effects
   pull_request: 14
-  reviewed_head: a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f
-  reviewed_tree: 32986899e94f980bdf648872cb82cb8f3b8c1700
-  review_id: 5097085114
+  reviewed_head: b73acefd41bf129a7e0264b93995b36249bc0270
+  reviewed_tree: 0038a556c54e2fc95362a78c71914281f8dad28c
+  review_id: 5101177903
   review_disposition: changes-required-not-approved
-  review_incident: INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY
+  review_incident: INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY
   review_incident_status: resolved
   blocking_incident: null
   external_governance_gate: independent-exact-head-rereview-and-explicit-merge-authorization
-  implementation_ancestor_commit: be6f435003c5031071dac59fecd6a0ab0c45c892
-  implementation_ancestor_tree: 134d232b64c3c8957168d07705fd2d827bf64c8b
-  receipt_binding_ancestor_commit: bdeff53182b4ba648f691333bdbedb737853e757
-  receipt_binding_ancestor_tree: dc78cf2bdfb46e2e3426fd091de9c55fd13aa105
-  current_v16_binding_file_sha256: 79cb3ba35245c3a285b6ca96445d79c096764f0f0bd3cbd24e892f31e9c627c3
-  current_v16_binding_semantic_sha256: df0c51b68e430f60a4c4c12dff8cdc7dcd0311fb24f4c36379df2a59dc011b65
-  current_v16_source_binding_file_sha256: b9ab3af1a26593b9cce3c1ab8c67fad637b2487066775c34d97f706f66bbf271
-  current_v16_source_binding_semantic_sha256: 4c645b624777950dd8ce95f73938892c9aa4a25f512a50c1f2f1db4c780088ae
-  live_effect_conformance_file_sha256: 3b7ca0b349d3331a58769035d8026d111d4f473d51e34154bb634b2ac8773531
-  live_effect_conformance_semantic_sha256: f5c7c751796fb49bfac1db02ad599e3540ae58eac801e1b245830662cac8c362
-  anti_shadow_bypass_file_sha256: 6968729b3fd38c70a861ce415cb9752fc2bf051a658a08bbb826a62e8a45fd72
-  anti_shadow_bypass_semantic_sha256: 8e8bd30138013677eaa3d14f529dd0a3030b0729ede50f0cd12ca19533b607c5
+  implementation_ancestor_commit: 75b62c2f51c9ba126ca48a8d802f88115eb5ce82
+  implementation_ancestor_tree: 727fb4c58eec5bddcb17459575b980de5064fca4
+  receipt_binding_ancestor_commit: 75b62c2f51c9ba126ca48a8d802f88115eb5ce82
+  receipt_binding_ancestor_tree: 727fb4c58eec5bddcb17459575b980de5064fca4
+  current_v16_binding_file_sha256: 41c5b9b56c203d8758fe2aba7d9e679a4e024b4d3000dbd45e3888b9517e03ef
+  current_v16_binding_semantic_sha256: e9858312de753db95294e16c348efde49292c6001d3733ffc019e2deed241929
+  current_v16_source_binding_file_sha256: 923e69bb5c3f2a7a83595d55cd348d77668e150ac50c0779bc4d0ba43d27e5c4
+  current_v16_source_binding_semantic_sha256: 1c8af34a228ffb4f6f293900d9791ee56afe26f2828834c4ea771a0246a97d42
+  live_effect_conformance_file_sha256: 4ac3215d81529f85ccd5ca00c1e919fdb693add59b12b090e10bbf4b2f492d5e
+  live_effect_conformance_semantic_sha256: 286072cbfc8b24370fa03830edd182ae00c6216c9fb5370230a68a550bf58029
+  anti_shadow_bypass_file_sha256: e9b85ad941c9a1fe364afea8b1c5e473a1858ec4dc234204bd1bb1382ece00f5
+  anti_shadow_bypass_semantic_sha256: e1430bb16ff4555d8409b7111868cd93e7b70d300df14323c5881fe10038cccc
   selected_runtime_target_source: goal-record
   selected_runtime_package: V16
   selected_runtime_plan: PLAN-EXP0001-PILOT-V16
@@ -71,8 +71,13 @@ t09_control_plane_stabilization_workstream:
   held_module_root_evidence_identity_protocol_valid: true
   provider_lifecycle_cost_source_bound: true
   complete_essential_failure_envelope_valid: true
+  complete_envelope_held_size_admission_valid: true
+  essential_envelope_counts_derived_from_held_artifacts: true
   held_root_terminalization_guaranteed: true
   public_runtime_topology_retained: false
+  selected_target_public_topology_validation: true
+  retained_sealed_roots_validate_independently: true
+  bound_goal_and_text_receipts_topology_scanned: true
   authoritative_condition_accounting: real-time-typed-event-observer
   anti_shadow_lint_valid: true
   live_effect_conformance_valid: true
