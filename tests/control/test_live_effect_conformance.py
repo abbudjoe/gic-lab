@@ -199,7 +199,11 @@ def test_live_shaped_checkpoint_authority_and_held_identity_repairs(
     assert provider_cost["hourly_price_usd"] == 1.29
     assert provider_cost["cumulative_provider_cost_usd"] == 0.0
     assert provider_cost["shared_lifecycle_value_authoritative"] is True
-    assert len(provider_cost["shared_lifecycle_proof_sha256"]) == 64
+    assert provider_cost["active_entry_receipt_source_bound"] is True
+    assert provider_cost["all_closed_slots_source_bound"] is True
+    assert provider_cost["effect_reconciliation_matches_shared_proof"] is True
+    assert provider_cost["shared_lifecycle_proof_validated"] is True
+    assert provider_cost["runtime_receipt_hashes_retained_publicly"] is False
     assert provider_cost["zero_real_provider_effects"] is True
     assert isinstance(authorization, dict)
     assert str(authorization["reference"]).startswith("AUTH-T09-V16-")

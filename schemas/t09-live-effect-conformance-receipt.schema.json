@@ -446,10 +446,12 @@
       "required": [
         "owned_instance_identity", "launch_ordinal", "hourly_price_usd",
         "provider_profile_sha256", "provider_price_source_sha256",
-        "active_entry_receipt_sha256", "closed_slot_source_binding_sha256s",
+        "active_entry_receipt_source_bound", "all_closed_slots_source_bound",
+        "closed_slot_count",
         "interval_count", "prior_preflight_cost_usd", "current_empirical_cost_usd",
-        "cumulative_provider_cost_usd", "effect_reconciliation_receipt_sha256",
-        "shared_lifecycle_proof_sha256", "shared_lifecycle_value_authoritative",
+        "cumulative_provider_cost_usd", "effect_reconciliation_matches_shared_proof",
+        "shared_lifecycle_proof_validated", "runtime_receipt_hashes_retained_publicly",
+        "shared_lifecycle_value_authoritative",
         "zero_real_provider_effects"
       ],
       "properties": {
@@ -458,14 +460,16 @@
         "hourly_price_usd": {"const": 1.29},
         "provider_profile_sha256": {"$ref": "#/$defs/sha256"},
         "provider_price_source_sha256": {"$ref": "#/$defs/sha256"},
-        "active_entry_receipt_sha256": {"$ref": "#/$defs/sha256"},
-        "closed_slot_source_binding_sha256s": {"const": []},
+        "active_entry_receipt_source_bound": {"const": true},
+        "all_closed_slots_source_bound": {"const": true},
+        "closed_slot_count": {"const": 0},
         "interval_count": {"const": 1},
         "prior_preflight_cost_usd": {"const": 0.0},
         "current_empirical_cost_usd": {"const": 0.0},
         "cumulative_provider_cost_usd": {"const": 0.0},
-        "effect_reconciliation_receipt_sha256": {"$ref": "#/$defs/sha256"},
-        "shared_lifecycle_proof_sha256": {"$ref": "#/$defs/sha256"},
+        "effect_reconciliation_matches_shared_proof": {"const": true},
+        "shared_lifecycle_proof_validated": {"const": true},
+        "runtime_receipt_hashes_retained_publicly": {"const": false},
         "shared_lifecycle_value_authoritative": {"const": true},
         "zero_real_provider_effects": {"const": true}
       }

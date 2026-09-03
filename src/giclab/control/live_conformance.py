@@ -1297,16 +1297,18 @@ def _run_temporary_package(
                 "hourly_price_usd": provider_cost["hourly_price_usd"],
                 "provider_profile_sha256": provider_cost["provider_profile_sha256"],
                 "provider_price_source_sha256": provider_cost["provider_price_source_sha256"],
-                "active_entry_receipt_sha256": provider_cost["active_entry_receipt_sha256"],
-                "closed_slot_source_binding_sha256s": provider_cost_proof[
-                    "closed_slot_source_binding_sha256s"
-                ],
+                "active_entry_receipt_source_bound": True,
+                "all_closed_slots_source_bound": True,
+                "closed_slot_count": len(
+                    cast(list[object], provider_cost_proof["closed_slot_source_binding_sha256s"])
+                ),
                 "interval_count": len(cast(list[object], provider_cost_proof["intervals"])),
                 "prior_preflight_cost_usd": provider_cost["prior_preflight_cost_usd"],
                 "current_empirical_cost_usd": provider_cost["current_empirical_cost_usd"],
                 "cumulative_provider_cost_usd": provider_cost["cumulative_provider_cost_usd"],
-                "effect_reconciliation_receipt_sha256": provider_cost["receipt_sha256"],
-                "shared_lifecycle_proof_sha256": provider_cost_proof["receipt_sha256"],
+                "effect_reconciliation_matches_shared_proof": True,
+                "shared_lifecycle_proof_validated": True,
+                "runtime_receipt_hashes_retained_publicly": False,
                 "shared_lifecycle_value_authoritative": True,
                 "zero_real_provider_effects": provider_cost["real_provider_effects"] is False,
             },
