@@ -13,7 +13,7 @@ INCIDENT_PATH = ROOT / "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json"
 def test_v16_incident_validates_and_named_regressions_pass() -> None:
     receipt = validate_incidents(ROOT, execute_regressions=True)
     assert receipt["complete"] is True
-    assert receipt["incident_count"] == 4
+    assert receipt["incident_count"] == 5
     incidents = {
         incident["incident_id"]: incident
         for incident in receipt["incidents"]  # type: ignore[union-attr]
@@ -21,6 +21,7 @@ def test_v16_incident_validates_and_named_regressions_pass() -> None:
     assert set(incidents) == {
         "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
         "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
+        "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY",
         "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
         "INC-T09-V16-LIFECYCLE-REGISTRY",
     }
@@ -30,6 +31,10 @@ def test_v16_incident_validates_and_named_regressions_pass() -> None:
     assert len(incidents["INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"]["regression_nodes"]) == 8
     assert (
         len(incidents["INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW"]["regression_nodes"]) >= 12
+    )
+    assert (
+        len(incidents["INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY"]["regression_nodes"])
+        >= 13
     )
 
 

@@ -112,7 +112,7 @@ def test_production_wrapper_happy_path_uses_retained_primitives_and_all_conditio
         "evaluate_retained_session",
         "record_first_pair_checkpoint",
         "immutable_cleanup_export_handoff",
-        "privacy_violations",
+        "privacy_violations:held-descriptor",
     }.issubset(primitives)
 
 
