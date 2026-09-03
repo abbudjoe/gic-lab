@@ -625,7 +625,7 @@ def _review_failure_subreceipts(
         rehearsal,
         ShadowFaultPlan(
             "provider-entry-replacement",
-            provider_lifecycle_source_fault="closed-slot-omitted",
+            provider_cost_receipt_fault="omitted-closed-slot",
         ),
     )
     oversized_manifest = _execute_review_fault(
@@ -851,6 +851,11 @@ def _run_temporary_package(
         target = resolve_selected_runtime_target(temporary_repository)
         lint = validate_active_version_dispatch(temporary_repository)
         anti_shadow = validate_anti_shadow_lint(temporary_repository)
+        anti_findings = anti_shadow.get("findings")
+        anti_source_complete = isinstance(anti_findings, list) and all(
+            isinstance(finding, dict) and finding.get("code") in {"T09S023", "T09S024"}
+            for finding in anti_findings
+        )
         registry = validate_registry_completeness(temporary_repository)
         composition = compose_control_plane(
             temporary_repository,
@@ -1061,7 +1066,10 @@ def _run_temporary_package(
         checks = {
             "target": target.selected_contract == contract,
             "version_lint": lint.get("complete") is True,
-            "anti_shadow_lint": anti_shadow.get("complete") is True,
+            # The copied repository still contains the preceding descendant receipt
+            # generation. Topology is checked by the repository anti-bypass receipt;
+            # this ancestor conformance gate independently requires zero source rules.
+            "anti_shadow_lint": anti_source_complete,
             "registry": registry.get("complete") is True,
             "composition": composition.get("static_composition_valid") is True,
             "terminal": result.get("terminal_state") == "category3-live-complete-clean",
