@@ -2,25 +2,25 @@
   "actual_v17_artifacts_created": false,
   "actual_v17_artifacts_present": false,
   "complete": true,
-  "control_implementation_commit": "7a809850722c175d01dc1567b73680995908072e",
-  "control_implementation_tree": "909c9afe42e6ca7845aed3c5b0453b3846d78004",
+  "control_implementation_commit": "db32bba7b87cae7e08083d6f6b332b126f8ff57a",
+  "control_implementation_tree": "3dc148643ddf610d2b3698898296de98381f827a",
   "effect_protocol_version": "1.0.0",
   "live_authority_created": false,
   "network_provider_cloud_browser_science_effects": 0,
   "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
-  "schema_version": "2.0.0",
+  "schema_version": "3.0.0",
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "6342b6dd78fee0b5b21c85c91ae2a69ec55a0b6fb45f6cc6a6494c764e675a1a",
+  "semantic_sha256": "43de22eb09b4890e5f3fdab6e6e8b64dec9cb3fa5df5c44db66161e2ff13770b",
   "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
   "shared_source_byte_map_unchanged": true,
   "temporary_package": {
     "authorization": {
       "private_overlay_contents_retained": false,
-      "reference": "AUTH-T09-V16-CONFORMANCE-abf7c511cea67d949c585f8f",
+      "reference": "AUTH-T09-V16-CONFORMANCE-910c1d6a8a7b78c1b26ee1cc",
       "replay_rejected": true,
       "same_reference_and_source_across_effect_metadata_launch_cleanup": true,
       "single_use_state": {
-        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-abf7c511cea67d949c585f8f",
+        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-910c1d6a8a7b78c1b26ee1cc",
         "contains_private_overlay_contents": false,
         "exact_private_source_context_root_and_receipt_validated": true,
         "private_runtime_identity_values_retained": false,
@@ -37,17 +37,17 @@
     "authorization_context_binding": {
       "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
       "control_binding_semantic_sha256": "f835cbba42179ab7f8dd6fcd6e0567f6ce60427f3298e531435ed7825aa78660",
-      "control_commit": "54c9793bee962f8e8753caeb33016e3962486b15",
-      "control_tree": "026ffc634c48d1c72a66f323e41362691b7323a9",
+      "control_commit": "0a90da1666865b8240c8f1c89a8a52f2b0a13ad0",
+      "control_tree": "0bc968148897cd025fe2843efa6b816431d70130",
       "current_turn_scope": "T09-PR14-EXACT-HEAD-CONFORMANCE",
-      "effect_implementation_sha256": "3d3e566bf576b90bee1ad51c48069e759bddf3372c950e615f75dcdc3c6644d8",
+      "effect_implementation_sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4",
       "exact_private_source_sha256_validated": true,
-      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-abf7c511cea67d949c585f8f",
+      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-910c1d6a8a7b78c1b26ee1cc",
       "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
       "private_runtime_identity_values_retained": false,
       "provider_contract_version": "V16",
-      "public_binding_semantic_sha256": "6b0b7ea6a8e68992485ba073e1cfe5e010b0c1cb67aabf4a9353ee546fa57374",
+      "public_binding_semantic_sha256": "e2ad44f2f9185f0b0fea112b67002dfdf9989632a763158cf87e56f244c8d880",
       "shared_held_transaction_root_identity_validated": true
     },
     "browser_accounting": {
@@ -130,11 +130,11 @@
     },
     "controller_terminal_state": "category3-live-complete-clean",
     "effect_implementation": {
-      "bytes": 596,
+      "bytes": 906,
       "factory_entry_point": "build_package_effects",
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
       "protocol_version": "1.0.0",
-      "sha256": "3d3e566bf576b90bee1ad51c48069e759bddf3372c950e615f75dcdc3c6644d8"
+      "sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4"
     },
     "first_pair_checkpoint": {
       "decision": "continue-to-task-b",
@@ -142,9 +142,10 @@
       "finalizer_closure_valid": true,
       "pair_match_valid": true,
       "private_runtime_identity_values_retained": false,
-      "public_checkpoint_semantic_sha256": "d7a2cd083990db78eb80bcd9d1742387e1711f6869b7abca18449666879edf63",
+      "public_checkpoint_semantic_sha256": "6325cc25d6aed4dca6dbeaeb4a382f8d15e608c3eaae32ec649910f33c0413d5",
       "reasons": [],
       "retained_first_pair_decision_invoked": true,
+      "safety_fields_have_no_defaults": true,
       "task_a_evaluator_succeeded": [
         true,
         true
@@ -160,17 +161,17 @@
       "task_b_admitted_only_after_retained_decision": true
     },
     "held_effect_source": {
-      "bytes": 596,
+      "bytes": 906,
       "compiled_from_held_bytes": true,
       "factory_entry_point": "build_package_effects",
       "git_blob_bytes_matched": true,
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
       "path_revalidated_after_execution_and_factory": true,
       "protocol_version": "1.0.0",
-      "public_attestation_semantic_sha256": "ea47b4c4ab7fd2b239c899437ae033aac68cecfc514e9038c9b57bcf433785ba",
+      "public_attestation_semantic_sha256": "a13f55b8569ca44564205917267509cbcf009bceec1b98a3a39f0f91111a064b",
       "regular_current_user_single_link_safe_mode": true,
       "runtime_identity_values_retained": false,
-      "sha256": "3d3e566bf576b90bee1ad51c48069e759bddf3372c950e615f75dcdc3c6644d8"
+      "sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4"
     },
     "held_evidence_chain": {
       "evaluator_consumed_held_finalized_identities": true,
@@ -290,13 +291,29 @@
     "projected_real_cost_usd": "0.00",
     "provider_contract_version": "V16",
     "provider_cost_accounting": {
+      "active_entry_receipt_source_bound": true,
+      "all_closed_slots_source_bound": true,
+      "closed_slot_count": 0,
       "cumulative_provider_cost_usd": 0.0,
       "current_empirical_cost_usd": 0.0,
+      "effect_reconciliation_matches_shared_proof": true,
+      "hourly_price_usd": 1.29,
+      "interval_count": 1,
       "launch_ordinal": 1,
       "owned_instance_identity": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176",
       "prior_preflight_cost_usd": 0.0,
-      "receipt_sha256": "5314672366fbc63dab6988ff991e02897a64383c62cd21f5144bccb83fd93e59",
+      "provider_price_source_sha256": "78a42953bb3df13449a2e4afabc82871c0fe70bce13e7862c44d9cbffa9e1240",
+      "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "runtime_receipt_hashes_retained_publicly": false,
+      "shared_lifecycle_proof_validated": true,
+      "shared_lifecycle_value_authoritative": true,
       "zero_real_provider_effects": true
+    },
+    "public_runtime_topology": {
+      "absolute_runtime_paths_retained": false,
+      "device_inode_uid_values_retained": false,
+      "repository_receipt_scan_bound": true,
+      "stable_held_root_projection_only": true
     },
     "raw_finalizer_evaluator_chain": {
       "attempt_count": 4,
@@ -309,8 +326,11 @@
     "review_failure_subreceipts": {
       "ambiguous-send-essential-failure": {
         "cleanup_complete": true,
+        "complete_envelope_file_count": 7,
+        "complete_envelope_total_bytes": 5795,
         "exported_and_acknowledged": true,
         "failure_class": "ambiguous-send",
+        "manifest_receipt_export_scanned": true,
         "sealed": true,
         "unscored": true,
         "zero_retry": true
@@ -322,17 +342,47 @@
       },
       "nonzero-process-exit-essential-failure": {
         "cleanup_complete": true,
+        "complete_envelope_file_count": 7,
+        "complete_envelope_total_bytes": 7460,
         "exported_and_acknowledged": true,
         "failure_class": "process-exit-nonzero",
+        "manifest_receipt_export_scanned": true,
         "sealed": true,
         "unscored": true,
         "zero_retry": true
+      },
+      "omitted-provider-slot-rejection": {
+        "closed_replacement_slot_required": true,
+        "task_b_condition_entries": 0
+      },
+      "oversized-essential-manifest-rejection": {
+        "complete_envelope_cap_enforced": true,
+        "essential_failure_accepted": false
+      },
+      "public-runtime-topology-injection-rejection": {
+        "forbidden_inode_rejected": true,
+        "forbidden_path_rejected": true
       },
       "raw-replacement-rejection": {
         "evaluator_calls": 0,
         "same_size_replacement_rejected": true,
         "scientific_interpretation_allowed": false,
         "stopping_phase": "finalization"
+      },
+      "root-replacement-terminalization": {
+        "authority_terminal_state": "terminal-failed-nonreplayable",
+        "held_descriptors_released": true,
+        "held_root_cleanup_used": true,
+        "privacy_path_identity_unresolved": true,
+        "provider_resources_zero": true,
+        "replacement_directory_unchanged": true,
+        "scientific_interpretation_allowed": false,
+        "terminal_result_returned": true
+      },
+      "sensitive-essential-receipt-rejection": {
+        "exact_schema_enforced": true,
+        "privacy_clean": false,
+        "terminal_privacy_scan_included_envelope": true
       },
       "split-authorization-rejection": {
         "authenticated_metadata_requests": 0,
@@ -348,6 +398,11 @@
         "root_symlink_rejected": true,
         "secret_reads": 0
       },
+      "understated-provider-cost-rejection": {
+        "self_hashed_effect_receipt_rejected": true,
+        "shared_lifecycle_value_authoritative": true,
+        "task_b_condition_entries": 0
+      },
       "unscored-task-a-checkpoint-stop": {
         "cleanup_complete": true,
         "decision": "stop-before-task-b",
@@ -358,8 +413,8 @@
     },
     "scientific_interpretation_allowed": false,
     "temporary_conformance_grant_only": true,
-    "temporary_repository_commit": "54c9793bee962f8e8753caeb33016e3962486b15",
-    "temporary_repository_tree": "026ffc634c48d1c72a66f323e41362691b7323a9",
+    "temporary_repository_commit": "0a90da1666865b8240c8f1c89a8a52f2b0a13ad0",
+    "temporary_repository_tree": "0bc968148897cd025fe2843efa6b816431d70130",
     "typed_failure_accounting": {
       "ambiguous-task-model-send": {
         "model_call_attempts": 1,

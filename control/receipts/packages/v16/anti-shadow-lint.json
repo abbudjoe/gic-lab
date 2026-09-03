@@ -8,31 +8,31 @@
     },
     {
       "classification": "legitimate deterministic effect fixture",
-      "line": 438,
+      "line": 444,
       "path": "src/giclab/control/shadow_effects.py",
       "token": "production-shadow"
     },
     {
       "classification": "historical test fixture",
-      "line": 273,
+      "line": 304,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "_FAKE_OPENAI_VALUE"
     },
     {
       "classification": "historical test fixture",
-      "line": 274,
+      "line": 305,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "CALL-SHADOW"
     },
     {
       "classification": "historical test fixture",
-      "line": 275,
+      "line": 306,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "_TASK_A_ANSWER"
     },
     {
       "classification": "historical test fixture",
-      "line": 276,
+      "line": 307,
       "path": "tests/control/test_live_effect_conformance.py",
       "token": "max_model_call_attempts=1"
     }
@@ -163,19 +163,45 @@
     "T09S013",
     "T09S014",
     "T09S015",
-    "T09S016"
+    "T09S016",
+    "T09S017",
+    "T09S018",
+    "T09S019",
+    "T09S020",
+    "T09S021",
+    "T09S022",
+    "T09S023",
+    "T09S024"
   ],
   "lint_definition_path": "src/giclab/control/anti_shadow_lint.py",
-  "repository_commit": "7a809850722c175d01dc1567b73680995908072e",
-  "repository_tree": "909c9afe42e6ca7845aed3c5b0453b3846d78004",
-  "schema_version": "1.0.0",
-  "semantic_sha256": "7d69061004f6bb1426455bb1c2319e0c23a7cb6c90acc6355ad1c8773466bf5c",
+  "public_receipt_topology_scan": {
+    "complete": true,
+    "files_scanned": 26,
+    "findings": 0,
+    "forbidden_filesystem_fields": [
+      "device",
+      "inode",
+      "uid"
+    ],
+    "forbidden_path_markers": [
+      "/private/",
+      "/var/folders/",
+      "/tmp/",
+      "/Users/"
+    ],
+    "root": "control/receipts/packages/v16"
+  },
+  "repository_commit": "db32bba7b87cae7e08083d6f6b332b126f8ff57a",
+  "repository_tree": "3dc148643ddf610d2b3698898296de98381f827a",
+  "schema_version": "2.0.0",
+  "semantic_sha256": "cf2f6c3b76d81a9f332286e641871dbbe750727449bbd2dbfb47ae9667b56bd2",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",
     "src/giclab/control/consumers.py",
     "src/giclab/control/contracts.py",
     "src/giclab/control/effects.py",
-    "src/giclab/control/production.py"
+    "src/giclab/control/production.py",
+    "src/giclab/harness/t09_sira_pilot.py"
   ]
 }

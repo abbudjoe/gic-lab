@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "682ac562f3ee08da5ada5048217c4e6b7f438d56c8a1d819229aaa0568993643"
+      "subject": "3dd8f25b1dd9ff8cb498ea39bc03ae05104815a511764889ad7739eb2b51ee9b"
     },
     {
       "adapter": "provider",
@@ -67,7 +67,7 @@
       "adapter": "evidence",
       "index": 10,
       "operation": "evidence.record",
-      "outcome": "retained:b56de612d0d0",
+      "outcome": "retained:3510b447e728",
       "subject": "qualification"
     },
     {
@@ -81,7 +81,7 @@
       "adapter": "evidence",
       "index": 12,
       "operation": "evidence.record",
-      "outcome": "retained:fd8a6844605b",
+      "outcome": "retained:3a4c88c2eb89",
       "subject": "scientific-freeze"
     },
     {
@@ -116,7 +116,7 @@
       "adapter": "evidence",
       "index": 17,
       "operation": "evidence.record",
-      "outcome": "retained:d1d85f6b3fae",
+      "outcome": "retained:54d028f8e381",
       "subject": "raw"
     },
     {
@@ -130,7 +130,7 @@
       "adapter": "evidence",
       "index": 19,
       "operation": "evidence.record",
-      "outcome": "retained:6277698e474f",
+      "outcome": "retained:550deaef19df",
       "subject": "finalized"
     },
     {
@@ -144,7 +144,7 @@
       "adapter": "evidence",
       "index": 21,
       "operation": "evidence.record",
-      "outcome": "retained:668af5f4d619",
+      "outcome": "retained:4e22a3ad58e1",
       "subject": "evaluator"
     },
     {
@@ -179,7 +179,7 @@
       "adapter": "evidence",
       "index": 26,
       "operation": "evidence.record",
-      "outcome": "retained:6737cd4dffbf",
+      "outcome": "retained:f5a3a20ba454",
       "subject": "raw"
     },
     {
@@ -193,7 +193,7 @@
       "adapter": "evidence",
       "index": 28,
       "operation": "evidence.record",
-      "outcome": "retained:90ac67324955",
+      "outcome": "retained:68549a2d86ba",
       "subject": "finalized"
     },
     {
@@ -207,7 +207,7 @@
       "adapter": "evidence",
       "index": 30,
       "operation": "evidence.record",
-      "outcome": "retained:7296d5f68cfd",
+      "outcome": "retained:117e8e1d8367",
       "subject": "evaluator"
     },
     {
@@ -249,7 +249,7 @@
       "adapter": "evidence",
       "index": 36,
       "operation": "evidence.record",
-      "outcome": "retained:59a256cfa1a1",
+      "outcome": "retained:0c6ea134b059",
       "subject": "raw"
     },
     {
@@ -263,7 +263,7 @@
       "adapter": "evidence",
       "index": 38,
       "operation": "evidence.record",
-      "outcome": "retained:c77f6df7108e",
+      "outcome": "retained:a71f26441bfd",
       "subject": "finalized"
     },
     {
@@ -277,7 +277,7 @@
       "adapter": "evidence",
       "index": 40,
       "operation": "evidence.record",
-      "outcome": "retained:875e2554c34c",
+      "outcome": "retained:56ec523eca5c",
       "subject": "evaluator"
     },
     {
@@ -312,7 +312,7 @@
       "adapter": "evidence",
       "index": 45,
       "operation": "evidence.record",
-      "outcome": "retained:5f3116eb7202",
+      "outcome": "retained:99cd20e31c9d",
       "subject": "raw"
     },
     {
@@ -326,7 +326,7 @@
       "adapter": "evidence",
       "index": 47,
       "operation": "evidence.record",
-      "outcome": "retained:f2c9451fe999",
+      "outcome": "retained:a469f2f24378",
       "subject": "finalized"
     },
     {
@@ -340,7 +340,7 @@
       "adapter": "evidence",
       "index": 49,
       "operation": "evidence.record",
-      "outcome": "retained:3663a994a09e",
+      "outcome": "retained:b81cb16ee8e8",
       "subject": "evaluator"
     },
     {
@@ -406,7 +406,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "1c817611ce8eb1a686d5c5589483020a422cac57f5ddbbcf45b4e628bb18f1a6",
+  "composition_sha256": "445b73037a6f408f62b692f964ca07a0d59349d3b0c6bb7efcc02e682e2f3d87",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
     "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -421,7 +421,7 @@
   ],
   "earliest_stopping_phase": null,
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "8be42c7b6f38baf8908ca0271890d0730b1b00bb27e040ef8bf7ce0f93b6109e",
+  "effect_authorization_context_sha256": "23b2c428afce00eb012f88e11dc5af84d6cd204d58ea515766ad6b866672ea22",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -439,7 +439,7 @@
     ],
     "pair_checkpoint_decision": "continue-to-task-b",
     "pair_checkpoint_reasons": [],
-    "pair_checkpoint_sha256": "ad4bee9dc8d04122f3afe45b00ac54d1304d1bfa21fed90dbb32c2d1a7c38db1",
+    "pair_checkpoint_sha256": "4bd7fddfdace84241c79fe6354e5535a5d778286eb3a0ca0f2b0d58d26f88c75",
     "raw": [
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -451,73 +451,73 @@
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "d1d85f6b3fae949b6d7ace49f68ad06766be3ef81a61a354e5fc54735659e3be",
+      "sha256": "54d028f8e381bb2811361b0ff8bb4f4f8da33e7c9ca0e07c56452bb5924cbb11",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "6277698e474f3dc549bf4796be63ba348ee6ba824c0c73b0c78a4ebda4f8cfe0",
+      "sha256": "550deaef19df269f734d0afff67f82e213a1e4aec2f4cf4bcccea16e5da3a904",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "668af5f4d619e0b5210c12c8f6026a0995a1fc05086c729b643d1f09021fd731",
+      "sha256": "4e22a3ad58e12e75659448471ad8d74aea7c89b7b5afcb6acba6231f13199e8f",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "6737cd4dffbfbb0cfa605a9405891f0c16fee65a16a9d6cb7875522df3663808",
+      "sha256": "f5a3a20ba454ab3096d2e3b77326044555147e9ff3e75d210577237ad9404455",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "90ac67324955317fd2bfefd3a5b36126d917ab1946cf1aa7a87af2e3ed539c1b",
+      "sha256": "68549a2d86ba2cd4f4eab3e1a92f3762f32b6a4f7b142cfbddc74233eb6c2305",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "7296d5f68cfd6f4cccd41971fdf121ebd65baeb5ef57013be83f32acb5a49909",
+      "sha256": "117e8e1d8367b7f1faddb452484f1aa87935b36502b40bf5bf87e6470625aeab",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "59a256cfa1a1e22b20ae3c6f61e3b4d2b8e1a81187d866e74d1fcdb61104b555",
+      "sha256": "0c6ea134b0591a576274f2aa65698ab7b1fdb09650c12c6bd8498fe9e9c2f5da",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "c77f6df7108e4c363375fae84babe68d77d536f3ad5236fbce9be9ef44641afb",
+      "sha256": "a71f26441bfd7498796aef77c5d03bc69b476ae1789e3483b2ecc611cec7a118",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "875e2554c34c7238b25a890cb2af614e8f423c7ed76c494ef6e26ccc0133e59b",
+      "sha256": "56ec523eca5c29d4c1ad3e259c789b1fd2974cc82542c32cf0ce285aaadb95be",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "5f3116eb7202ccd91030b5b4348f80f6e5f96e28bad7b4d4a467838136d490dd",
+      "sha256": "99cd20e31c9d668f358892779586470adce9ace6cf056c2da66429722fe807d4",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "f2c9451fe999bbb7af9cdaccb78ecab38bf76b73216bf8e87b3d9180b4274b34",
+      "sha256": "a469f2f24378331623da98b03806a8dc12938e5184f7c1d646be5b4f02074832",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "3663a994a09e53c9fa50e0de5d84f6b3b5d148c77988b568c7edf20cc41c5efb",
+      "sha256": "b81cb16ee8e856a3042bf5d2095b5e078b1e5b1dc75ce23556854b776080d97a",
       "shadow_only": true
     }
   ],
@@ -1707,18 +1707,18 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "8be42c7b6f38baf8908ca0271890d0730b1b00bb27e040ef8bf7ce0f93b6109e",
-    "cleanup_handoff_sha256": "ac1c6e8311f451d43bc41d58221e5dca628c333fe5b91b729f968ec2c36a2896",
-    "cleanup_receipt_sha256": "84e334a1bb0fa7ccd892cde57103171218f66125d7f51c35425f23bf9453312a",
+    "authorization_context_semantic_sha256": "23b2c428afce00eb012f88e11dc5af84d6cd204d58ea515766ad6b866672ea22",
+    "cleanup_handoff_sha256": "97f54da7ce5f8445cedd74feee65b34170cf530d8977bf00888027f1c5fbdfa3",
+    "cleanup_receipt_sha256": "15d9dc961a9f853156ca97ebabf8a7de6224a4cc8fd03dfb77263e1cf9a8bb99",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 88875,
+      "bytes": 99523,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
       "protocol_version": "1.0.0",
-      "sha256": "63e4ade95c33515aa4e8abad8228c9cd8129f239ab5d4c43017792d76e9768a4"
+      "sha256": "7093d5eba5336377954bc2aaaa2be6c7b6caefa9cb55e33d9a34132edfdf65f7"
     },
     "effect_protocol_version": "1.0.0",
     "essential_failures": {},
@@ -1728,7 +1728,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "668af5f4d619e0b5210c12c8f6026a0995a1fc05086c729b643d1f09021fd731",
+        "receipt_sha256": "4e22a3ad58e12e75659448471ad8d74aea7c89b7b5afcb6acba6231f13199e8f",
         "score": 0.9,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1738,7 +1738,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "7296d5f68cfd6f4cccd41971fdf121ebd65baeb5ef57013be83f32acb5a49909",
+        "receipt_sha256": "117e8e1d8367b7f1faddb452484f1aa87935b36502b40bf5bf87e6470625aeab",
         "score": 0.9,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1748,7 +1748,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "3663a994a09e53c9fa50e0de5d84f6b3b5d148c77988b568c7edf20cc41c5efb",
+        "receipt_sha256": "b81cb16ee8e856a3042bf5d2095b5e078b1e5b1dc75ce23556854b776080d97a",
         "score": 1.0,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1758,7 +1758,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "875e2554c34c7238b25a890cb2af614e8f423c7ed76c494ef6e26ccc0133e59b",
+        "receipt_sha256": "56ec523eca5c29d4c1ad3e259c789b1fd2974cc82542c32cf0ce285aaadb95be",
         "score": 1.0,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1806,13 +1806,14 @@
       "cumulative_t09_cost_cap_usd": 90.0,
       "decided_at_epoch": 1800001011.0,
       "decision": "continue-to-task-b",
-      "evidence_binding_sha256": "654eb9a1d567f23090436ac5a9982bbd9701de859c9d69c357869386970af005",
+      "evidence_binding_sha256": "cf2a30b50947442865588b2eeb967073a1b32d9accc1e8c9181f6c810a9d1b8d",
       "first_pair_started_at_epoch": 1800001011.0,
       "plan_id": "PLAN-EXP0001-PILOT-V16",
       "prior_t09_cost_usd": 36.36170860803283,
       "projected_aggregate_cost_usd": 2.48397,
       "projected_cumulative_t09_cost_usd": 38.84567860803283,
-      "provider_cost_receipt_sha256": "386431015a6a0c2482ec7c7727ce3dcfa8e54510dd8b707ae61064c7583c69ad",
+      "provider_cost_receipt_sha256": "34178b91c9333330884a4ac54ea3dad97584d69656ea79e29db6040937c1d3ca",
+      "provider_lifecycle_cost_proof_sha256": "34178b91c9333330884a4ac54ea3dad97584d69656ea79e29db6040937c1d3ca",
       "reasons": [],
       "remaining_campaign_seconds": 14400.0,
       "required_campaign_seconds_for_next_attempt": 5160,
@@ -1832,32 +1833,33 @@
     "held_evidence": {
       "essential_failure": {},
       "finalized": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "356bfa1faa2d6a06d39266239b208fc35db25ead2f0cc02a4206fcaf82843ea7",
-        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "c67c790b2d81911af3b4749212326a90dba02379577c9bec740c208351e99135",
-        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "d785cfeecc7898cb2fc5adeb265b73034e8290dfebe270e85eca8e333de712ff",
-        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "74c696151abe8353d26fde9d6a7bf1545ea6d0d176338150dc60f0dac1c8d537"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "29dbaed10b21505e06f06d784dedb75a7d98c612bb5af94896c0451538eaa240",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "32769559167fe96975cb8b3ba5265af8fda31b3da29f6a1a1acce86a8633738d",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "d6ed965d9238f365446d6d172e48460789a5dfdbc0fa557f607ef7d927cfe6ce",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "1fefde9deb8c8c7c24e1a59dd4ac3d98f74ac5b2a9a3370130b585d55f077984"
       },
       "raw": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "114e0c2c14d5b8e1ba775719514c70391a429a08d19ce31c0ee06c89b2896e79",
-        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "5142bdaa7b5d96a284846a035112c7dabb247d56683e5a0e96f8d2b0e3bfe631",
-        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "00e833ebbf6c893dc74437c73889ce257fc62f6e747966c0374ec8afe821e0b3",
-        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "ae93c2c011ed4c80456a1b18eafe863db6102a10258e5ec1e46e85488e8d2432"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "49a8493bfe3c7de07a9676e65dde9af0a864f03c50465539eeb59a9223edd9f6",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "73e79432bcdb7869c8d6baa765fa2c6441c696c2a85921a9091fdcdd4b111560",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "811a7aa826607af7df51c6edae457149a0dbfc4513b85cacba3260e17dc68d0a",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "687cd89111b0da5b43887e3bfa8348d3a4f4f8453eec75ab3129c60ec6f6da27"
       },
       "revalidated_across_consumers": true
     },
     "held_transaction_root": {
-      "device": 16777230,
-      "inode": 152234771,
-      "mode": 448,
-      "mount_identity": "device:16777230",
-      "path": "/private/var/folders/5s/5dk3z2k93lgfqmsn0l28_lbm0000gn/T/giclab-t09-effects-e6e77f79bf135d8951c2d1c463a38153",
-      "semantic_sha256": "8486021215bd315ee65d0dc63e81cad3f23f737584cf6578453f0a6c364b66a4",
-      "uid": 501
+      "current_user_owned": true,
+      "descriptor_held_through_cleanup": true,
+      "device_inode_mode_mount_revalidated": true,
+      "group_world_write_absent": true,
+      "identity_derived_by_shared_code": true,
+      "no_symlink_path_components_validated": true,
+      "public_attestation_semantic_sha256": "acaa9f688fc4409739fed1c33841d77cda264c9c73dcf347bf3f9560452e5ad6",
+      "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "97a98e5444ed0b38204fe898203dfd4c937afaf4cbda21ed44576e7de01d13f0",
-      "postfreeze_validation": "d6a17d23c5f9989ea96efee56d38a1bf70bb4f1a39de4aef9753faf509d3924e",
-      "qualification": "b56de612d0d0758c90959bf6f62984825d007316b0e772f14b084237b109b322"
+      "frozen_manifest": "184d30717173fcb8f8a9373703a8604bfa0f76e2bd8cf47f85b36d87c164bba0",
+      "postfreeze_validation": "fac3d98cf849002c358fbbe5722c0ee5505ba49b569f4c509aa5e6916f5e50d7",
+      "qualification": "3510b447e72816bbfbc81b61585afeccb09b2ced172ba7644c99545cc7f91968"
     },
     "implementation_flavor": "production-wrapper",
     "package_budget": {
@@ -1973,7 +1975,7 @@
       "mark_empirical_entry",
       "mark_raw_attempt_complete",
       "outcome_contract",
-      "privacy_violations",
+      "privacy_violations:held-descriptor",
       "publish_dynamic_frozen_run_manifest",
       "record_first_pair_checkpoint",
       "reserve_condition_start",
@@ -1988,6 +1990,7 @@
       "validate_model_metadata_receipt:durable-offline",
       "validate_model_metadata_receipt_offline",
       "validate_postfreeze_receipt",
+      "validate_provider_lifecycle_cost_proof",
       "validate_raw_attempt_seal",
       "validate_raw_attempt_seal:post-finalizer",
       "validate_raw_attempt_seal:pre-finalizer",
@@ -1995,22 +1998,57 @@
     ],
     "provider_cost_receipt": {
       "active_ended_wall_time": null,
+      "active_entry_receipt_sha256": "eccd2f22a43aa6dd8a75e2dbde867979235a01ea7aad8a8316cb74d3add820e2",
       "active_started_wall_time": 1800001006.0,
+      "closed_slot_receipt_sha256s": [],
       "cumulative_provider_cost_usd": 0.0,
       "current_empirical_cost_usd": 0.0,
-      "hourly_price_usd": 0.0,
+      "hourly_price_usd": 1.29,
       "launch_ordinal": 1,
+      "observed_monotonic": 1011.0,
       "observed_wall_time": 1800001011.0,
       "owned_instance_identity": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176",
+      "plan_id": "PLAN-EXP0001-PILOT-V16",
       "prior_preflight_cost_usd": 0.0,
+      "provider_contract_version": "V16",
+      "provider_price_source_sha256": "78a42953bb3df13449a2e4afabc82871c0fe70bce13e7862c44d9cbffa9e1240",
+      "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
       "real_provider_effects": false,
-      "receipt_sha256": "386431015a6a0c2482ec7c7727ce3dcfa8e54510dd8b707ae61064c7583c69ad"
+      "receipt_sha256": "e46c9461904b97d83e4b39e96359c5ab871bcdbb518fd093bedd582c3f8a0402"
+    },
+    "provider_lifecycle_cost_proof": {
+      "active_entry_receipt_sha256": "eccd2f22a43aa6dd8a75e2dbde867979235a01ea7aad8a8316cb74d3add820e2",
+      "closed_slot_source_binding_sha256s": [],
+      "cumulative_provider_cost_usd": "0",
+      "current_empirical_cost_usd": "0",
+      "intervals": [
+        {
+          "active_ended_wall_time": null,
+          "active_started_wall_time": 1800001006.0,
+          "billable_real_effect": false,
+          "billed_cost_usd": "0",
+          "closeout_receipt_sha256": null,
+          "entry_or_owner_receipt_sha256": "eccd2f22a43aa6dd8a75e2dbde867979235a01ea7aad8a8316cb74d3add820e2",
+          "hourly_price_usd": "1.29",
+          "launch_ordinal": 1,
+          "owned_instance_identity": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+        }
+      ],
+      "observed_monotonic": 1011.0,
+      "observed_wall_time": 1800001011.0,
+      "plan_id": "PLAN-EXP0001-PILOT-V16",
+      "prior_preflight_cost_usd": "0",
+      "provider_contract_version": "V16",
+      "provider_price_source_sha256": "78a42953bb3df13449a2e4afabc82871c0fe70bce13e7862c44d9cbffa9e1240",
+      "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "real_provider_effects": false,
+      "receipt_sha256": "34178b91c9333330884a4ac54ea3dad97584d69656ea79e29db6040937c1d3ca"
     },
     "raw_export_acknowledgements": {
-      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "af619065727f74f3974005261545071c785300bf8e9da0b3a62319468799a973",
-      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "d2110aa5851c7ffab9aeb2b45cc0dbaf94b30e8d8b6de4c09c9d2bbc85c39528",
-      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "537b05978bf180862258852b98b924731b34c3f9b26d1d86c4be637d073a4762",
-      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "bc285a9a80d9b696850aecb0bc077f6d4336f6ef10debcaa669acac7e525ecc7"
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "f24f1d22e32298bab63a575fd9dde869e36040c2bc05dca28f580cf1c8ea2474",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "4251005857332ecc6618d2a015d4dbeefc78e9261c838dac594843db5463d9db",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "2001ab37a67ae7c31a1f5de00f200a8f7b1a2ac6ddad26b8304ae59c67802e97",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "6c5f62494f5a0e6d796f91a2ffc06c494bb04288eaa50866bf0015d5bd0f946d"
     },
     "replacement_history": {
       "closed_launch_slots": [
@@ -2282,8 +2320,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "7a809850722c175d01dc1567b73680995908072e",
-  "repository_tree": "909c9afe42e6ca7845aed3c5b0453b3846d78004",
+  "repository_commit": "db32bba7b87cae7e08083d6f6b332b126f8ff57a",
+  "repository_tree": "3dc148643ddf610d2b3698898296de98381f827a",
   "scenario": "cleanup-interrupted-resumed",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -2297,7 +2335,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "a35b4725ec16829c12e915dc15b3b2c678db3d6dd4b52e8465e3e06fbb2e05b2",
+  "semantic_sha256": "e3b1079c6ea1df70221034113a640dea71c860b89387d7ac141c86a102049b4f",
   "shadow_only": true,
   "stop_reason": null,
   "terminal_state": "category3-shadow-complete-clean",
