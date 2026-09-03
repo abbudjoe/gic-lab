@@ -3908,7 +3908,9 @@ class ProductionCategory3World:
             self.authorization_context.execution_mode
             is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
         )
-        derived_cumulative = prior_cumulative + (interval_cost if billable else Decimal(0))
+        # The no-network lifecycle preserves simulated time/price arithmetic while
+        # its typed proof projects zero real spend.
+        derived_cumulative = prior_cumulative + interval_cost
         tolerance = Decimal("0.000000001")
         if (
             abs(retained_cumulative - cumulative) > tolerance

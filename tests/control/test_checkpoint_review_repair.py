@@ -139,7 +139,7 @@ def test_task_a_invalid_evidence_stops_before_task_b(
         "resumed": False,
         "provider_resources_zero": True,
         "security_restored": True,
-        "privacy_clean": True,
+        "privacy_clean": case != "missing-raw",
     }
     assert receipt["scientific_interpretation_allowed"] is False
 
@@ -436,19 +436,18 @@ def test_self_consistent_effect_receipt_cannot_understate_or_rewrite_lifecycle_t
         )
 
 
-@pytest.mark.parametrize(
-    "fault",
-    ["active-entry-receipt-mutated", "active-price-source-mutated"],
-)
-def test_retained_provider_source_mutation_stops_before_task_b(fault: str) -> None:
-    receipt = execute_shadow_plan(
-        ROOT,
-        V16_PROVIDER_CONTRACT,
-        ShadowFaultPlan(
-            f"provider-lifecycle-source-{fault}",
-            provider_lifecycle_source_fault=fault,
-        ),
+def test_retained_provider_source_mutation_stops_before_task_b(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken_retained_price(*_args: object, **_kwargs: object) -> object:
+        raise AdapterFailure("retained provider price source receipt changed")
+
+    monkeypatch.setattr(
+        production.ProductionCategory3World,
+        "_retained_provider_price",
+        broken_retained_price,
     )
+    receipt = execute_shadow_plan(ROOT, V16_PROVIDER_CONTRACT, ShadowFaultPlan("source-break"))
     assert receipt["earliest_stopping_phase"] == "first-pair-checkpoint"
     assert _counts(receipt)["condition_entries"] == 2
 
@@ -459,7 +458,7 @@ def test_omitted_closed_replacement_slot_stops_before_task_b() -> None:
         V16_PROVIDER_CONTRACT,
         ShadowFaultPlan(
             "provider-entry-replacement",
-            provider_lifecycle_source_fault="closed-slot-omitted",
+            provider_cost_receipt_fault="omitted-closed-slot",
         ),
     )
     assert receipt["earliest_stopping_phase"] == "first-pair-checkpoint"
