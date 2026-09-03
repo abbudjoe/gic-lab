@@ -18761,6 +18761,7 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
     actual_total = usage.cost_usd + lambda_cost
     decision = first_pair_decision(
         PairCheckpointInput(
+            plan_id=runtime_contract.plan_id,
             attempt_run_ids=(run_ids[0], run_ids[1]),
             valid_evidence=cast(
                 tuple[bool, bool],
@@ -18770,6 +18771,11 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
                 tuple[bool, bool],
                 tuple(outcome.get("evaluator_validity") is True for outcome in outcomes),
             ),
+            valid_scored_attempt=cast(
+                tuple[bool, bool],
+                tuple(outcome.get("valid_scored_attempt") is True for outcome in outcomes),
+            ),
+            finalizer_closure_valid=len(closures) == 1,
             pair_match_valid=pair_match_valid,
             credential_issue=any(
                 document.get("cleanup", {}).get("secret_removed") is not True
@@ -18789,6 +18795,8 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
                 billable_started_at=float(campaign_started), now=now
             ),
             next_attempt_hard_wall_seconds=execution_contract.limits.max_condition_wall_seconds,
+            prior_t09_cost_usd=runtime_contract.prior_t09_cost_usd,
+            cumulative_t09_cost_cap_usd=runtime_contract.cumulative_t09_cost_cap_usd,
         )
     )
     decision = {

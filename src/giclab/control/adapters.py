@@ -53,6 +53,10 @@ class StructuralPrivacyFinding(AdapterFailure):
     """A structural privacy scan found material that cannot be published."""
 
 
+class PrivacyUnresolved(AdapterFailure):
+    """Privacy was scanned through held state but path integrity remains unresolved."""
+
+
 class UndeclaredAdapterCall(AdapterFailure):
     """The controller issued an effect outside the declared package envelope."""
 
@@ -214,6 +218,9 @@ class AdapterAudit(Protocol):
 class AdapterDiagnostics(Protocol):
     def control_evidence(self) -> Mapping[str, object]: ...
 
+    def terminalize_authority(self, *, complete: bool) -> Mapping[str, object]:
+        """End a live grant exactly once and return its public consumption receipt."""
+
     def release_resources(self) -> None:
         """Release identities held through terminal result materialization."""
 
@@ -250,6 +257,7 @@ __all__ = [
     "FirstPairCheckpointResult",
     "ImplementationFlavor",
     "MetadataEnvelope",
+    "PrivacyUnresolved",
     "ProviderHandle",
     "ReplacementEligibleFailure",
     "StructuralPrivacyFinding",

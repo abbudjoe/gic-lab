@@ -16,12 +16,15 @@ import subprocess
 import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import MISSING, replace
 from pathlib import Path
 from types import MappingProxyType
 from typing import Final, cast
 
-from giclab.control.anti_shadow_lint import validate_anti_shadow_lint
+from giclab.control.anti_shadow_lint import (
+    public_receipt_topology_findings,
+    validate_anti_shadow_lint,
+)
 from giclab.control.category3 import (
     Category3Request,
     execute_category3_transaction,
@@ -65,7 +68,7 @@ from giclab.harness.t09_provider_contracts import (
 )
 from giclab.registry import load_json
 
-LIVE_EFFECT_CONFORMANCE_SCHEMA_VERSION: Final = "2.0.0"
+LIVE_EFFECT_CONFORMANCE_SCHEMA_VERSION: Final = "3.0.0"
 TEMPORARY_EFFECT_PATH: Final = (
     "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py"
 )
@@ -103,12 +106,18 @@ def _canonical_sha256(value: object) -> str:
 def _package_effect_source() -> bytes:
     return b'''"""Temporary package effect for the zero-real-effect conformance gate."""
 
-from giclab.control.shadow_effects import build_live_shaped_no_network_effects
+from giclab.control.shadow_effects import ShadowFaultPlan, build_live_shaped_no_network_effects
 
 
 def build_package_effects(
     *, repository, contract, authorization_context, authority, held_transaction_root
 ):
+    fault_plan = None
+    if authorization_context.current_turn_scope == "T09-PR14-ROOT-MISMATCH-CONFORMANCE":
+        fault_plan = ShadowFaultPlan(
+            "live-root-replacement-terminalization",
+            root_replacement_before_cleanup=True,
+        )
     return build_live_shaped_no_network_effects(
         repository=repository,
         contract=contract,
@@ -116,6 +125,7 @@ def build_package_effects(
         authorization_context=authorization_context,
         authority=authority,
         held_transaction_root=held_transaction_root,
+        fault_plan=fault_plan,
     )
 '''
 
@@ -459,6 +469,110 @@ def _execute_review_fault(
     )
 
 
+def _root_replacement_terminalization_subreceipt(
+    repository: Path,
+    contract: T09ProviderContract,
+    rehearsal: ValidatedShadowRehearsal,
+) -> dict[str, object]:
+    """Exercise the full live-shaped controller after its root pathname is replaced."""
+
+    held_source = hold_package_effect_registration(repository, contract)
+    if held_source is None:
+        raise ValueError("root-replacement probe lacks its held package source")
+    transaction_root = repository.parent / "private-root-mismatch-transaction"
+    transaction_root.mkdir(mode=0o700)
+    held_root = hold_transaction_root(transaction_root)
+    prefix = contract.authorization_prefix
+    if not isinstance(prefix, str):
+        raise ValueError("root-replacement probe lacks its contract authorization prefix")
+    reference = prefix + "CONFORMANCE-ROOT-MISMATCH-" + contract.source_commit[:12]
+    turn_scope = "T09-PR14-ROOT-MISMATCH-CONFORMANCE"
+    overlay_document = project_live_authority_overlay(
+        repository,
+        contract,
+        held_transaction_root=held_root,
+        effect_implementation=held_source.identity,
+        control_binding_semantic_sha256=rehearsal.staging.semantic_sha256,
+        external_authorization_reference=reference,
+        current_turn_scope=turn_scope,
+        execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
+    )
+    overlay_path = repository.parent / "private-root-mismatch-overlay.json"
+    overlay_path.write_bytes(_canonical_bytes(overlay_document))
+    overlay_path.chmod(0o600)
+    context, authority = validate_external_live_effect_authority(
+        repository,
+        contract,
+        overlay_path=overlay_path,
+        held_transaction_root=held_root,
+        effect_implementation=held_source.identity,
+        control_binding_semantic_sha256=rehearsal.staging.semantic_sha256,
+        current_turn_scope=turn_scope,
+        execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
+    )
+    loaded = load_registered_package_effects(
+        repository,
+        contract,
+        authorization_context=context,
+        authority=authority,
+        held_source=held_source,
+    )
+    world = build_production_adapter_assembly(
+        repository,
+        contract,
+        low_level_effects=loaded.effects,
+        authorization_context=context,
+        authority=authority,
+        held_transaction_root=held_root,
+        held_effect_source=loaded.held_source,
+    )
+    commit, tree = repository_identity(repository)
+    result = execute_category3_transaction(
+        Category3Request(
+            repository=repository,
+            contract=contract,
+            scenario="live-root-replacement-terminalization",
+            expected_repository_commit=commit,
+            expected_repository_tree=tree,
+            control_proof=rehearsal,
+        ),
+        adapters=world.adapters(),
+    )
+    evidence = result.get("production_control_evidence")
+    consumption = evidence.get("authority_consumption") if isinstance(evidence, dict) else None
+    cleanup = result.get("cleanup")
+    replacement = transaction_root / "replacement-sentinel.bin"
+    descriptor_released = False
+    try:
+        held_root.revalidate_descriptor()
+    except ValueError:
+        descriptor_released = True
+    if (
+        result.get("terminal_state") != "category3-live-stopped-privacy-blocked"
+        or not isinstance(evidence, dict)
+        or evidence.get("cleanup_used_held_root_after_path_mismatch") is not True
+        or not isinstance(consumption, dict)
+        or consumption.get("terminal_state") != "terminal-failed-nonreplayable"
+        or not replacement.is_file()
+        or replacement.read_bytes() != b"replacement-directory-must-remain-unchanged\n"
+        or tuple(transaction_root.iterdir()) != (replacement,)
+        or not descriptor_released
+    ):
+        raise ValueError("root-replacement controller probe did not terminalize cleanly")
+    return {
+        "terminal_result_returned": True,
+        "held_root_cleanup_used": True,
+        "replacement_directory_unchanged": True,
+        "privacy_path_identity_unresolved": True,
+        "authority_terminal_state": "terminal-failed-nonreplayable",
+        "held_descriptors_released": True,
+        "provider_resources_zero": cleanup.get("provider_resources_zero")
+        if isinstance(cleanup, dict)
+        else False,
+        "scientific_interpretation_allowed": False,
+    }
+
+
 def _review_failure_subreceipts(
     repository: Path,
     contract: T09ProviderContract,
@@ -494,6 +608,44 @@ def _review_failure_subreceipts(
         ShadowFaultPlan(
             "review-raw-replacement",
             held_identity_fault="raw-same-size-swap-before-finalizer",
+        ),
+    )
+    understated_provider_cost = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan(
+            "review-understated-provider-cost",
+            provider_cost_receipt_fault="zero-price",
+        ),
+    )
+    omitted_provider_slot = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan(
+            "provider-entry-replacement",
+            provider_lifecycle_source_fault="closed-slot-omitted",
+        ),
+    )
+    oversized_manifest = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan(
+            "review-oversized-essential-manifest",
+            fail_operation="condition.run",
+            essential_envelope_fault="oversized-manifest",
+        ),
+    )
+    sensitive_receipt = _execute_review_fault(
+        repository,
+        contract,
+        rehearsal,
+        ShadowFaultPlan(
+            "review-sensitive-essential-receipt",
+            fail_operation="condition.run",
+            essential_envelope_fault="header-completion-field",
         ),
     )
 
@@ -562,6 +714,9 @@ def _review_failure_subreceipts(
                 "security_restored": True,
                 "privacy_clean": True,
             },
+            "complete_envelope_file_count": failure.get("file_count"),
+            "complete_envelope_total_bytes": failure.get("total_bytes"),
+            "manifest_receipt_export_scanned": True,
         }
 
     raw_evidence = production(raw_replacement)
@@ -579,6 +734,31 @@ def _review_failure_subreceipts(
         or not isinstance(raw_replacement.get("stop_reason"), str)
     ):
         raise ValueError("same-size raw replacement was not rejected at finalization")
+
+    understated_counts = counts(understated_provider_cost)
+    omitted_counts = counts(omitted_provider_slot)
+    if (
+        understated_provider_cost.get("earliest_stopping_phase") != "first-pair-checkpoint"
+        or understated_counts.get("condition_entries") != 2
+        or omitted_provider_slot.get("earliest_stopping_phase") != "first-pair-checkpoint"
+        or omitted_counts.get("condition_entries") != 2
+        or "could not be sealed and exported" not in str(oversized_manifest.get("stop_reason"))
+        or "could not be sealed and exported" not in str(sensitive_receipt.get("stop_reason"))
+    ):
+        raise ValueError("residual cost or essential-envelope probes did not fail closed")
+
+    with tempfile.TemporaryDirectory(prefix="giclab-public-topology-negative-") as directory:
+        probe_root = Path(directory)
+        receipt_root = probe_root / "control/receipts/packages/v16"
+        receipt_root.mkdir(parents=True)
+        (receipt_root / "injected.json").write_bytes(
+            _canonical_bytes({"held_transaction_root": {"path": "/tmp/private-root", "inode": 7}})
+        )
+        topology_codes = sorted(
+            {finding.code for finding in public_receipt_topology_findings(probe_root)}
+        )
+    if topology_codes != ["T09S023", "T09S024"]:
+        raise ValueError("public runtime-topology injection was not rejected")
 
     return {
         "unscored-task-a-checkpoint-stop": {
@@ -601,6 +781,28 @@ def _review_failure_subreceipts(
             "stopping_phase": "finalization",
             "evaluator_calls": 0,
             "scientific_interpretation_allowed": False,
+        },
+        "understated-provider-cost-rejection": {
+            "shared_lifecycle_value_authoritative": True,
+            "self_hashed_effect_receipt_rejected": True,
+            "task_b_condition_entries": 0,
+        },
+        "omitted-provider-slot-rejection": {
+            "closed_replacement_slot_required": True,
+            "task_b_condition_entries": 0,
+        },
+        "oversized-essential-manifest-rejection": {
+            "complete_envelope_cap_enforced": True,
+            "essential_failure_accepted": False,
+        },
+        "sensitive-essential-receipt-rejection": {
+            "exact_schema_enforced": True,
+            "terminal_privacy_scan_included_envelope": True,
+            "privacy_clean": False,
+        },
+        "public-runtime-topology-injection-rejection": {
+            "forbidden_path_rejected": True,
+            "forbidden_inode_rejected": True,
         },
     }
 
@@ -792,6 +994,13 @@ def _run_temporary_package(
             ),
             adapters=world.adapters(),
         )
+        review_failure_subreceipts["root-replacement-terminalization"] = (
+            _root_replacement_terminalization_subreceipt(
+                temporary_repository,
+                contract,
+                rehearsal,
+            )
+        )
         evidence = result.get("production_control_evidence")
         if not isinstance(evidence, dict):
             raise ValueError("conformance production evidence is absent")
@@ -829,6 +1038,7 @@ def _run_temporary_package(
         authority_consumption = evidence.get("authority_consumption")
         checkpoint = evidence.get("first_pair_checkpoint")
         provider_cost = evidence.get("provider_cost_receipt")
+        provider_cost_proof = evidence.get("provider_lifecycle_cost_proof")
         held_evidence = evidence.get("held_evidence")
         primitives = evidence.get("production_primitives")
         replay_rejected = False
@@ -904,10 +1114,22 @@ def _run_temporary_package(
             and "record_first_pair_checkpoint" in primitives,
             "provider_cost": isinstance(provider_cost, dict)
             and provider_cost.get("cumulative_provider_cost_usd") == 0.0
+            and provider_cost.get("hourly_price_usd") == 1.29
             and provider_cost.get("real_provider_effects") is False
+            and isinstance(provider_cost_proof, dict)
+            and provider_cost_proof.get("cumulative_provider_cost_usd") == "0"
+            and provider_cost_proof.get("real_provider_effects") is False
+            and provider_cost_proof.get("provider_profile_sha256")
+            == provider_cost.get("provider_profile_sha256")
+            and provider_cost_proof.get("provider_price_source_sha256")
+            == provider_cost.get("provider_price_source_sha256")
             and isinstance(checkpoint, dict)
             and checkpoint.get("provider_cost_receipt_sha256")
-            == provider_cost.get("receipt_sha256"),
+            == provider_cost_proof.get("receipt_sha256"),
+            "mandatory_checkpoint_fields": all(
+                t09_sira_pilot.PairCheckpointInput.__dataclass_fields__[name].default is MISSING
+                for name in ("valid_scored_attempt", "finalizer_closure_valid")
+            ),
             "held_evidence": isinstance(held_evidence, dict)
             and held_evidence.get("revalidated_across_consumers") is True
             and isinstance(held_evidence.get("raw"), dict)
@@ -920,13 +1142,26 @@ def _run_temporary_package(
                 "ambiguous-task-model-send",
                 "response-accounting-incomplete",
             },
+            "public_runtime_topology_absent": all(
+                marker not in json.dumps(result, sort_keys=True)
+                for marker in ("/private/", "/var/folders/", "/tmp/", "/Users/")
+            )
+            and isinstance(evidence.get("held_transaction_root"), dict)
+            and not (
+                {"path", "device", "inode", "uid"}
+                & set(cast(dict[str, object], evidence["held_transaction_root"]))
+            ),
         }
         failed = sorted(name for name, passed in checks.items() if not passed)
         if failed:
             raise ValueError(
                 "live-shaped package conformance did not close cleanly: " + ", ".join(failed)
             )
-        if not isinstance(checkpoint, dict) or not isinstance(provider_cost, dict):
+        if (
+            not isinstance(checkpoint, dict)
+            or not isinstance(provider_cost, dict)
+            or not isinstance(provider_cost_proof, dict)
+        ):
             raise ValueError("happy conformance checkpoint or provider cost is absent")
         retained_evidence = result.get("evidence_retained")
         if not isinstance(retained_evidence, dict):
@@ -1009,6 +1244,7 @@ def _run_temporary_package(
             "exact_private_decision_and_evidence_identities_validated": True,
             "private_runtime_identity_values_retained": False,
             "task_b_admitted_only_after_retained_decision": True,
+            "safety_fields_have_no_defaults": True,
         }
         public_checkpoint["public_checkpoint_semantic_sha256"] = _canonical_sha256(
             public_checkpoint
@@ -1049,10 +1285,20 @@ def _run_temporary_package(
             "provider_cost_accounting": {
                 "owned_instance_identity": provider_cost["owned_instance_identity"],
                 "launch_ordinal": provider_cost["launch_ordinal"],
+                "hourly_price_usd": provider_cost["hourly_price_usd"],
+                "provider_profile_sha256": provider_cost["provider_profile_sha256"],
+                "provider_price_source_sha256": provider_cost["provider_price_source_sha256"],
+                "active_entry_receipt_sha256": provider_cost["active_entry_receipt_sha256"],
+                "closed_slot_source_binding_sha256s": provider_cost_proof[
+                    "closed_slot_source_binding_sha256s"
+                ],
+                "interval_count": len(cast(list[object], provider_cost_proof["intervals"])),
                 "prior_preflight_cost_usd": provider_cost["prior_preflight_cost_usd"],
                 "current_empirical_cost_usd": provider_cost["current_empirical_cost_usd"],
                 "cumulative_provider_cost_usd": provider_cost["cumulative_provider_cost_usd"],
-                "receipt_sha256": provider_cost["receipt_sha256"],
+                "effect_reconciliation_receipt_sha256": provider_cost["receipt_sha256"],
+                "shared_lifecycle_proof_sha256": provider_cost_proof["receipt_sha256"],
+                "shared_lifecycle_value_authoritative": True,
                 "zero_real_provider_effects": provider_cost["real_provider_effects"] is False,
             },
             "controller_terminal_state": result["terminal_state"],
@@ -1109,6 +1355,12 @@ def _run_temporary_package(
                 ],
             },
             "review_failure_subreceipts": review_failure_subreceipts,
+            "public_runtime_topology": {
+                "stable_held_root_projection_only": True,
+                "absolute_runtime_paths_retained": False,
+                "device_inode_uid_values_retained": False,
+                "repository_receipt_scan_bound": True,
+            },
             "cleanup": expected_cleanup,
             "zero_real_effects": True,
             "temporary_conformance_grant_only": True,

@@ -16,11 +16,12 @@
     "findings",
     "assumption_inventory",
     "classification_counts",
+    "public_receipt_topology_scan",
     "complete",
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "2.0.0"},
     "repository_commit": {"$ref": "#/$defs/git"},
     "repository_tree": {"$ref": "#/$defs/git"},
     "audited_base": {
@@ -75,6 +76,24 @@
         "documentation": {"type": "integer", "minimum": 0}
       }
     },
+    "public_receipt_topology_scan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root", "files_scanned", "forbidden_path_markers",
+        "forbidden_filesystem_fields", "findings", "complete"
+      ],
+      "properties": {
+        "root": {"const": "control/receipts/packages/v16"},
+        "files_scanned": {"type": "integer", "minimum": 1},
+        "forbidden_path_markers": {
+          "const": ["/private/", "/var/folders/", "/tmp/", "/Users/"]
+        },
+        "forbidden_filesystem_fields": {"const": ["device", "inode", "uid"]},
+        "findings": {"type": "integer", "minimum": 0},
+        "complete": {"const": true}
+      }
+    },
     "complete": {"const": true},
     "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },
@@ -90,7 +109,7 @@
       "additionalProperties": false,
       "required": ["path", "line", "column", "code", "message"],
       "properties": {
-        "path": {"$ref": "#/$defs/path"},
+        "path": {"$ref": "#/$defs/inventoryPath"},
         "line": {"type": "integer", "minimum": 1},
         "column": {"type": "integer", "minimum": 1},
         "code": {"type": "string", "pattern": "^T09S[0-9]{3}$"},

@@ -38,6 +38,9 @@ _HEX40: Final = re.compile(r"^[a-f0-9]{40}$")
 _HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
 _PRIVATE_MARKERS: Final = (
     "/Users/",
+    "/private/",
+    "/var/folders/",
+    "/tmp/",
     "BEGIN PRIVATE KEY",
     "OPENAI_API_KEY",
     "LAMBDA_API_KEY",
@@ -372,22 +375,57 @@ def _git_blob(repository: Path, commit: str, relative: str) -> bytes:
     return completed.stdout
 
 
-def _public_safe(value: object, *, repository: Path) -> None:
+def _public_safe(
+    value: object,
+    *,
+    repository: Path,
+    parent_key: str | None = None,
+) -> None:
     repository_marker = str(repository.resolve())
     if isinstance(value, str):
         lowered = value.casefold()
-        if repository_marker in value or any(
-            marker.casefold() in lowered for marker in _PRIVATE_MARKERS
+        declared_topology_policy = parent_key == "forbidden_path_markers"
+        if repository_marker in value or (
+            not declared_topology_policy
+            and any(marker.casefold() in lowered for marker in _PRIVATE_MARKERS)
         ):
             raise ControlProofError("control proof contains a private path or secret marker")
     elif isinstance(value, dict):
         for key, child in value.items():
-            if any(marker.casefold() in str(key).casefold() for marker in _PRIVATE_MARKERS[5:]):
+            normalized_key = str(key).casefold()
+            if normalized_key in {"device", "inode", "uid"}:
+                raise ControlProofError("control proof contains runtime filesystem topology")
+            if any(marker.casefold() in normalized_key for marker in _PRIVATE_MARKERS[8:]):
                 raise ControlProofError("control proof contains a secret-like field")
-            _public_safe(child, repository=repository)
+            _public_safe(child, repository=repository, parent_key=str(key))
     elif isinstance(value, list):
         for child in value:
-            _public_safe(child, repository=repository)
+            _public_safe(child, repository=repository, parent_key=parent_key)
+
+
+def _public_topology_safe(
+    value: object,
+    *,
+    repository: Path,
+    parent_key: str | None = None,
+) -> None:
+    """Reject runtime filesystem identities while permitting explicit lint policy text."""
+
+    repository_marker = str(repository.resolve())
+    if isinstance(value, str):
+        if repository_marker in value or (
+            parent_key != "forbidden_path_markers"
+            and any(marker in value for marker in _PRIVATE_MARKERS[:4])
+        ):
+            raise ControlProofError("control proof contains private runtime topology")
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            if str(key).casefold() in {"device", "inode", "uid"}:
+                raise ControlProofError("control proof contains runtime filesystem topology")
+            _public_topology_safe(child, repository=repository, parent_key=str(key))
+    elif isinstance(value, list):
+        for child in value:
+            _public_topology_safe(child, repository=repository, parent_key=parent_key)
 
 
 def discover_sealed_control_receipt_roots(repository: Path) -> tuple[Path, ...]:
@@ -1050,6 +1088,7 @@ def _validate_control_receipt_set(
 
     all_documents = [*documents.values(), *failures.values()]
     for document in all_documents:
+        _public_topology_safe(document, repository=root)
         identity = _identity_from_receipt(document)
         if identity != (commit, tree):
             raise ControlProofError("bound receipts do not share the exact control revision")

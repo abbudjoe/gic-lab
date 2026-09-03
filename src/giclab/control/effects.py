@@ -43,6 +43,7 @@ EFFECT_AUTHORITY_SCHEMA_VERSION: Final = "1.0.0"
 MAX_PACKAGE_EFFECT_BYTES: Final = 2_000_000
 MAX_ESSENTIAL_FAILURE_BYTES: Final = 67_108_864
 MAX_ESSENTIAL_FAILURE_FILES: Final = 4096
+MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES: Final = 1_048_576
 _HEX40: Final = re.compile(r"^[a-f0-9]{40}$")
 _HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
 _SAFE_ID: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
@@ -253,6 +254,12 @@ class HeldTransactionRoot:
         ):
             raise ValueError("held transaction root descriptor identity changed")
 
+    def open_relative_no_follow(self, relative_path: str, *, flags: int) -> int:
+        """Open beneath the held descriptor without consulting the root pathname."""
+
+        self.revalidate_descriptor()
+        return _open_relative_no_symlinks(self.descriptor, relative_path, flags=flags)
+
     def close(self) -> None:
         if not self._closed:
             os.close(self._fd)
@@ -357,10 +364,13 @@ class HeldArtifact:
     def read_bytes(self) -> builtins.bytes:
         return _read_held_bytes(self.descriptor)
 
-    def revalidate(self) -> None:
+    def revalidate(self, *, allow_root_path_mismatch: bool = False) -> None:
         if self._closed:
             raise ValueError("held artifact is closed")
-        self._root.revalidate()
+        if allow_root_path_mismatch:
+            self._root.revalidate_descriptor()
+        else:
+            self._root.revalidate()
         reopened = _open_relative_no_symlinks(
             self._root.descriptor,
             self.relative_path,
@@ -980,8 +990,9 @@ class ValidatedLiveEffectAuthority:
         *,
         expected: tuple[LiveAuthorityState, ...],
         target: LiveAuthorityState,
+        allow_root_path_mismatch: bool = False,
     ) -> None:
-        self._revalidate_state()
+        self._revalidate_state(allow_root_path_mismatch=allow_root_path_mismatch)
         if self._state not in expected:
             raise ValueError("live authority transition is replayed or out of order")
         ordinal = self._ordinal + 1
@@ -992,7 +1003,7 @@ class ValidatedLiveEffectAuthority:
         os.fsync(self._held_root.descriptor)
         self._state = target
         self._ordinal = ordinal
-        self._revalidate_state()
+        self._revalidate_state(allow_root_path_mismatch=allow_root_path_mismatch)
 
     @property
     def held_transaction_root(self) -> HeldTransactionRoot:
@@ -1063,25 +1074,35 @@ class ValidatedLiveEffectAuthority:
         )
 
     def terminal_complete(self) -> None:
+        self._revalidate_state()
+        if self._state is LiveAuthorityState.TERMINAL_COMPLETE:
+            return
         self._transition(
             expected=(LiveAuthorityState.PROVIDER_LAUNCH_CONSUMED,),
             target=LiveAuthorityState.TERMINAL_COMPLETE,
         )
 
-    def terminal_failed_nonreplayable(self) -> None:
-        if self.state in {
+    def terminal_failed_nonreplayable(
+        self,
+        *,
+        allow_root_path_mismatch: bool = False,
+    ) -> None:
+        self._revalidate_state(allow_root_path_mismatch=allow_root_path_mismatch)
+        if self._state in {
             LiveAuthorityState.TERMINAL_COMPLETE,
             LiveAuthorityState.TERMINAL_FAILED_NONREPLAYABLE,
         }:
             return
         self._transition(
             expected=(
+                LiveAuthorityState.VALIDATED_UNCONSUMED,
                 LiveAuthorityState.RESERVED_PRE_CREDENTIAL,
                 LiveAuthorityState.METADATA_SEND_ATTEMPTED,
                 LiveAuthorityState.METADATA_BOUND,
                 LiveAuthorityState.PROVIDER_LAUNCH_CONSUMED,
             ),
             target=LiveAuthorityState.TERMINAL_FAILED_NONREPLAYABLE,
+            allow_root_path_mismatch=allow_root_path_mismatch,
         )
 
     def consumption_receipt(
@@ -1263,33 +1284,86 @@ class ProviderHandle:
 
 @dataclass(frozen=True, slots=True)
 class ProviderCostObservationRequest:
-    """Exact provider lifecycle identity observed at a control checkpoint."""
+    """Shared-derived provider lifecycle facts offered for effect reconciliation."""
 
     provider_handle: ProviderHandle
     observed_wall_time: float
     observed_monotonic: float
     campaign_started_wall_time: float
     campaign_started_monotonic: float
+    provider_profile_sha256: str
+    provider_price_source_sha256: str
+    active_entry_receipt_sha256: str
+    closed_slot_receipt_sha256s: tuple[str, ...]
+    frozen_hourly_price_usd: float
+    active_started_wall_time: float
+    prior_preflight_cost_usd: float
+    current_empirical_cost_usd: float
+    cumulative_provider_cost_usd: float
 
 
 @dataclass(frozen=True, slots=True)
 class ProviderCostReceipt:
-    """Effect-produced provider billing facts validated by shared policy.
+    """Effect reconciliation receipt checked against a shared-derived cost proof.
 
-    The effect reports lifecycle facts; it does not decide whether a checkpoint
-    may continue.  A deterministic no-network effect reports a zero hourly rate
-    and zero costs while retaining the same receipt shape.
+    The effect cannot select a price, omit a consumed slot, shift an interval, or
+    choose the value passed to checkpoint policy.  Those facts are reconstructed
+    from retained provider lifecycle records by shared code before this receipt is
+    requested.  Deterministic no-network effects reconcile zero *real* cost while
+    preserving the frozen source price and all source hashes.
     """
 
+    provider_contract_version: str
+    plan_id: str
     owned_instance_identity: str
     launch_ordinal: int
+    provider_profile_sha256: str
+    provider_price_source_sha256: str
+    active_entry_receipt_sha256: str
+    closed_slot_receipt_sha256s: tuple[str, ...]
     hourly_price_usd: float
     active_started_wall_time: float
     active_ended_wall_time: float | None
     observed_wall_time: float
+    observed_monotonic: float
     prior_preflight_cost_usd: float
     current_empirical_cost_usd: float
     cumulative_provider_cost_usd: float
+    real_provider_effects: bool
+    receipt_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderLifecycleInterval:
+    """One source-bound provider ownership interval in launch order."""
+
+    launch_ordinal: int
+    owned_instance_identity: str
+    entry_or_owner_receipt_sha256: str
+    closeout_receipt_sha256: str | None
+    active_started_wall_time: float
+    active_ended_wall_time: float | None
+    hourly_price_usd: str
+    billed_cost_usd: str
+    billable_real_effect: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ProviderLifecycleCostProof:
+    """Shared-validated cost authority derived from retained lifecycle evidence."""
+
+    provider_contract_version: str
+    plan_id: str
+    provider_profile_sha256: str
+    provider_price_source_sha256: str
+    active_entry_receipt_sha256: str
+    closed_slot_source_binding_sha256s: tuple[str, ...]
+    intervals: tuple[ProviderLifecycleInterval, ...]
+    prior_preflight_cost_usd: str
+    current_empirical_cost_usd: str
+    cumulative_provider_cost_usd: str
+    observed_wall_time: float
+    observed_monotonic: float
     real_provider_effects: bool
     receipt_sha256: str
 
@@ -1628,6 +1702,8 @@ class ConditionInfrastructureFailureOutcome:
     completion_path: Path
     stdout_path: Path | None
     stderr_path: Path | None
+    payload_file_count: int
+    payload_total_bytes: int
     essential_file_count: int
     essential_total_bytes: int
     output_bytes: int
@@ -1663,6 +1739,8 @@ class ConditionFailureExportReceipt:
     essential_receipt_sha256: str
     essential_file_count: int
     essential_total_bytes: int
+    acknowledgement_path: Path
+    acknowledgement_bytes: int
     export_complete: bool
     resumed: bool
     receipt_sha256: str

@@ -19,13 +19,15 @@ import tarfile
 from collections import Counter
 from collections.abc import Mapping
 from contextlib import suppress
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
 from types import MappingProxyType, ModuleType
 from typing import Final, NoReturn, cast
 
 import yaml
+from jsonschema import Draft202012Validator
 
 from giclab.control.adapters import (
     AdapterCall,
@@ -39,6 +41,7 @@ from giclab.control.adapters import (
     FirstPairCheckpointResult,
     ImplementationFlavor,
     MetadataEnvelope,
+    PrivacyUnresolved,
     ReplacementEligibleFailure,
     StructuralPrivacyFinding,
     TerminationUnavailable,
@@ -53,6 +56,7 @@ from giclab.control.effects import (
     EFFECT_PROTOCOL_VERSION,
     MAX_ESSENTIAL_FAILURE_BYTES,
     MAX_ESSENTIAL_FAILURE_FILES,
+    MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
     CleanupExecutionReceipt,
     CleanupExecutionRequest,
     ConditionAction,
@@ -95,6 +99,8 @@ from giclab.control.effects import (
     ProviderCostObservationRequest,
     ProviderCostReceipt,
     ProviderHandle,
+    ProviderLifecycleCostProof,
+    ProviderLifecycleInterval,
     RuntimeClock,
     ScientificFreezeReceipt,
     ScientificFreezeRequest,
@@ -119,7 +125,11 @@ from giclab.harness.sira_gate_a import (
     ProviderResponseReceiptError,
     ProviderResponseUsage,
 )
-from giclab.harness.t09_provider_contracts import T09ProviderContract
+from giclab.harness.t09_provider_contracts import (
+    T09ProviderContract,
+    T09ProviderContractError,
+    load_provider_profile,
+)
 from giclab.registry import load_json
 
 _RUNTIME_CONSUMERS: Final = {
@@ -158,6 +168,27 @@ def _file_sha256(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _decimal_number(value: object, *, label: str) -> Decimal:
+    """Parse one finite nonnegative decimal without binary-float arithmetic."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+        raise AdapterFailure(f"{label} is not an exact nonnegative decimal")
+    try:
+        result = Decimal(str(value))
+    except InvalidOperation as exc:
+        raise AdapterFailure(f"{label} is not an exact nonnegative decimal") from exc
+    if not result.is_finite() or result < 0:
+        raise AdapterFailure(f"{label} is not an exact nonnegative decimal")
+    return result
+
+
+def _decimal_text(value: Decimal) -> str:
+    rendered = format(value, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered or "0"
 
 
 def _git_identity(repository: Path) -> tuple[str, str]:
@@ -603,6 +634,7 @@ class ProductionCategory3World:
         self._essential_failure_exports: dict[str, ConditionFailureExportReceipt] = {}
         self._essential_failure_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
         self._essential_failure_artifact_bindings: dict[str, str] = {}
+        self._essential_failure_roots: set[str] = set()
         self._raw_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
         self._raw_artifact_bindings: dict[str, str] = {}
         self._finalizations: dict[str, FinalizerExecutionOutcome] = {}
@@ -614,6 +646,7 @@ class ProductionCategory3World:
         self._evaluations: dict[str, dict[str, object]] = {}
         self._raw_export_acknowledgements: dict[str, str] = {}
         self._provider_cost_receipt: ProviderCostReceipt | None = None
+        self._provider_lifecycle_cost_proof: ProviderLifecycleCostProof | None = None
         self._checkpoint_result: FirstPairCheckpointResult | None = None
         self._checkpoint_document: dict[str, object] | None = None
         self._cleanup_handoff_bytes: bytes | None = None
@@ -694,7 +727,18 @@ class ProductionCategory3World:
                 raise ValueError("effect returned a different transaction root")
         except ValueError as exc:
             self._root_identity_mismatch = True
-            if operation != "host.cleanup":
+            try:
+                self.held_transaction_root.revalidate_descriptor()
+            except ValueError as descriptor_exc:
+                raise AdapterFailure("held transaction root descriptor changed") from descriptor_exc
+            cleanup_only_operation = operation in {
+                "host.cleanup",
+                "evidence.scan_privacy",
+            } or (
+                self._cleanup_calls > 0
+                and operation in {"provider.terminate", "provider.inventory"}
+            )
+            if not cleanup_only_operation:
                 raise AdapterFailure("held transaction root identity changed") from exc
         occurrence = self._counts[operation] + 1
         self._counts[operation] = occurrence
@@ -1997,12 +2041,29 @@ class ProductionCategory3World:
                 or receipt.receipt_sha256 != self._freeze_receipt_identity(receipt)
             ):
                 raise AdapterFailure("scientific freeze receipts drifted")
+            entry_document = load_json(entry)
+            owned_started = finite_time(
+                entry_document.get("owned_lambda_started_at_epoch"),
+                label="owned provider start",
+            )
+            prior_duration = finite_time(
+                entry_document.get("prior_campaign_lambda_duration_seconds"),
+                label="prior provider duration",
+            )
+            prior_cost = finite_time(
+                entry_document.get("prior_campaign_lambda_cost_usd"),
+                label="prior provider cost",
+            )
+            if owned_started > end_wall:
+                raise AdapterFailure("provider ownership starts after the empirical freeze")
             pilot.initialize_pilot_state(
                 self._pilot_state,
                 provider_contract=self.contract,
                 execution_contract_sha256=self._execution_contract.sha256,
-                pilot_started_at_epoch=started_wall,
-                lambda_started_at_epoch=started_wall,
+                pilot_started_at_epoch=end_wall,
+                lambda_started_at_epoch=owned_started,
+                prior_campaign_lambda_duration_seconds=prior_duration,
+                prior_campaign_lambda_cost_usd=prior_cost,
             )
         except BaseException as exc:
             self._record(operation, handle.opaque_identity, "failed")
@@ -2155,9 +2216,13 @@ class ProductionCategory3World:
             raise
 
     @staticmethod
-    def _revalidate_artifacts(artifacts: tuple[HeldArtifact, ...]) -> None:
+    def _revalidate_artifacts(
+        artifacts: tuple[HeldArtifact, ...],
+        *,
+        allow_root_path_mismatch: bool = False,
+    ) -> None:
         for artifact in artifacts:
-            artifact.revalidate()
+            artifact.revalidate(allow_root_path_mismatch=allow_root_path_mismatch)
 
     @staticmethod
     def _load_held_json(artifact: HeldArtifact, *, label: str) -> dict[str, object]:
@@ -2168,6 +2233,106 @@ class ProductionCategory3World:
         if not isinstance(value, dict):
             raise AdapterFailure(f"{label} must contain one JSON object")
         return cast(dict[str, object], value)
+
+    @staticmethod
+    def _load_canonical_held_json(
+        artifact: HeldArtifact,
+        *,
+        label: str,
+    ) -> dict[str, object]:
+        """Load canonical JSON while rejecting duplicate keys and extensions."""
+
+        encoded = artifact.read_bytes()
+
+        def reject_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+            result: dict[str, object] = {}
+            for key, value in pairs:
+                if key in result:
+                    raise AdapterFailure(f"{label} contains a duplicate JSON key")
+                result[key] = value
+            return result
+
+        try:
+            value = json.loads(encoded, object_pairs_hook=reject_duplicates)
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise AdapterFailure(f"{label} is not strict JSON") from exc
+        if not isinstance(value, dict) or encoded != _canonical_bytes(value):
+            raise AdapterFailure(f"{label} is not canonical JSON")
+        return cast(dict[str, object], value)
+
+    @staticmethod
+    def _reject_private_failure_structure(value: object, *, label: str) -> None:
+        forbidden_key_tokens = (
+            "api_key",
+            "authorization_header",
+            "credential_hash",
+            "credential_sha",
+            "headers",
+            "private_path",
+            "absolute_path",
+        )
+
+        def visit(item: object, path: str) -> None:
+            if isinstance(item, dict):
+                for raw_key, child in item.items():
+                    key = str(raw_key).casefold()
+                    if any(token in key for token in forbidden_key_tokens):
+                        raise AdapterFailure(f"{label} contains a secret-shaped field at {path}")
+                    visit(child, f"{path}.{raw_key}")
+            elif isinstance(item, list):
+                for index, child in enumerate(item):
+                    visit(child, f"{path}[{index}]")
+            elif isinstance(item, str) and item.startswith("/"):
+                raise AdapterFailure(f"{label} contains a private absolute path at {path}")
+
+        visit(value, "$")
+
+    def _validate_failure_schema(
+        self,
+        relative_schema: str,
+        document: Mapping[str, object],
+        *,
+        label: str,
+    ) -> None:
+        schema = load_json(self.repository / relative_schema)
+        errors = sorted(
+            Draft202012Validator(schema).iter_errors(document),
+            key=lambda error: tuple(str(item) for item in error.absolute_path),
+        )
+        if errors:
+            raise AdapterFailure(f"{label} fails its exact schema: {errors[0].message}")
+
+    @staticmethod
+    def _enumerate_essential_envelope(root: Path) -> tuple[Path, ...]:
+        """Return every safe regular member of one complete private envelope."""
+
+        members: list[Path] = []
+        for path in sorted(root.rglob("*")):
+            metadata_value = path.stat(follow_symlinks=False)
+            mode = stat.S_IMODE(metadata_value.st_mode)
+            if stat.S_ISDIR(metadata_value.st_mode):
+                if stat.S_ISLNK(metadata_value.st_mode) or mode & 0o022:
+                    raise AdapterFailure("essential failure contains an unsafe directory")
+                continue
+            if (
+                stat.S_ISLNK(metadata_value.st_mode)
+                or not stat.S_ISREG(metadata_value.st_mode)
+                or metadata_value.st_uid != os.getuid()
+                or metadata_value.st_nlink != 1
+                or mode & 0o022
+            ):
+                raise AdapterFailure("essential failure contains an unsealed artifact")
+            if (
+                path.suffix in {".json", ".jsonl"}
+                and metadata_value.st_size > MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES
+            ):
+                raise AdapterFailure("essential failure JSON member exceeds its finite cap")
+            if metadata_value.st_size > MAX_ESSENTIAL_FAILURE_BYTES:
+                raise AdapterFailure("essential failure member exceeds its finite cap")
+            members.append(path)
+        if len(members) > MAX_ESSENTIAL_FAILURE_FILES:
+            raise AdapterFailure("essential failure exceeds its finite entry cap")
+        return tuple(members)
 
     @staticmethod
     def _validate_condition_ledgers(
@@ -2246,12 +2411,6 @@ class ProductionCategory3World:
             return ConditionFailureClass.OUTCOME_VALIDATION
         return ConditionFailureClass.PROCESS_CRASH
 
-    @staticmethod
-    def _failure_export_receipt_identity(receipt: ConditionFailureExportReceipt) -> str:
-        values = asdict(receipt)
-        values.pop("receipt_sha256")
-        return _identity(values)
-
     def _validate_and_seal_condition_failure(
         self,
         *,
@@ -2304,18 +2463,24 @@ class ProductionCategory3World:
         )
         expected_root = partial_raw_root.parent / "essential-failure"
         root = _safe_directory(self.root, outcome.essential_root, label="essential failure root")
+        self._essential_failure_roots.add(root.relative_to(self.root).as_posix())
+        payload_root = _safe_directory(
+            root,
+            root / "payload",
+            label="essential failure payload root",
+        )
         manifest_path = _safe_existing_file(
-            self.root,
+            root,
             outcome.essential_manifest_path,
             label="essential failure manifest",
         )
         receipt_path = _safe_existing_file(
-            self.root,
+            root,
             outcome.essential_receipt_path,
             label="essential failure receipt",
         )
         role_paths = tuple(
-            _safe_existing_file(root, path, label="essential failure role")
+            _safe_existing_file(payload_root, path, label="essential failure role")
             for path in (
                 outcome.call_ledger_path,
                 outcome.browser_ledger_path,
@@ -2325,83 +2490,75 @@ class ProductionCategory3World:
         )
         if outcome.stdout_path is not None:
             role_paths += (
-                _safe_existing_file(root, outcome.stdout_path, label="essential stdout"),
+                _safe_existing_file(payload_root, outcome.stdout_path, label="essential stdout"),
             )
         if outcome.stderr_path is not None:
             role_paths += (
-                _safe_existing_file(root, outcome.stderr_path, label="essential stderr"),
+                _safe_existing_file(payload_root, outcome.stderr_path, label="essential stderr"),
             )
-        evidence_paths: list[Path] = []
-        for path in sorted(root.rglob("*")):
-            metadata_value = path.stat(follow_symlinks=False)
-            if stat.S_ISDIR(metadata_value.st_mode):
-                if path.is_symlink() or stat.S_IMODE(metadata_value.st_mode) & 0o022:
-                    raise AdapterFailure("essential failure contains an unsafe directory")
-                continue
-            if (
-                path.is_symlink()
-                or not stat.S_ISREG(metadata_value.st_mode)
-                or metadata_value.st_uid != os.getuid()
-                or metadata_value.st_nlink != 1
-                or stat.S_IMODE(metadata_value.st_mode) & 0o022
-            ):
-                raise AdapterFailure("essential failure contains an unsealed artifact")
-            evidence_paths.append(path)
+        evidence_paths = self._enumerate_essential_envelope(root)
         host = _host_module(self.repository)
         if host.privacy_violations(root):
             raise AdapterFailure("essential failure contains private or credential-like material")
         held_failure: tuple[HeldArtifact, ...] = ()
         try:
-            held_failure = self._hold_artifact_set(
-                (manifest_path, receipt_path, *tuple(evidence_paths))
-            )
+            held_failure = self._hold_artifact_set(evidence_paths)
             by_path = {artifact.path: artifact for artifact in held_failure}
             if len(by_path) != len(held_failure) or any(
                 path not in by_path for path in (manifest_path, receipt_path, *role_paths)
             ):
                 raise AdapterFailure("essential failure roles lack one held artifact identity")
-            essential_artifacts = tuple(
+            preexport_artifacts = tuple(
                 artifact for artifact in held_failure if root in artifact.path.parents
             )
-            if len(essential_artifacts) != len(evidence_paths):
+            if len(preexport_artifacts) != len(evidence_paths):
                 raise AdapterFailure("essential failure held file inventory drifted")
-            files = sorted(
+            payload_artifacts = tuple(
+                artifact
+                for artifact in preexport_artifacts
+                if payload_root in artifact.path.parents
+            )
+            payload_files = sorted(
                 (
                     {
                         "path": artifact.path.relative_to(root).as_posix(),
                         "bytes": artifact.bytes,
                         "sha256": artifact.sha256,
                     }
-                    for artifact in essential_artifacts
+                    for artifact in payload_artifacts
                 ),
                 key=lambda item: cast(str, item["path"]),
             )
-            total = sum(cast(int, item["bytes"]) for item in files)
-            if total > MAX_ESSENTIAL_FAILURE_BYTES or len(files) > MAX_ESSENTIAL_FAILURE_FILES:
+            payload_total = sum(cast(int, item["bytes"]) for item in payload_files)
+            preexport_total = sum(artifact.bytes for artifact in preexport_artifacts)
+            if (
+                preexport_total > MAX_ESSENTIAL_FAILURE_BYTES
+                or len(preexport_artifacts) > MAX_ESSENTIAL_FAILURE_FILES
+            ):
                 raise AdapterFailure("essential failure exceeds its independent evidence cap")
             manifest_artifact = by_path[manifest_path]
             receipt_artifact = by_path[receipt_path]
-            manifest = self._load_held_json(
+            manifest = self._load_canonical_held_json(
                 manifest_artifact,
                 label="essential failure manifest",
             )
-            receipt = self._load_held_json(
+            receipt = self._load_canonical_held_json(
                 receipt_artifact,
                 label="essential failure receipt",
             )
-            call_ledger = self._load_held_json(
+            call_ledger = self._load_canonical_held_json(
                 by_path[outcome.call_ledger_path],
                 label="essential failure call ledger",
             )
-            browser_ledger = self._load_held_json(
+            browser_ledger = self._load_canonical_held_json(
                 by_path[outcome.browser_ledger_path],
                 label="essential failure browser ledger",
             )
-            process_document = self._load_held_json(
+            process_document = self._load_canonical_held_json(
                 by_path[outcome.process_outcome_path],
                 label="essential failure process outcome",
             )
-            completion_document = self._load_held_json(
+            completion_document = self._load_canonical_held_json(
                 by_path[outcome.completion_path],
                 label="essential failure completion",
             )
@@ -2411,150 +2568,372 @@ class ProductionCategory3World:
             for artifact in held_failure:
                 artifact.close()
             raise
-        if (
-            outcome.run_id != request.run_id
-            or outcome.evaluator_run_id != request.evaluator_run_id
-            or outcome.failure_class is not failure_class
-            or outcome.process_exit_code != process_exit_code
-            or outcome.completed is not completed
-            or outcome.answer != answer
-            or outcome.error != failure_class.value
-            or root != expected_root
-            or manifest_path != expected_root.parent / "essential-failure-manifest.json"
-            or receipt_path != expected_root.parent / "essential-failure-complete.json"
-            or len(set(role_paths)) != len(role_paths)
-            or outcome.essential_file_count != len(files)
-            or outcome.essential_total_bytes != total
-            or total > preservation.essential_failure_cap_bytes
-            or len(files) > preservation.essential_failure_file_cap
-            or outcome.output_bytes != preservation.output_bytes
-            or outcome.unknown_call_ids != unknown_call_ids
-            or not outcome.writers_closed
-            or not outcome.browser_descendants_closed
-            or not outcome.credential_cleanup_clean
-            or outcome.core_dump_present
-            or outcome.structural_privacy_findings
-            or not outcome.cleanup_ready
-            or outcome.retry_count != 0
-            or manifest.get("run_id") != request.run_id
-            or manifest.get("failure_class") != failure_class.value
-            or manifest.get("files") != files
-            or manifest.get("file_count") != len(files)
-            or manifest.get("total_bytes") != total
-            or manifest.get("unknown_call_ids") != list(unknown_call_ids)
-            or manifest.get("failure_reconstructable") is not True
-            or manifest.get("private_access_controlled") is not True
-            or manifest.get("publication_blocked_pending_privacy_review") is not True
-            or manifest.get("scientific_result") is not False
-            or receipt.get("run_id") != request.run_id
-            or receipt.get("essential_failure_seal_complete") is not True
-            or receipt.get("attempt_identity_consumed") is not True
-            or receipt.get("infrastructure_invalid") is not True
-            or receipt.get("unscored") is not True
-            or receipt.get("evaluator_permitted") is not False
-            or receipt.get("condition_retry_permitted") is not False
-            or receipt.get("manifest_sha256") != manifest_sha
-            or receipt.get("essential_file_count") != len(files)
-            or receipt.get("essential_total_bytes") != total
-            or call_ledger.get("accounting") != accounting
-            or call_ledger.get("call_ids") != list(observer.call_order)
-            or call_ledger.get("logical_call_ids") != list(observer.logical_call_order)
-            or call_ledger.get("unknown_call_ids") != list(unknown_call_ids)
-            or browser_ledger.get("actions")
-            != [
-                {"action_id": action_id, "terminal_state": terminal_state}
-                for action_id, terminal_state in preservation.browser_actions
-            ]
-            or process_document.get("failure_class") != failure_class.value
-            or process_document.get("exit_code") != process_exit_code
-            or process_document.get("retry_count") != 0
-            or completion_document.get("completed") is not completed
-            or completion_document.get("answer") != answer
-            or completion_document.get("error") != failure_class.value
-            or completion_document.get("evaluator_eligible") is not False
-        ):
-            raise AdapterFailure("essential failure outcome is not reconstructable")
-        pilot.mark_essential_failure_sealed(
-            self._pilot_state,
-            execution_contract_sha256=execution.sha256,
-            run_id=request.run_id,
-            manifest_sha256=manifest_sha,
-            receipt_sha256=receipt_sha,
-        )
-        export_identity = _identity(
-            {
-                "run_id": request.run_id,
-                "essential_manifest_sha256": manifest_sha,
-                "essential_receipt_sha256": receipt_sha,
-                "essential_file_count": len(files),
-                "essential_total_bytes": total,
-            }
-        )
-        export_request = ConditionFailureExportRequest(
-            run_id=request.run_id,
-            essential_root=root,
-            essential_manifest_path=manifest_path,
-            essential_receipt_path=receipt_path,
-            essential_manifest_sha256=manifest_sha,
-            essential_receipt_sha256=receipt_sha,
-            essential_file_count=len(files),
-            essential_total_bytes=total,
-            export_identity=export_identity,
-        )
-        resumed = False
+        complete_held: tuple[HeldArtifact, ...] = ()
+        retained = False
         try:
+            if (
+                outcome.run_id != request.run_id
+                or outcome.evaluator_run_id != request.evaluator_run_id
+                or outcome.failure_class is not failure_class
+                or outcome.process_exit_code != process_exit_code
+                or outcome.completed is not completed
+                or outcome.answer != answer
+                or outcome.error != failure_class.value
+                or root != expected_root
+                or manifest_path != expected_root / "essential-failure-manifest.json"
+                or receipt_path != expected_root / "essential-failure-complete.json"
+                or len(set(role_paths)) != len(role_paths)
+                or outcome.payload_file_count != len(payload_files)
+                or outcome.payload_total_bytes != payload_total
+                or outcome.essential_file_count != len(preexport_artifacts)
+                or outcome.essential_total_bytes != preexport_total
+                or preexport_total > preservation.essential_failure_cap_bytes
+                or len(preexport_artifacts) > preservation.essential_failure_file_cap
+                or outcome.output_bytes != preservation.output_bytes
+                or outcome.unknown_call_ids != unknown_call_ids
+                or not outcome.writers_closed
+                or not outcome.browser_descendants_closed
+                or not outcome.credential_cleanup_clean
+                or outcome.core_dump_present
+                or outcome.structural_privacy_findings
+                or not outcome.cleanup_ready
+                or outcome.retry_count != 0
+                or set(manifest)
+                != {
+                    "schema_version",
+                    "provider_contract_version",
+                    "plan_id",
+                    "run_id",
+                    "evaluator_run_id",
+                    "package_commit",
+                    "execution_contract_sha256",
+                    "frozen_manifest_sha256",
+                    "condition_plan_sha256",
+                    "command_sha256",
+                    "failure_class",
+                    "evidence_root",
+                    "manifest_scope",
+                    "files",
+                    "payload_file_count",
+                    "payload_total_bytes",
+                    "envelope_file_cap",
+                    "envelope_total_bytes_cap",
+                    "unknown_call_ids",
+                    "failure_reconstructable",
+                    "private_access_controlled",
+                    "publication_blocked_pending_privacy_review",
+                    "scientific_result",
+                }
+                or manifest.get("schema_version") != "2.0.0"
+                or manifest.get("provider_contract_version") != self.contract.version
+                or manifest.get("plan_id") != self.contract.plan_id
+                or manifest.get("run_id") != request.run_id
+                or manifest.get("evaluator_run_id") != request.evaluator_run_id
+                or manifest.get("package_commit") != request.package_commit
+                or manifest.get("execution_contract_sha256") != request.execution_contract_sha256
+                or manifest.get("frozen_manifest_sha256") != request.frozen_manifest_sha256
+                or manifest.get("condition_plan_sha256") != request.condition_plan_sha256
+                or manifest.get("command_sha256") != request.command_sha256
+                or manifest.get("failure_class") != failure_class.value
+                or manifest.get("evidence_root") != "essential-failure"
+                or manifest.get("manifest_scope") != "payload-members-only-noncircular"
+                or manifest.get("files") != payload_files
+                or manifest.get("payload_file_count") != len(payload_files)
+                or manifest.get("payload_total_bytes") != payload_total
+                or manifest.get("envelope_file_cap") != preservation.essential_failure_file_cap
+                or manifest.get("envelope_total_bytes_cap")
+                != preservation.essential_failure_cap_bytes
+                or manifest.get("unknown_call_ids") != list(unknown_call_ids)
+                or manifest.get("failure_reconstructable") is not True
+                or manifest.get("private_access_controlled") is not True
+                or manifest.get("publication_blocked_pending_privacy_review") is not True
+                or manifest.get("scientific_result") is not False
+                or set(receipt)
+                != {
+                    "schema_version",
+                    "run_id",
+                    "essential_failure_seal_complete",
+                    "attempt_identity_consumed",
+                    "infrastructure_invalid",
+                    "unscored",
+                    "evaluator_permitted",
+                    "condition_retry_permitted",
+                    "manifest_sha256",
+                    "payload_file_count",
+                    "payload_total_bytes",
+                    "writers_closed",
+                    "browser_descendants_closed",
+                    "credential_cleanup_clean",
+                    "core_dump_present",
+                    "structural_privacy_findings",
+                    "cleanup_ready",
+                }
+                or receipt.get("schema_version") != "2.0.0"
+                or receipt.get("run_id") != request.run_id
+                or receipt.get("essential_failure_seal_complete") is not True
+                or receipt.get("attempt_identity_consumed") is not True
+                or receipt.get("infrastructure_invalid") is not True
+                or receipt.get("unscored") is not True
+                or receipt.get("evaluator_permitted") is not False
+                or receipt.get("condition_retry_permitted") is not False
+                or receipt.get("manifest_sha256") != manifest_sha
+                or receipt.get("payload_file_count") != len(payload_files)
+                or receipt.get("payload_total_bytes") != payload_total
+                or receipt.get("writers_closed") is not True
+                or receipt.get("browser_descendants_closed") is not True
+                or receipt.get("credential_cleanup_clean") is not True
+                or receipt.get("core_dump_present") is not False
+                or receipt.get("structural_privacy_findings") != []
+                or receipt.get("cleanup_ready") is not True
+                or set(call_ledger)
+                != {"run_id", "call_ids", "logical_call_ids", "unknown_call_ids", "accounting"}
+                or call_ledger.get("run_id") != request.run_id
+                or call_ledger.get("accounting") != accounting
+                or call_ledger.get("call_ids") != list(observer.call_order)
+                or call_ledger.get("logical_call_ids") != list(observer.logical_call_order)
+                or call_ledger.get("unknown_call_ids") != list(unknown_call_ids)
+                or set(browser_ledger) != {"run_id", "actions"}
+                or browser_ledger.get("run_id") != request.run_id
+                or browser_ledger.get("actions")
+                != [
+                    {"action_id": action_id, "terminal_state": terminal_state}
+                    for action_id, terminal_state in preservation.browser_actions
+                ]
+                or set(process_document)
+                != {
+                    "run_id",
+                    "failure_class",
+                    "exit_code",
+                    "retry_count",
+                    "command_argv",
+                    "command_sha256",
+                    "condition_plan_path",
+                    "condition_plan_sha256",
+                    "writers_closed",
+                    "browser_descendants_closed",
+                }
+                or process_document.get("run_id") != request.run_id
+                or process_document.get("failure_class") != failure_class.value
+                or process_document.get("exit_code") != process_exit_code
+                or process_document.get("retry_count") != 0
+                or process_document.get("command_argv") != list(request.command_argv)
+                or process_document.get("command_sha256") != request.command_sha256
+                or process_document.get("condition_plan_path") != request.condition_plan_path
+                or process_document.get("condition_plan_sha256") != request.condition_plan_sha256
+                or process_document.get("writers_closed") is not True
+                or process_document.get("browser_descendants_closed") is not True
+                or set(completion_document)
+                != {"run_id", "completed", "answer", "error", "evaluator_eligible"}
+                or completion_document.get("run_id") != request.run_id
+                or completion_document.get("completed") is not completed
+                or completion_document.get("answer") != answer
+                or completion_document.get("error") != failure_class.value
+                or completion_document.get("evaluator_eligible") is not False
+            ):
+                raise AdapterFailure("essential failure outcome is not reconstructable")
+            for label, document in (
+                ("essential failure manifest", manifest),
+                ("essential failure receipt", receipt),
+                ("essential failure call ledger", call_ledger),
+                ("essential failure browser ledger", browser_ledger),
+                ("essential failure process outcome", process_document),
+                ("essential failure completion", completion_document),
+            ):
+                self._reject_private_failure_structure(document, label=label)
+            self._validate_failure_schema(
+                "schemas/t09-essential-failure-manifest.schema.json",
+                manifest,
+                label="essential failure manifest",
+            )
+            self._validate_failure_schema(
+                "schemas/t09-essential-failure-complete.schema.json",
+                receipt,
+                label="essential failure completion receipt",
+            )
+            pilot.mark_essential_failure_sealed(
+                self._pilot_state,
+                execution_contract_sha256=execution.sha256,
+                run_id=request.run_id,
+                manifest_sha256=manifest_sha,
+                receipt_sha256=receipt_sha,
+            )
+            export_identity = _identity(
+                {
+                    "run_id": request.run_id,
+                    "essential_manifest_sha256": manifest_sha,
+                    "essential_receipt_sha256": receipt_sha,
+                    "essential_file_count": len(preexport_artifacts),
+                    "essential_total_bytes": preexport_total,
+                }
+            )
+            export_request = ConditionFailureExportRequest(
+                run_id=request.run_id,
+                essential_root=root,
+                essential_manifest_path=manifest_path,
+                essential_receipt_path=receipt_path,
+                essential_manifest_sha256=manifest_sha,
+                essential_receipt_sha256=receipt_sha,
+                essential_file_count=len(preexport_artifacts),
+                essential_total_bytes=preexport_total,
+                export_identity=export_identity,
+            )
+            resumed = False
+            try:
+                self._revalidate_artifacts(held_failure)
+                export = self.low_level_effects.export_condition_failure(export_request)
+            except ConditionFailureExportInterrupted:
+                resumed = True
+                self._revalidate_artifacts(held_failure)
+                export = self.low_level_effects.export_condition_failure(export_request)
             self._revalidate_artifacts(held_failure)
-            export = self.low_level_effects.export_condition_failure(export_request)
-        except ConditionFailureExportInterrupted:
-            resumed = True
+
+            acknowledgement_path = _safe_existing_file(
+                root,
+                export.acknowledgement_path,
+                label="essential failure export acknowledgement",
+            )
+            if acknowledgement_path != root / "export-acknowledgement.json":
+                raise AdapterFailure("essential failure acknowledgement path drifted")
+            complete_paths = self._enumerate_essential_envelope(root)
+            complete_total = sum(
+                path.stat(follow_symlinks=False).st_size for path in complete_paths
+            )
+            if (
+                complete_total > preservation.essential_failure_cap_bytes
+                or len(complete_paths) > preservation.essential_failure_file_cap
+            ):
+                raise AdapterFailure("complete essential failure envelope exceeds its cap")
+            complete_held = self._hold_artifact_set(complete_paths)
+            complete_by_path = {artifact.path: artifact for artifact in complete_held}
+            acknowledgement_artifact = complete_by_path.get(acknowledgement_path)
+            if acknowledgement_artifact is None:
+                raise AdapterFailure("essential failure acknowledgement identity is not held")
+            acknowledgement = self._load_canonical_held_json(
+                acknowledgement_artifact,
+                label="essential failure export acknowledgement",
+            )
+            expected_acknowledgement_keys = {
+                "schema_version",
+                "run_id",
+                "export_identity",
+                "essential_manifest_sha256",
+                "essential_receipt_sha256",
+                "essential_file_count",
+                "essential_total_bytes",
+                "destination_identity",
+                "export_complete",
+                "resumed",
+                "envelope_padding",
+            }
+            padding = acknowledgement.get("envelope_padding")
+            expected_complete_paths = set(evidence_paths) | {acknowledgement_path}
+            if padding is not None:
+                if not isinstance(padding, dict) or set(padding) != {"path", "bytes", "sha256"}:
+                    raise AdapterFailure("essential failure padding descriptor is malformed")
+                padding_path_value = padding.get("path")
+                if (
+                    not isinstance(padding_path_value, str)
+                    or Path(padding_path_value).name != padding_path_value
+                ):
+                    raise AdapterFailure("essential failure padding path is not one local member")
+                padding_path = _safe_existing_file(
+                    root,
+                    root / padding_path_value,
+                    label="essential failure envelope padding",
+                )
+                padding_artifact = complete_by_path.get(padding_path)
+                if (
+                    padding_artifact is None
+                    or padding.get("bytes") != padding_artifact.bytes
+                    or padding.get("sha256") != padding_artifact.sha256
+                ):
+                    raise AdapterFailure("essential failure padding identity drifted")
+                expected_complete_paths.add(padding_path)
+            if (
+                set(complete_paths) != expected_complete_paths
+                or set(acknowledgement) != expected_acknowledgement_keys
+                or acknowledgement.get("schema_version") != "2.0.0"
+                or acknowledgement.get("run_id") != request.run_id
+                or acknowledgement.get("export_identity") != export_identity
+                or acknowledgement.get("essential_manifest_sha256") != manifest_sha
+                or acknowledgement.get("essential_receipt_sha256") != receipt_sha
+                or acknowledgement.get("essential_file_count") != len(preexport_artifacts)
+                or acknowledgement.get("essential_total_bytes") != preexport_total
+                or acknowledgement.get("destination_identity") != export.destination_identity
+                or acknowledgement.get("export_complete") is not True
+                or acknowledgement.get("resumed") is not resumed
+                or export.run_id != request.run_id
+                or export.export_identity != export_identity
+                or _HEX64.fullmatch(export.destination_identity) is None
+                or export.essential_manifest_sha256 != manifest_sha
+                or export.essential_receipt_sha256 != receipt_sha
+                or export.essential_file_count != len(preexport_artifacts)
+                or export.essential_total_bytes != preexport_total
+                or export.acknowledgement_bytes != acknowledgement_artifact.bytes
+                or not export.export_complete
+                or export.resumed is not resumed
+                or export.receipt_sha256 != acknowledgement_artifact.sha256
+                or complete_by_path[manifest_path].sha256 != manifest_sha
+                or complete_by_path[receipt_path].sha256 != receipt_sha
+            ):
+                raise AdapterFailure("essential failure export acknowledgement drifted")
+            self._reject_private_failure_structure(
+                acknowledgement,
+                label="essential failure export acknowledgement",
+            )
+            self._validate_failure_schema(
+                "schemas/t09-essential-failure-export-acknowledgement.schema.json",
+                acknowledgement,
+                label="essential failure export acknowledgement",
+            )
+            if host.privacy_violations(root):
+                raise AdapterFailure("complete essential envelope failed privacy validation")
             self._revalidate_artifacts(held_failure)
-            export = self.low_level_effects.export_condition_failure(export_request)
-        self._revalidate_artifacts(held_failure)
-        if (
-            export.run_id != request.run_id
-            or export.export_identity != export_identity
-            or _HEX64.fullmatch(export.destination_identity) is None
-            or export.essential_manifest_sha256 != manifest_sha
-            or export.essential_receipt_sha256 != receipt_sha
-            or export.essential_file_count != len(files)
-            or export.essential_total_bytes != total
-            or not export.export_complete
-            or export.resumed is not resumed
-            or export.receipt_sha256 != self._failure_export_receipt_identity(export)
-            or by_path[manifest_path].sha256 != manifest_sha
-            or by_path[receipt_path].sha256 != receipt_sha
-        ):
+            self._revalidate_artifacts(complete_held)
+
+            complete_outcome = replace(
+                outcome,
+                essential_file_count=len(complete_held),
+                essential_total_bytes=complete_total,
+            )
             for artifact in held_failure:
                 artifact.close()
-            raise AdapterFailure("essential failure export acknowledgement drifted")
-        self._condition_failures[request.run_id] = outcome
-        self._essential_failure_exports[request.run_id] = export
-        self._essential_failure_artifacts[request.run_id] = held_failure
-        self._essential_failure_artifact_bindings[request.run_id] = self._artifact_binding(
-            held_failure
-        )
-        self._primitive("mark_essential_failure_sealed")
-        self._primitive("validate_essential_failure_bundle")
-        self._primitive("export_essential_failure_bundle")
-        return EssentialFailureRecord(
-            run_id=request.run_id,
-            stopping_phase=stopping_phase,
-            failure_class=failure_class.value,
-            manifest_sha256=manifest_sha,
-            receipt_sha256=receipt_sha,
-            export_receipt_sha256=export.receipt_sha256,
-            evidence_binding_sha256=_identity(
-                {
-                    "manifest_sha256": manifest_sha,
-                    "receipt_sha256": receipt_sha,
-                    "export_receipt_sha256": export.receipt_sha256,
-                    "held_artifact_binding_sha256": self._essential_failure_artifact_bindings[
-                        request.run_id
-                    ],
-                    "accounting": accounting,
-                }
-            ),
-        )
+            held_failure = ()
+            self._condition_failures[request.run_id] = complete_outcome
+            self._essential_failure_exports[request.run_id] = export
+            self._essential_failure_artifacts[request.run_id] = complete_held
+            self._essential_failure_artifact_bindings[request.run_id] = self._artifact_binding(
+                complete_held
+            )
+            retained = True
+            self._primitive("mark_essential_failure_sealed")
+            self._primitive("validate_essential_failure_bundle")
+            self._primitive("export_essential_failure_bundle")
+            return EssentialFailureRecord(
+                run_id=request.run_id,
+                stopping_phase=stopping_phase,
+                failure_class=failure_class.value,
+                manifest_sha256=manifest_sha,
+                receipt_sha256=receipt_sha,
+                export_receipt_sha256=export.receipt_sha256,
+                evidence_binding_sha256=_identity(
+                    {
+                        "manifest_sha256": manifest_sha,
+                        "receipt_sha256": receipt_sha,
+                        "export_receipt_sha256": export.receipt_sha256,
+                        "essential_file_count": len(complete_held),
+                        "essential_total_bytes": complete_total,
+                        "held_artifact_binding_sha256": (
+                            self._essential_failure_artifact_bindings[request.run_id]
+                        ),
+                        "accounting": accounting,
+                    }
+                ),
+            )
+        finally:
+            if not retained:
+                for artifact in (*held_failure, *complete_held):
+                    artifact.close()
 
     def _seal_accepted_condition_failure(
         self,
@@ -3394,11 +3773,354 @@ class ProductionCategory3World:
         values.pop("receipt_sha256")
         return _identity(values)
 
+    @staticmethod
+    def _provider_lifecycle_proof_identity(
+        proof: ProviderLifecycleCostProof,
+    ) -> str:
+        values = asdict(proof)
+        values.pop("receipt_sha256")
+        return _identity(values)
+
+    def _retained_provider_price(
+        self,
+        entry_source: Path,
+    ) -> tuple[Decimal, str]:
+        """Revalidate the exact retained offer that froze provider pricing."""
+
+        provider.validate_source_manifest(entry_source, contract=self.contract)
+        price_source = entry_source / "001-instance-types.json"
+        source = load_json(price_source)
+        data = source.get("data")
+        offer = data.get(provider.INSTANCE_TYPE) if isinstance(data, dict) else None
+        identity = offer.get("instance_type") if isinstance(offer, dict) else None
+        cents = identity.get("price_cents_per_hour") if isinstance(identity, dict) else None
+        if type(cents) is not int or cents <= 0:
+            raise AdapterFailure("retained provider price source is malformed or zero")
+        return Decimal(cents) / Decimal(100), _file_sha256(price_source)
+
+    def _closed_provider_interval(
+        self,
+        *,
+        ordinal: int,
+        prior_cumulative: Decimal,
+        expected_price: Decimal,
+    ) -> tuple[ProviderLifecycleInterval, Decimal, str]:
+        """Reconstruct one closed preflight/replacement slot from retained bytes."""
+
+        root = self._campaign_roots.get(ordinal)
+        if root is None:
+            raise AdapterFailure("provider lifecycle omitted one consumed launch root")
+        eligibility_path = root / "replacement-launch-eligibility.json"
+        eligibility = load_json(eligibility_path)
+        if (
+            eligibility.get("closed_launch_slot") != ordinal
+            or eligibility.get("terminal_or_absent") is not True
+            or eligibility.get("zero_t09_instances") is not True
+            or eligibility.get("security_restored") is not True
+        ):
+            raise AdapterFailure("closed provider slot lacks terminal retained eligibility")
+        cumulative = _decimal_number(
+            eligibility.get("prior_lambda_cost_usd"),
+            label="closed provider cumulative cost",
+        )
+        if cumulative < prior_cumulative:
+            raise AdapterFailure("closed provider cumulative cost moved backward")
+
+        entry_source = root / "entry-source"
+        price, price_sha = self._retained_provider_price(entry_source)
+        if price != expected_price:
+            raise AdapterFailure("closed provider slot used another frozen hourly price")
+        entry_path = entry_source / "entry-receipt.json"
+        closeout_path = root / "closeout-source/closeout-receipt.json"
+        commit, _tree = _git_identity(self.repository)
+        plan_sha = _file_sha256(self.repository / self.contract.provider_profile_path)
+        if entry_path.is_file() and closeout_path.is_file():
+            entry = provider.validate_entry_receipt_source_bound(
+                entry_path,
+                entry_source,
+                contract=self.contract,
+                package_commit=commit,
+                plan_sha256=plan_sha,
+            )
+            closeout = provider.validate_closeout_receipt(
+                closeout_path,
+                root / "closeout-source",
+                contract=self.contract,
+                entry_receipt_path=entry_path,
+                entry_source_root=entry_source,
+                package_commit=commit,
+                plan_sha256=plan_sha,
+                lifecycle=provider.load_campaign_lifecycle(
+                    self.repository,
+                    contract=self.contract,
+                ),
+            )
+            owner = cast(str, entry["owned_instance_identity_sha256"])
+            started = finite_time(
+                entry.get("owned_lambda_started_at_epoch"),
+                label="closed provider active start",
+            )
+            ended = max(
+                finite_time(
+                    closeout.get("terminal_observed_at_epoch"),
+                    label="closed provider terminal observation",
+                ),
+                finite_time(
+                    closeout.get("zero_instance_observed_at_epoch"),
+                    label="closed provider zero observation",
+                ),
+            )
+            entry_identity = _file_sha256(entry_path)
+            closeout_identity = _file_sha256(closeout_path)
+            retained_cumulative = _decimal_number(
+                closeout.get("lambda_list_cost_usd"),
+                label="source-bound closeout cumulative cost",
+            )
+        else:
+            owner_path = root / "provisional-owned-state.json"
+            closed_path = root / "PROVISIONAL_OWNER_CLOSED.json"
+            owner_document = load_json(owner_path)
+            closed_document = load_json(closed_path)
+            owner = cast(str, owner_document.get("owned_instance_identity_sha256"))
+            if (
+                not isinstance(owner, str)
+                or _HEX64.fullmatch(owner) is None
+                or closed_document.get("owned_instance_identity_sha256") != owner
+                or closed_document.get("provider_disposition") != "absent"
+            ):
+                raise AdapterFailure("provisional provider closeout identity drifted")
+            started = finite_time(
+                owner_document.get("lambda_started_at_epoch"),
+                label="provisional provider active start",
+            )
+            ended = finite_time(
+                closed_document.get("closed_at_epoch"),
+                label="provisional provider active end",
+            )
+            entry_identity = _file_sha256(owner_path)
+            closeout_identity = _file_sha256(closed_path)
+            retained_cumulative = cumulative
+        if ended < started:
+            raise AdapterFailure("closed provider interval ends before it starts")
+        interval_cost = (Decimal(str(ended)) - Decimal(str(started))) * price / Decimal(3600)
+        derived_cumulative = prior_cumulative + interval_cost
+        tolerance = Decimal("0.000000001")
+        if (
+            abs(retained_cumulative - cumulative) > tolerance
+            or abs(derived_cumulative - cumulative) > tolerance
+        ):
+            raise AdapterFailure("closed provider interval cost is not source-derived")
+        billable = (
+            self.authorization_context.execution_mode
+            is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+        )
+        interval = ProviderLifecycleInterval(
+            launch_ordinal=ordinal,
+            owned_instance_identity=owner,
+            entry_or_owner_receipt_sha256=entry_identity,
+            closeout_receipt_sha256=closeout_identity,
+            active_started_wall_time=started,
+            active_ended_wall_time=ended,
+            hourly_price_usd=_decimal_text(price),
+            billed_cost_usd=_decimal_text(interval_cost if billable else Decimal(0)),
+            billable_real_effect=billable,
+        )
+        return (
+            interval,
+            cumulative,
+            _identity(
+                {
+                    "eligibility_sha256": _file_sha256(eligibility_path),
+                    "entry_or_owner_receipt_sha256": entry_identity,
+                    "closeout_receipt_sha256": closeout_identity,
+                    "provider_price_source_sha256": price_sha,
+                }
+            ),
+        )
+
+    def _derive_provider_lifecycle_cost_proof(
+        self,
+        *,
+        state: Mapping[str, object],
+        active: ProviderHandle,
+        observed_wall: float,
+        observed_monotonic: float,
+    ) -> ProviderLifecycleCostProof:
+        """Derive checkpoint provider cost solely from retained lifecycle evidence."""
+
+        try:
+            profile = load_provider_profile(self.repository, self.contract)
+        except (OSError, T09ProviderContractError) as exc:
+            raise AdapterFailure("provider lifecycle profile identity drifted") from exc
+        lifecycle = profile.get("provider_lifecycle")
+        budget = profile.get("budget")
+        if (
+            not isinstance(lifecycle, dict)
+            or lifecycle.get("cumulative_accounting_origin") != "actual-active-lambda-seconds"
+            or not isinstance(budget, dict)
+            or budget.get("max_provider_compute_cost_usd")
+            != self.contract.campaign_lambda_cost_cap_usd
+        ):
+            raise AdapterFailure("provider profile does not freeze lifecycle cost policy")
+        profile_sha = _file_sha256(self.repository / self.contract.provider_profile_path)
+        if profile_sha != self.contract.expected_provider_profile_sha256:
+            raise AdapterFailure("provider profile hash differs from the selected contract")
+
+        expected_closed = tuple(range(1, active.launch_ordinal))
+        if tuple(self._closed_launch_slots) != expected_closed:
+            raise AdapterFailure("provider lifecycle closed-slot set is incomplete or duplicated")
+        active_root = self._campaign_roots.get(active.launch_ordinal)
+        entry_path = self._entry_receipts.get(active.launch_ordinal)
+        if active_root is None or entry_path is None:
+            raise AdapterFailure("provider lifecycle lacks its active source-bound entry")
+        entry_source = active_root / "entry-source"
+        commit, _tree = _git_identity(self.repository)
+        entry = provider.validate_entry_receipt_source_bound(
+            entry_path,
+            entry_source,
+            contract=self.contract,
+            package_commit=commit,
+            plan_sha256=profile_sha,
+        )
+        price, active_price_sha = self._retained_provider_price(entry_source)
+        if _decimal_number(entry.get("hourly_price_usd"), label="entry hourly price") != price:
+            raise AdapterFailure("provider entry price differs from its retained offer")
+        if (
+            entry.get("owned_instance_identity_sha256") != active.opaque_identity
+            or entry.get("launch_slot") != active.launch_ordinal
+        ):
+            raise AdapterFailure("active provider entry identity drifted")
+
+        campaign_wall = finite_time(
+            state.get("campaign_started_at_epoch"),
+            label="campaign wall origin",
+        )
+        if (
+            self._freeze is None
+            or self._campaign_started_monotonic is None
+            or campaign_wall != self._freeze.completed_wall_time
+            or self._campaign_started_monotonic != self._freeze.completed_monotonic
+        ):
+            raise AdapterFailure("empirical provider clock is not bound to the durable freeze")
+        campaign_mono = self._campaign_started_monotonic
+        wall_elapsed = observed_wall - campaign_wall
+        monotonic_elapsed = observed_monotonic - campaign_mono
+        if wall_elapsed < 0 or monotonic_elapsed < 0 or abs(wall_elapsed - monotonic_elapsed) > 1.0:
+            raise AdapterFailure("provider observation mixes or shifts clock domains")
+
+        intervals: list[ProviderLifecycleInterval] = []
+        price_source_hashes: list[str] = []
+        closed_receipt_hashes: list[str] = []
+        prior_cumulative = Decimal(0)
+        prior_end: float | None = None
+        for ordinal in expected_closed:
+            interval, prior_cumulative, source_binding = self._closed_provider_interval(
+                ordinal=ordinal,
+                prior_cumulative=prior_cumulative,
+                expected_price=price,
+            )
+            if prior_end is not None and interval.active_started_wall_time < prior_end:
+                raise AdapterFailure("provider lifecycle intervals overlap")
+            assert interval.active_ended_wall_time is not None
+            prior_end = interval.active_ended_wall_time
+            intervals.append(interval)
+            price_source_hashes.append(
+                _file_sha256(self._campaign_roots[ordinal] / "entry-source/001-instance-types.json")
+            )
+            closed_receipt_hashes.append(source_binding)
+
+        active_started = finite_time(
+            entry.get("owned_lambda_started_at_epoch"),
+            label="active provider start",
+        )
+        if (
+            active_started > campaign_wall
+            or campaign_wall > observed_wall
+            or (prior_end is not None and active_started < prior_end)
+        ):
+            raise AdapterFailure("active provider interval chronology drifted")
+        retained_prior = _decimal_number(
+            entry.get("prior_campaign_lambda_cost_usd"),
+            label="active entry prior provider cost",
+        )
+        state_prior = _decimal_number(
+            state.get("prior_campaign_lambda_cost_usd"),
+            label="pilot-state prior provider cost",
+        )
+        if (
+            abs(retained_prior - prior_cumulative) > Decimal("0.000000001")
+            or state_prior != retained_prior
+        ):
+            raise AdapterFailure("prior provider cost omits or duplicates a closed slot")
+
+        deterministic = (
+            self.authorization_context.execution_mode
+            is EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+        )
+        current_preflight = (
+            (Decimal(str(campaign_wall)) - Decimal(str(active_started))) * price / Decimal(3600)
+        )
+        empirical = (
+            (Decimal(str(observed_wall)) - Decimal(str(campaign_wall))) * price / Decimal(3600)
+        )
+        if deterministic:
+            prior_cost = Decimal(0)
+            empirical_cost = Decimal(0)
+            active_cost = Decimal(0)
+        else:
+            prior_cost = prior_cumulative + current_preflight
+            empirical_cost = empirical
+            active_cost = current_preflight + empirical
+        intervals.append(
+            ProviderLifecycleInterval(
+                launch_ordinal=active.launch_ordinal,
+                owned_instance_identity=active.opaque_identity,
+                entry_or_owner_receipt_sha256=_file_sha256(entry_path),
+                closeout_receipt_sha256=None,
+                active_started_wall_time=active_started,
+                active_ended_wall_time=None,
+                hourly_price_usd=_decimal_text(price),
+                billed_cost_usd=_decimal_text(active_cost),
+                billable_real_effect=not deterministic,
+            )
+        )
+        price_source_hashes.append(active_price_sha)
+        price_binding = _identity(price_source_hashes)
+        cumulative = prior_cost + empirical_cost
+        provisional = ProviderLifecycleCostProof(
+            provider_contract_version=self.contract.version,
+            plan_id=self.contract.plan_id,
+            provider_profile_sha256=profile_sha,
+            provider_price_source_sha256=price_binding,
+            active_entry_receipt_sha256=_file_sha256(entry_path),
+            closed_slot_source_binding_sha256s=tuple(closed_receipt_hashes),
+            intervals=tuple(intervals),
+            prior_preflight_cost_usd=_decimal_text(prior_cost),
+            current_empirical_cost_usd=_decimal_text(empirical_cost),
+            cumulative_provider_cost_usd=_decimal_text(cumulative),
+            observed_wall_time=observed_wall,
+            observed_monotonic=observed_monotonic,
+            real_provider_effects=not deterministic,
+            receipt_sha256="0" * 64,
+        )
+        proof = ProviderLifecycleCostProof(
+            **{
+                **asdict(provisional),
+                "intervals": provisional.intervals,
+                "receipt_sha256": self._provider_lifecycle_proof_identity(provisional),
+            }
+        )
+        if proof.receipt_sha256 != self._provider_lifecycle_proof_identity(proof):
+            raise AdapterFailure("provider lifecycle proof identity drifted")
+        self._provider_lifecycle_cost_proof = proof
+        self._primitive("validate_provider_lifecycle_cost_proof")
+        return proof
+
     def _observe_provider_cost(
         self,
         *,
         state: Mapping[str, object],
-    ) -> ProviderCostReceipt:
+    ) -> ProviderLifecycleCostProof:
         candidates = [
             handle
             for ordinal, handle in sorted(self._provider_handles.items())
@@ -3406,84 +4128,80 @@ class ProductionCategory3World:
         ]
         if len(candidates) != 1:
             raise AdapterFailure("checkpoint lacks one exact active provider owner")
-        campaign_started_wall = finite_time(
-            state.get("campaign_started_at_epoch"),
-            label="campaign wall origin",
-        )
         if self._campaign_started_monotonic is None:
             raise AdapterFailure("checkpoint lacks its campaign monotonic origin")
         observed_wall = self.clock.wall_time()
         observed_monotonic = self.clock.monotonic()
+        proof = self._derive_provider_lifecycle_cost_proof(
+            state=state,
+            active=candidates[0],
+            observed_wall=observed_wall,
+            observed_monotonic=observed_monotonic,
+        )
+        active_interval = proof.intervals[-1]
         request = ProviderCostObservationRequest(
             provider_handle=candidates[0],
             observed_wall_time=observed_wall,
             observed_monotonic=observed_monotonic,
-            campaign_started_wall_time=campaign_started_wall,
+            campaign_started_wall_time=finite_time(
+                state.get("campaign_started_at_epoch"),
+                label="campaign wall origin",
+            ),
             campaign_started_monotonic=self._campaign_started_monotonic,
+            provider_profile_sha256=proof.provider_profile_sha256,
+            provider_price_source_sha256=proof.provider_price_source_sha256,
+            active_entry_receipt_sha256=proof.active_entry_receipt_sha256,
+            closed_slot_receipt_sha256s=proof.closed_slot_source_binding_sha256s,
+            frozen_hourly_price_usd=float(active_interval.hourly_price_usd),
+            active_started_wall_time=active_interval.active_started_wall_time,
+            prior_preflight_cost_usd=float(proof.prior_preflight_cost_usd),
+            current_empirical_cost_usd=float(proof.current_empirical_cost_usd),
+            cumulative_provider_cost_usd=float(proof.cumulative_provider_cost_usd),
         )
         receipt = self.low_level_effects.provider_cost_receipt(request)
-        numeric = (
-            receipt.hourly_price_usd,
-            receipt.active_started_wall_time,
-            receipt.observed_wall_time,
-            receipt.prior_preflight_cost_usd,
-            receipt.current_empirical_cost_usd,
-            receipt.cumulative_provider_cost_usd,
+        self._validate_provider_cost_reconciliation(
+            receipt=receipt,
+            request=request,
+            proof=proof,
+            contract=self.contract,
         )
-        effective_end = (
-            receipt.active_ended_wall_time
-            if receipt.active_ended_wall_time is not None
-            else receipt.observed_wall_time
-        )
-        expected_current = (
-            (effective_end - receipt.active_started_wall_time) * receipt.hourly_price_usd / 3600.0
-        )
-        deterministic = (
-            self.authorization_context.execution_mode
-            is EffectExecutionMode.DETERMINISTIC_NO_NETWORK
-        )
-        if (
-            receipt.owned_instance_identity != request.provider_handle.opaque_identity
-            or receipt.launch_ordinal != request.provider_handle.launch_ordinal
-            or type(receipt.real_provider_effects) is not bool
-            or any(not math.isfinite(value) or value < 0 for value in numeric)
-            or (
-                receipt.active_ended_wall_time is not None
-                and (
-                    not math.isfinite(receipt.active_ended_wall_time)
-                    or receipt.active_ended_wall_time < receipt.active_started_wall_time
-                )
-            )
-            or receipt.active_started_wall_time > receipt.observed_wall_time
-            or receipt.observed_wall_time != observed_wall
-            or not math.isclose(
-                receipt.current_empirical_cost_usd,
-                expected_current,
-                rel_tol=1e-12,
-                abs_tol=1e-12,
-            )
-            or not math.isclose(
-                receipt.cumulative_provider_cost_usd,
-                receipt.prior_preflight_cost_usd + receipt.current_empirical_cost_usd,
-                rel_tol=1e-12,
-                abs_tol=1e-12,
-            )
-            or receipt.receipt_sha256 != self._provider_cost_receipt_identity(receipt)
-            or (
-                deterministic
-                and (
-                    receipt.real_provider_effects
-                    or receipt.hourly_price_usd != 0.0
-                    or receipt.prior_preflight_cost_usd != 0.0
-                    or receipt.current_empirical_cost_usd != 0.0
-                    or receipt.cumulative_provider_cost_usd != 0.0
-                )
-            )
-            or (not deterministic and not receipt.real_provider_effects)
-        ):
-            raise AdapterFailure("provider lifecycle cost receipt is not exact")
         self._provider_cost_receipt = receipt
-        return receipt
+        return proof
+
+    @staticmethod
+    def _validate_provider_cost_reconciliation(
+        *,
+        receipt: ProviderCostReceipt,
+        request: ProviderCostObservationRequest,
+        proof: ProviderLifecycleCostProof,
+        contract: T09ProviderContract,
+    ) -> None:
+        """Reject any effect-selected value that differs from shared lifecycle truth."""
+
+        if (
+            receipt.provider_contract_version != contract.version
+            or receipt.plan_id != contract.plan_id
+            or receipt.owned_instance_identity != request.provider_handle.opaque_identity
+            or receipt.launch_ordinal != request.provider_handle.launch_ordinal
+            or receipt.provider_profile_sha256 != request.provider_profile_sha256
+            or receipt.provider_price_source_sha256 != request.provider_price_source_sha256
+            or receipt.active_entry_receipt_sha256 != request.active_entry_receipt_sha256
+            or receipt.closed_slot_receipt_sha256s != request.closed_slot_receipt_sha256s
+            or receipt.hourly_price_usd != request.frozen_hourly_price_usd
+            or receipt.active_started_wall_time != request.active_started_wall_time
+            or receipt.active_ended_wall_time is not None
+            or receipt.observed_wall_time != request.observed_wall_time
+            or receipt.observed_monotonic != request.observed_monotonic
+            or receipt.prior_preflight_cost_usd != request.prior_preflight_cost_usd
+            or receipt.current_empirical_cost_usd != request.current_empirical_cost_usd
+            or receipt.cumulative_provider_cost_usd != request.cumulative_provider_cost_usd
+            or receipt.real_provider_effects is not proof.real_provider_effects
+            or receipt.receipt_sha256
+            != ProductionCategory3World._provider_cost_receipt_identity(receipt)
+        ):
+            raise AdapterFailure(
+                "effect provider-cost receipt differs from shared-derived lifecycle evidence"
+            )
 
     def _checkpoint_cost_projection(
         self,
@@ -3729,8 +4447,9 @@ class ProductionCategory3World:
                 evidence_bindings,
             ) = self._task_a_checkpoint_evidence(state=state)
             provider_cost = self._observe_provider_cost(state=state)
+            provider_cost_value = float(provider_cost.cumulative_provider_cost_usd)
             projected_cost = self._checkpoint_cost_projection(
-                actual_provider_cost_usd=provider_cost.cumulative_provider_cost_usd,
+                actual_provider_cost_usd=provider_cost_value,
             )
             assert self._runtime_budget is not None
             next_caps = self._runtime_budget.condition_caps.get(self.contract.run_ids[2])
@@ -3748,7 +4467,7 @@ class ProductionCategory3World:
                 actual_usage=self._aggregate_usage,
                 actual_pair_wall_seconds=decided_monotonic - first_monotonic,
                 projected_aggregate_cost_usd=projected_cost,
-                actual_lambda_cost_usd=provider_cost.cumulative_provider_cost_usd,
+                actual_lambda_cost_usd=provider_cost_value,
                 remaining_campaign_seconds=remaining,
                 next_attempt_hard_wall_seconds=int(next_caps.max_wall_seconds),
                 prior_t09_cost_usd=self.contract.prior_t09_cost_usd,
@@ -3766,6 +4485,7 @@ class ProductionCategory3World:
                 "decided_at_epoch": decided,
                 "evidence_binding_sha256": _identity(evidence_bindings),
                 "provider_cost_receipt_sha256": provider_cost.receipt_sha256,
+                "provider_lifecycle_cost_proof_sha256": provider_cost.receipt_sha256,
             }
             pilot.record_first_pair_checkpoint(
                 self._pilot_state,
@@ -3815,18 +4535,51 @@ class ProductionCategory3World:
         values.pop("receipt_sha256")
         return _identity(values)
 
-    @staticmethod
-    def _destroy_secret_file(path: Path) -> None:
-        if not path.is_file() or path.is_symlink():
-            return
+    def _destroy_secret_file(self, path: Path) -> None:
+        """Destroy one top-level secret through the held root descriptor."""
+
         try:
-            size = path.stat(follow_symlinks=False).st_size
-            with path.open("r+b", buffering=0) as handle:
-                handle.write(b"\x00" * size)
-                handle.flush()
-                os.fsync(handle.fileno())
+            relative = path.relative_to(self.root).as_posix()
+        except ValueError as exc:
+            raise AdapterFailure("secret cleanup path escaped the held root") from exc
+        if "/" in relative or relative in {"", ".", ".."}:
+            raise AdapterFailure("secret cleanup path is not one exact root member")
+        self.held_transaction_root.revalidate_descriptor()
+        try:
+            named = os.stat(
+                relative,
+                dir_fd=self.held_transaction_root.descriptor,
+                follow_symlinks=False,
+            )
+        except FileNotFoundError:
+            return
+        if not stat.S_ISREG(named.st_mode) or named.st_uid != os.getuid() or named.st_nlink != 1:
+            raise AdapterFailure("secret cleanup target identity is unsafe")
+        descriptor = self.held_transaction_root.open_relative_no_follow(
+            relative,
+            flags=os.O_RDWR,
+        )
+        try:
+            metadata_value = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(metadata_value.st_mode)
+                or metadata_value.st_uid != os.getuid()
+                or metadata_value.st_nlink != 1
+            ):
+                raise AdapterFailure("secret cleanup target identity is unsafe")
+            size = metadata_value.st_size
+            offset = 0
+            block = b"\x00" * min(1_048_576, max(1, size))
+            while offset < size:
+                written = os.pwrite(descriptor, block[: min(len(block), size - offset)], offset)
+                if written <= 0:
+                    raise AdapterFailure("secret cleanup overwrite made no progress")
+                offset += written
+            os.fsync(descriptor)
         finally:
-            path.unlink(missing_ok=True)
+            os.close(descriptor)
+        os.unlink(relative, dir_fd=self.held_transaction_root.descriptor)
+        os.fsync(self.held_transaction_root.descriptor)
 
     def cleanup(self, handle: ProviderHandle | None) -> str:
         operation = "host.cleanup"
@@ -3976,6 +4729,168 @@ class ProductionCategory3World:
         self._record(operation, subject, "passed")
         return receipt.receipt_sha256
 
+    @staticmethod
+    def _privacy_findings_for_bytes(
+        host: ModuleType,
+        *,
+        relative: str,
+        encoded: bytes,
+    ) -> list[str]:
+        """Apply retained structural checks to descriptor-read bytes."""
+
+        findings: list[str] = []
+        text = encoded.decode("utf-8", errors="ignore")
+        for label, matcher in (
+            ("jupyter-url", host._JUPYTER_URL),
+            ("credential-pattern", host._CREDENTIAL_TEXT),
+        ):
+            if matcher.search(text):
+                findings.append(f"{relative}:{label}")
+        if host._private_network_values(text):
+            findings.append(f"{relative}:private-network")
+        if relative.endswith(".json") and len(encoded) <= host.MAX_PRIVACY_JSON_BYTES:
+            try:
+                value: object = json.loads(encoded)
+            except (UnicodeError, json.JSONDecodeError):
+                value = None
+            if value is not None and host._sensitive_json_paths(value):
+                findings.append(f"{relative}:sensitive-json-field")
+            if value is not None and "essential-failure" in PurePosixPath(relative).parts:
+                try:
+                    ProductionCategory3World._reject_private_failure_structure(
+                        value,
+                        label=relative,
+                    )
+                except AdapterFailure:
+                    findings.append(f"{relative}:private-structure")
+        elif relative.endswith(".jsonl"):
+            for raw_line in encoded.splitlines():
+                if len(raw_line) > host.MAX_PRIVACY_LINE_BYTES:
+                    continue
+                try:
+                    value = json.loads(raw_line)
+                except (UnicodeError, json.JSONDecodeError):
+                    continue
+                if host._sensitive_json_paths(value):
+                    findings.append(f"{relative}:sensitive-json-field")
+                    break
+        return findings
+
+    def _held_tree_privacy_findings(
+        self,
+        host: ModuleType,
+        *,
+        relative_root: str,
+    ) -> list[str]:
+        """Scan one subtree through the held root, never its pathname."""
+
+        findings: list[str] = []
+        entry_count = 0
+
+        def visit(directory_fd: int, prefix: str) -> None:
+            nonlocal entry_count
+            with os.scandir(directory_fd) as entries:
+                for entry in sorted(entries, key=lambda item: item.name):
+                    entry_count += 1
+                    if entry_count > 100_000:
+                        findings.append("control-public:entry-cap-exceeded")
+                        return
+                    relative = f"{prefix}/{entry.name}" if prefix else entry.name
+                    metadata_value = entry.stat(follow_symlinks=False)
+                    if stat.S_ISLNK(metadata_value.st_mode):
+                        findings.append(f"{relative}:symlink")
+                        continue
+                    if stat.S_ISDIR(metadata_value.st_mode):
+                        child = os.open(
+                            entry.name,
+                            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                            dir_fd=directory_fd,
+                        )
+                        try:
+                            visit(child, relative)
+                        finally:
+                            os.close(child)
+                        continue
+                    if not stat.S_ISREG(metadata_value.st_mode):
+                        findings.append(f"{relative}:nonregular")
+                        continue
+                    descriptor = os.open(
+                        entry.name,
+                        os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                        dir_fd=directory_fd,
+                    )
+                    try:
+                        observed = os.fstat(descriptor)
+                        if (
+                            observed.st_dev != metadata_value.st_dev
+                            or observed.st_ino != metadata_value.st_ino
+                            or observed.st_uid != os.getuid()
+                            or observed.st_nlink != 1
+                        ):
+                            findings.append(f"{relative}:unsafe-identity")
+                            continue
+                        chunks: list[bytes] = []
+                        offset = 0
+                        while True:
+                            chunk = os.pread(descriptor, 1_048_576, offset)
+                            if not chunk:
+                                break
+                            chunks.append(chunk)
+                            offset += len(chunk)
+                        encoded = b"".join(chunks)
+                    finally:
+                        os.close(descriptor)
+                    findings.extend(
+                        self._privacy_findings_for_bytes(
+                            host,
+                            relative=relative,
+                            encoded=encoded,
+                        )
+                    )
+
+        try:
+            public_fd = self.held_transaction_root.open_relative_no_follow(
+                relative_root,
+                flags=os.O_RDONLY | os.O_DIRECTORY,
+            )
+        except (OSError, ValueError):
+            return [f"{relative_root}:held-root-unavailable"]
+        try:
+            visit(public_fd, relative_root)
+        finally:
+            os.close(public_fd)
+        return findings
+
+    def _held_evidence_privacy_findings(self, host: ModuleType) -> list[str]:
+        """Scan every held raw/finalized/failure member through its descriptor."""
+
+        findings: list[str] = []
+        seen: set[tuple[int, int]] = set()
+        for groups in (
+            self._raw_artifacts,
+            self._finalized_artifacts,
+            self._essential_failure_artifacts,
+        ):
+            for artifacts in groups.values():
+                for artifact in artifacts:
+                    identity = (artifact.device, artifact.inode)
+                    if identity in seen:
+                        continue
+                    seen.add(identity)
+                    try:
+                        artifact.revalidate(allow_root_path_mismatch=True)
+                    except ValueError:
+                        findings.append(f"{artifact.relative_path}:held-identity-changed")
+                        continue
+                    findings.extend(
+                        self._privacy_findings_for_bytes(
+                            host,
+                            relative=artifact.relative_path,
+                            encoded=artifact.read_bytes(),
+                        )
+                    )
+        return findings
+
     def scan_privacy(self) -> str:
         operation = "evidence.scan_privacy"
         self._begin(operation, "effect-evidence")
@@ -3988,24 +4903,50 @@ class ProductionCategory3World:
             findings.extend(receipt.structural_privacy_findings)
             if receipt.exact_secret_matches != 0:
                 findings.append("exact credential material retained")
-        findings.extend(str(value) for value in host.privacy_violations(self.public_root))
-        for outcome in self._condition_outcomes.values():
-            findings.extend(str(value) for value in host.privacy_violations(outcome.raw_root))
-        self._primitive("privacy_violations")
+        findings.extend(
+            self._held_tree_privacy_findings(
+                host,
+                relative_root=self.public_root.relative_to(self.root).as_posix(),
+            )
+        )
+        for relative_root in sorted(self._essential_failure_roots):
+            findings.extend(self._held_tree_privacy_findings(host, relative_root=relative_root))
+        findings.extend(self._held_evidence_privacy_findings(host))
+        self._primitive("privacy_violations:held-descriptor")
         if findings:
-            if isinstance(self.authority, ValidatedLiveEffectAuthority):
-                self.authority.terminal_failed_nonreplayable()
             self._record(operation, "effect-evidence", "finding")
             raise StructuralPrivacyFinding("retained structural privacy scanner found a violation")
         assert receipt is not None
-        if isinstance(self.authority, ValidatedLiveEffectAuthority):
-            if self._authority_launch_consumed:
-                self.authority.terminal_complete()
-            else:
-                self.authority.terminal_failed_nonreplayable()
-            self._primitive("publish_live_authority_consumption_receipt")
+        if self._root_identity_mismatch:
+            self._record(operation, "effect-evidence", "path-identity-unresolved")
+            raise PrivacyUnresolved(
+                "held-root privacy scan completed but the original path identity changed"
+            )
         self._record(operation, "effect-evidence", "passed")
         return _identity({"privacy": "clean", "cleanup": receipt.receipt_sha256})
+
+    def terminalize_authority(self, *, complete: bool) -> Mapping[str, object]:
+        """Guarantee one terminal live-authority receipt before descriptor release."""
+
+        if not isinstance(self.authority, ValidatedLiveEffectAuthority):
+            return {
+                "terminal_state": "shadow-only",
+                "single_use": False,
+                "contains_private_overlay_contents": False,
+            }
+        terminal_complete = (
+            complete and self._authority_launch_consumed and not self._root_identity_mismatch
+        )
+        if terminal_complete:
+            self.authority.terminal_complete()
+        else:
+            self.authority.terminal_failed_nonreplayable(
+                allow_root_path_mismatch=self._root_identity_mismatch
+            )
+        self._primitive("publish_live_authority_consumption_receipt")
+        return self.authority.consumption_receipt(
+            allow_root_path_mismatch=self._root_identity_mismatch
+        )
 
     def control_evidence(self) -> Mapping[str, object]:
         lower_cost = self._aggregate_observed_usage.cost_usd
@@ -4031,7 +4972,7 @@ class ProductionCategory3World:
                     "contains_private_overlay_contents": False,
                 }
             ),
-            "held_transaction_root": self.held_transaction_root.to_document(),
+            "held_transaction_root": self.held_transaction_root.to_public_document(),
             "authorization_context_semantic_sha256": (self.authorization_context.semantic_sha256),
             "effect_implementation": (
                 self.authorization_context.effect_implementation.to_document()
@@ -4086,6 +5027,11 @@ class ProductionCategory3World:
             "first_pair_checkpoint": self._checkpoint_document,
             "provider_cost_receipt": (
                 None if self._provider_cost_receipt is None else asdict(self._provider_cost_receipt)
+            ),
+            "provider_lifecycle_cost_proof": (
+                None
+                if self._provider_lifecycle_cost_proof is None
+                else asdict(self._provider_lifecycle_cost_proof)
             ),
             "essential_failures": {
                 run_id: {

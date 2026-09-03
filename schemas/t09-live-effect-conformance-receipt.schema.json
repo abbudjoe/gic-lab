@@ -22,7 +22,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["1.0.0", "2.0.0"]},
+    "schema_version": {"enum": ["1.0.0", "2.0.0", "3.0.0"]},
     "control_implementation_commit": {"$ref": "#/$defs/git"},
     "control_implementation_tree": {"$ref": "#/$defs/git"},
     "effect_protocol_version": {"const": "1.0.0"},
@@ -58,7 +58,7 @@
     },
     {
       "if": {
-        "properties": {"schema_version": {"const": "2.0.0"}},
+        "properties": {"schema_version": {"enum": ["2.0.0", "3.0.0"]}},
         "required": ["schema_version"]
       },
       "then": {
@@ -72,7 +72,8 @@
               "first_pair_checkpoint",
               "provider_cost_accounting",
               "held_evidence_chain",
-              "review_failure_subreceipts"
+              "review_failure_subreceipts",
+              "public_runtime_topology"
             ]
           }
         }
@@ -272,6 +273,14 @@
           }
         },
         "review_failure_subreceipts": {"$ref": "#/$defs/reviewFailures"},
+        "public_runtime_topology": {
+          "const": {
+            "stable_held_root_projection_only": true,
+            "absolute_runtime_paths_retained": false,
+            "device_inode_uid_values_retained": false,
+            "repository_receipt_scan_bound": true
+          }
+        },
         "cleanup": {
           "const": {
             "state": "complete",
@@ -412,7 +421,8 @@
         "finalizer_closure_valid", "pair_match_valid", "decision", "reasons",
         "exact_private_decision_and_evidence_identities_validated",
         "private_runtime_identity_values_retained", "public_checkpoint_semantic_sha256",
-        "task_b_admitted_only_after_retained_decision"
+        "task_b_admitted_only_after_retained_decision",
+        "safety_fields_have_no_defaults"
       ],
       "properties": {
         "retained_first_pair_decision_invoked": {"const": true},
@@ -426,24 +436,37 @@
         "exact_private_decision_and_evidence_identities_validated": {"const": true},
         "private_runtime_identity_values_retained": {"const": false},
         "public_checkpoint_semantic_sha256": {"$ref": "#/$defs/sha256"},
-        "task_b_admitted_only_after_retained_decision": {"const": true}
+        "task_b_admitted_only_after_retained_decision": {"const": true},
+        "safety_fields_have_no_defaults": {"const": true}
       }
     },
     "providerCost": {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "owned_instance_identity", "launch_ordinal", "prior_preflight_cost_usd",
-        "current_empirical_cost_usd", "cumulative_provider_cost_usd",
-        "receipt_sha256", "zero_real_provider_effects"
+        "owned_instance_identity", "launch_ordinal", "hourly_price_usd",
+        "provider_profile_sha256", "provider_price_source_sha256",
+        "active_entry_receipt_sha256", "closed_slot_source_binding_sha256s",
+        "interval_count", "prior_preflight_cost_usd", "current_empirical_cost_usd",
+        "cumulative_provider_cost_usd", "effect_reconciliation_receipt_sha256",
+        "shared_lifecycle_proof_sha256", "shared_lifecycle_value_authoritative",
+        "zero_real_provider_effects"
       ],
       "properties": {
         "owned_instance_identity": {"$ref": "#/$defs/sha256"},
         "launch_ordinal": {"const": 1},
+        "hourly_price_usd": {"const": 1.29},
+        "provider_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "provider_price_source_sha256": {"$ref": "#/$defs/sha256"},
+        "active_entry_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "closed_slot_source_binding_sha256s": {"const": []},
+        "interval_count": {"const": 1},
         "prior_preflight_cost_usd": {"const": 0.0},
         "current_empirical_cost_usd": {"const": 0.0},
         "cumulative_provider_cost_usd": {"const": 0.0},
-        "receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "effect_reconciliation_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "shared_lifecycle_proof_sha256": {"$ref": "#/$defs/sha256"},
+        "shared_lifecycle_value_authoritative": {"const": true},
         "zero_real_provider_effects": {"const": true}
       }
     },
@@ -454,7 +477,10 @@
         "unscored-task-a-checkpoint-stop", "ambiguous-send-essential-failure",
         "nonzero-process-exit-essential-failure", "split-authorization-rejection",
         "effect-module-replacement-rejection", "symlink-transaction-root-rejection",
-        "raw-replacement-rejection"
+        "raw-replacement-rejection", "understated-provider-cost-rejection",
+        "omitted-provider-slot-rejection", "oversized-essential-manifest-rejection",
+        "sensitive-essential-receipt-rejection", "root-replacement-terminalization",
+        "public-runtime-topology-injection-rejection"
       ],
       "properties": {
         "unscored-task-a-checkpoint-stop": {
@@ -467,23 +493,43 @@
           }
         },
         "ambiguous-send-essential-failure": {
-          "const": {
-            "failure_class": "ambiguous-send",
-            "sealed": true,
-            "exported_and_acknowledged": true,
-            "unscored": true,
-            "zero_retry": true,
-            "cleanup_complete": true
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "failure_class", "sealed", "exported_and_acknowledged", "unscored",
+            "zero_retry", "cleanup_complete", "complete_envelope_file_count",
+            "complete_envelope_total_bytes", "manifest_receipt_export_scanned"
+          ],
+          "properties": {
+            "failure_class": {"const": "ambiguous-send"},
+            "sealed": {"const": true},
+            "exported_and_acknowledged": {"const": true},
+            "unscored": {"const": true},
+            "zero_retry": {"const": true},
+            "cleanup_complete": {"const": true},
+            "complete_envelope_file_count": {"type": "integer", "minimum": 7, "maximum": 4096},
+            "complete_envelope_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+            "manifest_receipt_export_scanned": {"const": true}
           }
         },
         "nonzero-process-exit-essential-failure": {
-          "const": {
-            "failure_class": "process-exit-nonzero",
-            "sealed": true,
-            "exported_and_acknowledged": true,
-            "unscored": true,
-            "zero_retry": true,
-            "cleanup_complete": true
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "failure_class", "sealed", "exported_and_acknowledged", "unscored",
+            "zero_retry", "cleanup_complete", "complete_envelope_file_count",
+            "complete_envelope_total_bytes", "manifest_receipt_export_scanned"
+          ],
+          "properties": {
+            "failure_class": {"const": "process-exit-nonzero"},
+            "sealed": {"const": true},
+            "exported_and_acknowledged": {"const": true},
+            "unscored": {"const": true},
+            "zero_retry": {"const": true},
+            "cleanup_complete": {"const": true},
+            "complete_envelope_file_count": {"type": "integer", "minimum": 7, "maximum": 4096},
+            "complete_envelope_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+            "manifest_receipt_export_scanned": {"const": true}
           }
         },
         "split-authorization-rejection": {
@@ -517,6 +563,50 @@
             "stopping_phase": "finalization",
             "evaluator_calls": 0,
             "scientific_interpretation_allowed": false
+          }
+        },
+        "understated-provider-cost-rejection": {
+          "const": {
+            "shared_lifecycle_value_authoritative": true,
+            "self_hashed_effect_receipt_rejected": true,
+            "task_b_condition_entries": 0
+          }
+        },
+        "omitted-provider-slot-rejection": {
+          "const": {
+            "closed_replacement_slot_required": true,
+            "task_b_condition_entries": 0
+          }
+        },
+        "oversized-essential-manifest-rejection": {
+          "const": {
+            "complete_envelope_cap_enforced": true,
+            "essential_failure_accepted": false
+          }
+        },
+        "sensitive-essential-receipt-rejection": {
+          "const": {
+            "exact_schema_enforced": true,
+            "terminal_privacy_scan_included_envelope": true,
+            "privacy_clean": false
+          }
+        },
+        "root-replacement-terminalization": {
+          "const": {
+            "terminal_result_returned": true,
+            "held_root_cleanup_used": true,
+            "replacement_directory_unchanged": true,
+            "privacy_path_identity_unresolved": true,
+            "authority_terminal_state": "terminal-failed-nonreplayable",
+            "held_descriptors_released": true,
+            "provider_resources_zero": true,
+            "scientific_interpretation_allowed": false
+          }
+        },
+        "public-runtime-topology-injection-rejection": {
+          "const": {
+            "forbidden_path_rejected": true,
+            "forbidden_inode_rejected": true
           }
         }
       }

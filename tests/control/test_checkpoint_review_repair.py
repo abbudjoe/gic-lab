@@ -8,6 +8,14 @@ import pytest
 from _category3_test_support import execute_shadow_plan
 
 from giclab.control import production
+from giclab.control.adapters import AdapterFailure
+from giclab.control.effects import (
+    ProviderCostObservationRequest,
+    ProviderCostReceipt,
+    ProviderHandle,
+    ProviderLifecycleCostProof,
+    ProviderLifecycleInterval,
+)
 from giclab.control.shadow_effects import ShadowFaultPlan
 from giclab.harness import t09_sira_pilot as pilot
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
@@ -46,6 +54,19 @@ def _passing_input() -> pilot.PairCheckpointInput:
         prior_t09_cost_usd=contract.prior_t09_cost_usd,
         cumulative_t09_cost_cap_usd=contract.cumulative_t09_cost_cap_usd,
     )
+
+
+@pytest.mark.parametrize("missing", ["valid_scored_attempt", "finalizer_closure_valid"])
+def test_pair_checkpoint_requires_explicit_scored_and_finalizer_evidence(
+    missing: str,
+) -> None:
+    values = {
+        field: getattr(_passing_input(), field)
+        for field in _passing_input().__dataclass_fields__
+        if field != missing
+    }
+    with pytest.raises(TypeError, match="required positional argument"):
+        pilot.PairCheckpointInput(**values)
 
 
 @pytest.fixture(scope="module")
@@ -249,7 +270,7 @@ def test_mutated_persisted_checkpoint_decision_or_evidence_binding_fails_closed(
     assert _counts(receipt)["condition_entries"] == 2
 
 
-def test_provider_cost_receipt_is_effect_produced_and_exactly_bound(
+def test_provider_cost_receipt_reconciles_shared_derived_lifecycle_proof(
     checkpoint_receipts: dict[str, dict[str, object]],
 ) -> None:
     evidence = checkpoint_receipts["zero-score"]["production_control_evidence"]
@@ -259,12 +280,232 @@ def test_provider_cost_receipt_is_effect_produced_and_exactly_bound(
     assert isinstance(receipt["owned_instance_identity"], str)
     assert len(receipt["owned_instance_identity"]) == 64
     assert receipt["launch_ordinal"] == 1
-    assert receipt["hourly_price_usd"] == 0.0
+    assert receipt["hourly_price_usd"] == 1.29
     assert receipt["prior_preflight_cost_usd"] == 0.0
     assert receipt["current_empirical_cost_usd"] == 0.0
     assert receipt["cumulative_provider_cost_usd"] == 0.0
     assert receipt["real_provider_effects"] is False
+    proof = evidence["provider_lifecycle_cost_proof"]
+    assert isinstance(proof, dict)
+    assert proof["provider_profile_sha256"] == receipt["provider_profile_sha256"]
+    assert proof["provider_price_source_sha256"] == receipt["provider_price_source_sha256"]
+    assert proof["cumulative_provider_cost_usd"] == "0"
+    assert proof["real_provider_effects"] is False
     assert (
         _checkpoint(checkpoint_receipts["zero-score"])["provider_cost_receipt_sha256"]
-        == receipt["receipt_sha256"]
+        == proof["receipt_sha256"]
     )
+
+
+def _live_cost_documents() -> tuple[
+    ProviderCostObservationRequest,
+    ProviderLifecycleCostProof,
+    ProviderCostReceipt,
+]:
+    handle = ProviderHandle("opaque-provider-owner", 2)
+    request = ProviderCostObservationRequest(
+        provider_handle=handle,
+        observed_wall_time=30.0,
+        observed_monotonic=20.0,
+        campaign_started_wall_time=20.0,
+        campaign_started_monotonic=10.0,
+        provider_profile_sha256="1" * 64,
+        provider_price_source_sha256="2" * 64,
+        active_entry_receipt_sha256="3" * 64,
+        closed_slot_receipt_sha256s=("4" * 64,),
+        frozen_hourly_price_usd=1.29,
+        active_started_wall_time=10.0,
+        prior_preflight_cost_usd=0.01,
+        current_empirical_cost_usd=0.02,
+        cumulative_provider_cost_usd=0.03,
+    )
+    proof = ProviderLifecycleCostProof(
+        provider_contract_version=V16_PROVIDER_CONTRACT.version,
+        plan_id=V16_PROVIDER_CONTRACT.plan_id,
+        provider_profile_sha256=request.provider_profile_sha256,
+        provider_price_source_sha256=request.provider_price_source_sha256,
+        active_entry_receipt_sha256=request.active_entry_receipt_sha256,
+        closed_slot_source_binding_sha256s=request.closed_slot_receipt_sha256s,
+        intervals=(
+            ProviderLifecycleInterval(
+                launch_ordinal=1,
+                owned_instance_identity="closed-owner",
+                entry_or_owner_receipt_sha256="5" * 64,
+                closeout_receipt_sha256="6" * 64,
+                active_started_wall_time=1.0,
+                active_ended_wall_time=9.0,
+                hourly_price_usd="1.29",
+                billed_cost_usd="0.002866666666666666666666666667",
+                billable_real_effect=True,
+            ),
+            ProviderLifecycleInterval(
+                launch_ordinal=2,
+                owned_instance_identity=handle.opaque_identity,
+                entry_or_owner_receipt_sha256=request.active_entry_receipt_sha256,
+                closeout_receipt_sha256=None,
+                active_started_wall_time=request.active_started_wall_time,
+                active_ended_wall_time=None,
+                hourly_price_usd="1.29",
+                billed_cost_usd="0.03",
+                billable_real_effect=True,
+            ),
+        ),
+        prior_preflight_cost_usd="0.01",
+        current_empirical_cost_usd="0.02",
+        cumulative_provider_cost_usd="0.03",
+        observed_wall_time=request.observed_wall_time,
+        observed_monotonic=request.observed_monotonic,
+        real_provider_effects=True,
+        receipt_sha256="7" * 64,
+    )
+    provisional = ProviderCostReceipt(
+        provider_contract_version=V16_PROVIDER_CONTRACT.version,
+        plan_id=V16_PROVIDER_CONTRACT.plan_id,
+        owned_instance_identity=handle.opaque_identity,
+        launch_ordinal=handle.launch_ordinal,
+        provider_profile_sha256=request.provider_profile_sha256,
+        provider_price_source_sha256=request.provider_price_source_sha256,
+        active_entry_receipt_sha256=request.active_entry_receipt_sha256,
+        closed_slot_receipt_sha256s=request.closed_slot_receipt_sha256s,
+        hourly_price_usd=request.frozen_hourly_price_usd,
+        active_started_wall_time=request.active_started_wall_time,
+        active_ended_wall_time=None,
+        observed_wall_time=request.observed_wall_time,
+        observed_monotonic=request.observed_monotonic,
+        prior_preflight_cost_usd=request.prior_preflight_cost_usd,
+        current_empirical_cost_usd=request.current_empirical_cost_usd,
+        cumulative_provider_cost_usd=request.cumulative_provider_cost_usd,
+        real_provider_effects=True,
+        receipt_sha256="0" * 64,
+    )
+    receipt = replace(
+        provisional,
+        receipt_sha256=production.ProductionCategory3World._provider_cost_receipt_identity(
+            provisional
+        ),
+    )
+    return request, proof, receipt
+
+
+def test_exact_shared_derived_live_provider_reconciliation_passes() -> None:
+    request, proof, receipt = _live_cost_documents()
+    production.ProductionCategory3World._validate_provider_cost_reconciliation(
+        receipt=receipt,
+        request=request,
+        proof=proof,
+        contract=V16_PROVIDER_CONTRACT,
+    )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"hourly_price_usd": 0.0},
+        {"hourly_price_usd": 2.0},
+        {"active_started_wall_time": 30.0},
+        {"active_started_wall_time": 9.0},
+        {"active_ended_wall_time": 8.0},
+        {"active_ended_wall_time": 31.0},
+        {"closed_slot_receipt_sha256s": ()},
+        {"owned_instance_identity": "wrong-owner"},
+        {"launch_ordinal": 1},
+        {"provider_profile_sha256": "8" * 64},
+        {"provider_price_source_sha256": "9" * 64},
+        {"active_entry_receipt_sha256": "a" * 64},
+        {"prior_preflight_cost_usd": 0.0},
+        {"current_empirical_cost_usd": 0.01, "cumulative_provider_cost_usd": 0.02},
+        {"observed_wall_time": 29.0},
+        {"observed_monotonic": 30.0},
+    ],
+)
+def test_self_consistent_effect_receipt_cannot_understate_or_rewrite_lifecycle_truth(
+    changes: dict[str, object],
+) -> None:
+    request, proof, receipt = _live_cost_documents()
+    mutated = replace(receipt, **changes)
+    mutated = replace(
+        mutated,
+        receipt_sha256=production.ProductionCategory3World._provider_cost_receipt_identity(mutated),
+    )
+    with pytest.raises(AdapterFailure, match="shared-derived lifecycle evidence"):
+        production.ProductionCategory3World._validate_provider_cost_reconciliation(
+            receipt=mutated,
+            request=request,
+            proof=proof,
+            contract=V16_PROVIDER_CONTRACT,
+        )
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["active-entry-receipt-mutated", "active-price-source-mutated"],
+)
+def test_retained_provider_source_mutation_stops_before_task_b(fault: str) -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            f"provider-lifecycle-source-{fault}",
+            provider_lifecycle_source_fault=fault,
+        ),
+    )
+    assert receipt["earliest_stopping_phase"] == "first-pair-checkpoint"
+    assert _counts(receipt)["condition_entries"] == 2
+
+
+def test_omitted_closed_replacement_slot_stops_before_task_b() -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            "provider-entry-replacement",
+            provider_lifecycle_source_fault="closed-slot-omitted",
+        ),
+    )
+    assert receipt["earliest_stopping_phase"] == "first-pair-checkpoint"
+    assert _counts(receipt)["condition_entries"] == 2
+
+
+def test_source_bound_replacement_slot_is_included_once() -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan("provider-entry-replacement"),
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    proof = evidence["provider_lifecycle_cost_proof"]
+    assert isinstance(proof, dict)
+    assert len(proof["intervals"]) == 2  # type: ignore[arg-type]
+    assert len(proof["closed_slot_source_binding_sha256s"]) == 1  # type: ignore[arg-type]
+    assert _counts(receipt)["condition_entries"] == 4
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "zero-price",
+        "wrong-price",
+        "shifted-active-start",
+        "active-end-before-start",
+        "active-end-after-observation",
+        "wrong-owner",
+        "wrong-ordinal",
+        "wrong-profile-hash",
+        "wrong-price-source-hash",
+        "wrong-entry-hash",
+        "stale-observation",
+        "cross-domain-observation",
+    ],
+)
+def test_production_checkpoint_rejects_effect_provider_cost_drift(fault: str) -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            f"provider-cost-reconciliation-{fault}",
+            provider_cost_receipt_fault=fault,
+        ),
+    )
+    assert receipt["earliest_stopping_phase"] == "first-pair-checkpoint"
+    assert _counts(receipt)["condition_entries"] == 2

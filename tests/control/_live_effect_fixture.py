@@ -25,6 +25,7 @@ from giclab.control.effects import (
     validate_external_live_effect_authority,
 )
 from giclab.control.live_conformance import _copy_working_repository
+from giclab.control.proofs import ValidatedShadowRehearsal
 from giclab.harness.t09_provider_contracts import T09ProviderContract
 
 
@@ -50,6 +51,7 @@ class RuntimePackage:
     context: EffectAuthorizationContext
     authority: ValidatedLiveEffectAuthority
     overlay_path: Path
+    rehearsal: ValidatedShadowRehearsal | None = None
 
     def load(self) -> LoadedPackageEffects:
         return load_registered_package_effects(
@@ -66,6 +68,7 @@ def materialize_runtime_package(
     root: Path,
     *,
     effect_source: bytes | None = None,
+    prepare_execution: bool = False,
 ) -> RuntimePackage:
     external_root = root.resolve(strict=True)
     repository = external_root / "repository"
@@ -78,6 +81,13 @@ def materialize_runtime_package(
         identities["effect_sha256"] = hashlib.sha256(effect_source).hexdigest()
     commit, _tree = commit_repository(repository)
     contract = synthetic_contract(identities, source_commit=commit)
+    rehearsal = None
+    control_binding_semantic_sha256 = "a" * 64
+    if prepare_execution:
+        from _category3_test_support import validated_rehearsal
+
+        rehearsal = validated_rehearsal(repository.as_posix(), contract)
+        control_binding_semantic_sha256 = rehearsal.staging.semantic_sha256
     held_source = hold_package_effect_registration(repository, contract)
     assert held_source is not None
     transaction_root = external_root / "private-transaction"
@@ -92,7 +102,7 @@ def materialize_runtime_package(
         contract,
         held_transaction_root=held_root,
         effect_implementation=held_source.identity,
-        control_binding_semantic_sha256="a" * 64,
+        control_binding_semantic_sha256=control_binding_semantic_sha256,
         external_authorization_reference=reference,
         current_turn_scope=current_turn_scope,
         execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
@@ -106,7 +116,7 @@ def materialize_runtime_package(
         overlay_path=overlay_path,
         held_transaction_root=held_root,
         effect_implementation=held_source.identity,
-        control_binding_semantic_sha256="a" * 64,
+        control_binding_semantic_sha256=control_binding_semantic_sha256,
         current_turn_scope=current_turn_scope,
         execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
     )
@@ -118,4 +128,5 @@ def materialize_runtime_package(
         context=context,
         authority=authority,
         overlay_path=overlay_path,
+        rehearsal=rehearsal,
     )

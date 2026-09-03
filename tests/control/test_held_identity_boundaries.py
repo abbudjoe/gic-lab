@@ -90,6 +90,28 @@ def build_package_effects(
     )
 '''
 
+ROOT_REPLACEMENT_SOURCE = b'''"""Exercise held-root terminal cleanup."""
+
+from giclab.control.shadow_effects import ShadowFaultPlan, build_live_shaped_no_network_effects
+
+
+def build_package_effects(
+    *, repository, contract, authorization_context, authority, held_transaction_root
+):
+    return build_live_shaped_no_network_effects(
+        repository=repository,
+        contract=contract,
+        implementation_identity=authorization_context.effect_implementation,
+        authorization_context=authorization_context,
+        authority=authority,
+        held_transaction_root=held_transaction_root,
+        fault_plan=ShadowFaultPlan(
+            "live-root-replacement-terminalization",
+            root_replacement_before_cleanup=True,
+        ),
+    )
+'''
+
 
 @pytest.fixture()
 def package(tmp_path: Path) -> RuntimePackage:
@@ -281,6 +303,32 @@ def test_held_artifact_public_binding_excludes_unstable_inode_values() -> None:
     assert "spec_from_file_location" not in source
 
 
+def test_public_shadow_receipt_is_stable_across_fresh_transaction_roots() -> None:
+    plan = ShadowFaultPlan("public-held-root-projection-stability")
+    first = execute_shadow_plan(ROOT, V16_PROVIDER_CONTRACT, plan)
+    second = execute_shadow_plan(ROOT, V16_PROVIDER_CONTRACT, plan)
+    first_evidence = first["production_control_evidence"]
+    second_evidence = second["production_control_evidence"]
+    assert isinstance(first_evidence, dict) and isinstance(second_evidence, dict)
+    expected = {
+        "identity_derived_by_shared_code": True,
+        "descriptor_held_through_cleanup": True,
+        "no_symlink_path_components_validated": True,
+        "current_user_owned": True,
+        "group_world_write_absent": True,
+        "device_inode_mode_mount_revalidated": True,
+        "runtime_identity_values_retained": False,
+    }
+    public_root = first_evidence["held_transaction_root"]
+    assert isinstance(public_root, dict)
+    attestation = dict(public_root)
+    semantic = attestation.pop("public_attestation_semantic_sha256")
+    assert attestation == expected
+    assert isinstance(semantic, str) and len(semantic) == 64
+    assert first_evidence["held_transaction_root"] == second_evidence["held_transaction_root"]
+    assert first["semantic_sha256"] == second["semantic_sha256"]
+
+
 def test_controller_releases_held_descriptors_only_after_terminal_result() -> None:
     rehearsal = validated_rehearsal(ROOT.as_posix(), V16_PROVIDER_CONTRACT)
     world = build_production_shadow_assembly(
@@ -305,3 +353,61 @@ def test_controller_releases_held_descriptors_only_after_terminal_result() -> No
     assert receipt["cleanup"]["state"] == "complete"
     with pytest.raises(ValueError, match="closed"):
         world.held_transaction_root.revalidate_descriptor()
+
+
+def test_full_live_shaped_controller_terminalizes_after_root_path_replacement(
+    tmp_path: Path,
+) -> None:
+    package = materialize_runtime_package(
+        ROOT,
+        tmp_path,
+        effect_source=ROOT_REPLACEMENT_SOURCE,
+        prepare_execution=True,
+    )
+    assert package.rehearsal is not None
+    loaded = package.load()
+    world = build_production_adapter_assembly(
+        package.repository,
+        package.contract,
+        low_level_effects=loaded.effects,
+        authorization_context=package.context,
+        authority=package.authority,
+        held_transaction_root=package.held_root,
+        held_effect_source=loaded.held_source,
+    )
+    commit, tree = repository_identity(package.repository)
+    original = package.held_root.path
+    receipt = execute_category3_transaction(
+        Category3Request(
+            repository=package.repository,
+            contract=package.contract,
+            scenario="live-root-replacement-terminalization",
+            expected_repository_commit=commit,
+            expected_repository_tree=tree,
+            control_proof=package.rehearsal,
+        ),
+        adapters=world.adapters(),
+    )
+    replacement = original / "replacement-sentinel.bin"
+    assert replacement.read_bytes() == b"replacement-directory-must-remain-unchanged\n"
+    assert tuple(original.iterdir()) == (replacement,)
+    assert receipt["terminal_state"] == "category3-live-stopped-privacy-blocked"
+    assert receipt["cleanup"] == {
+        "state": "complete",
+        "resumed": False,
+        "provider_resources_zero": True,
+        "security_restored": True,
+        "privacy_clean": False,
+    }
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["cleanup_used_held_root_after_path_mismatch"] is True
+    authority = evidence["authority_consumption"]
+    assert isinstance(authority, dict)
+    assert authority["terminal_state"] == "terminal-failed-nonreplayable"
+    assert authority["replay_permitted"] is False
+    assert "original path identity changed" in str(receipt["stop_reason"])
+    with pytest.raises(ValueError, match="closed"):
+        package.held_root.revalidate_descriptor()
+    with pytest.raises(ValueError, match="closed"):
+        package.held_source.revalidate(package.repository)

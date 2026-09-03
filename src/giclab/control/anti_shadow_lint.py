@@ -13,7 +13,7 @@ from typing import Final
 
 from giclab.control.category3 import repository_identity
 
-ANTI_SHADOW_LINT_SCHEMA_VERSION: Final = "1.0.0"
+ANTI_SHADOW_LINT_SCHEMA_VERSION: Final = "2.0.0"
 AUDITED_BASE_COMMIT: Final = "f1d872d59c4952eb98467c2506850af7772f4454"
 AUDITED_BASE_TREE: Final = "eb70e20024559d65b3fadd240f72d3522895ef04"
 SHARED_EFFECT_NEUTRAL_SOURCES: Final = (
@@ -23,6 +23,7 @@ SHARED_EFFECT_NEUTRAL_SOURCES: Final = (
     "src/giclab/control/contracts.py",
     "src/giclab/control/effects.py",
     "src/giclab/control/production.py",
+    "src/giclab/harness/t09_sira_pilot.py",
 )
 INVENTORY_ROOTS: Final = (
     "src/giclab/control",
@@ -32,6 +33,8 @@ INVENTORY_ROOTS: Final = (
 )
 INVENTORY_SUFFIXES: Final = frozenset({".json", ".md", ".py", ".yaml", ".yml"})
 LINT_DEFINITION_PATH: Final = "src/giclab/control/anti_shadow_lint.py"
+PUBLIC_RECEIPT_ROOT: Final = "control/receipts/packages/v16"
+_RUNTIME_TOPOLOGY_MARKERS: Final = ("/private/", "/var/folders/", "/tmp/", "/Users/")
 
 _FORBIDDEN_TEXT: Final = (
     ("T09S001", re.compile(r"_FAKE_OPENAI_VALUE"), "fake OpenAI credential constant"),
@@ -360,6 +363,151 @@ def _review_bypass_findings(source: str, *, relative_path: str) -> list[AntiShad
     return findings
 
 
+def _required_architecture_findings(
+    source: str,
+    *,
+    relative_path: str,
+) -> list[AntiShadowFinding]:
+    """Require the residual review contracts to remain visible in shared source."""
+
+    findings: list[AntiShadowFinding] = []
+
+    def missing(code: str, message: str) -> None:
+        findings.append(AntiShadowFinding(relative_path, 1, 1, code, message))
+
+    if relative_path.endswith("/production.py"):
+        if not all(
+            token in source
+            for token in (
+                "_derive_provider_lifecycle_cost_proof",
+                "active_entry_receipt_sha256",
+                "closed_slot_source_binding_sha256s",
+                "_validate_provider_cost_reconciliation",
+            )
+        ):
+            missing(
+                "T09S017",
+                "provider cost lacks retained lifecycle source bindings",
+            )
+        if not all(
+            token in source
+            for token in (
+                "_enumerate_essential_envelope",
+                "MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES",
+                "export-acknowledgement.json",
+            )
+        ):
+            missing("T09S019", "complete essential envelope lacks finite member caps")
+        if "_essential_failure_roots" not in source or "_held_tree_privacy_findings" not in source:
+            missing("T09S020", "terminal privacy scan omits essential-failure envelopes")
+        if "held_transaction_root.to_document()" in source:
+            offset = source.index("held_transaction_root.to_document()")
+            line, column = _line_column(source, offset)
+            findings.append(
+                AntiShadowFinding(
+                    relative_path,
+                    line,
+                    column,
+                    "T09S021",
+                    "public control evidence retains runtime transaction-root topology",
+                )
+            )
+    if relative_path.endswith("/t09_sira_pilot.py"):
+        tree = ast.parse(source, filename=relative_path)
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name == "PairCheckpointInput":
+                defaults = {
+                    child.target.id
+                    for child in node.body
+                    if isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                    and child.value is not None
+                }
+                if defaults & {"valid_scored_attempt", "finalizer_closure_valid"}:
+                    missing("T09S018", "checkpoint safety evidence has pass-valued defaults")
+                break
+        else:
+            missing("T09S018", "PairCheckpointInput is absent")
+    if relative_path.endswith("/category3.py"):
+        tree = ast.parse(source, filename=relative_path)
+        execute = next(
+            (
+                node
+                for node in tree.body
+                if isinstance(node, ast.FunctionDef)
+                and node.name == "execute_category3_transaction"
+            ),
+            None,
+        )
+        release_in_finally = execute is not None and any(
+            isinstance(node, ast.Try)
+            and any(
+                isinstance(call, ast.Call)
+                and isinstance(call.func, ast.Attribute)
+                and call.func.attr == "release_resources"
+                for statement in node.finalbody
+                for call in ast.walk(statement)
+            )
+            for node in ast.walk(execute)
+        )
+        if not release_in_finally:
+            missing("T09S022", "Category 3 controller lacks guaranteed resource release")
+    return findings
+
+
+def public_receipt_topology_findings(repository: Path) -> tuple[AntiShadowFinding, ...]:
+    """Reject unstable runtime topology from tracked V16 public receipts."""
+
+    root = repository.resolve(strict=True)
+    receipt_root = root / PUBLIC_RECEIPT_ROOT
+    findings: list[AntiShadowFinding] = []
+    for path in sorted(receipt_root.rglob("*.json")):
+        relative = path.relative_to(root).as_posix()
+        source = path.read_text(encoding="utf-8")
+        try:
+            document = json.loads(source)
+        except json.JSONDecodeError:
+            continue
+
+        def visit(
+            value: object,
+            *,
+            parent_key: str | None = None,
+            relative_path: str = relative,
+        ) -> None:
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    if key.casefold() in {"device", "inode", "uid"}:
+                        findings.append(
+                            AntiShadowFinding(
+                                relative_path,
+                                1,
+                                1,
+                                "T09S024",
+                                f"public receipt retains runtime filesystem field {key}",
+                            )
+                        )
+                    visit(child, parent_key=key)
+            elif isinstance(value, list):
+                for child in value:
+                    visit(child, parent_key=parent_key)
+            elif isinstance(value, str) and parent_key != "forbidden_path_markers":
+                for marker in _RUNTIME_TOPOLOGY_MARKERS:
+                    if marker in value:
+                        findings.append(
+                            AntiShadowFinding(
+                                relative_path,
+                                1,
+                                1,
+                                "T09S023",
+                                f"public receipt contains runtime path marker {marker}",
+                            )
+                        )
+
+        visit(document)
+    return tuple(sorted(findings, key=lambda item: (item.path, item.line, item.column, item.code)))
+
+
 def lint_effect_neutral_source(
     source: str,
     *,
@@ -382,6 +530,7 @@ def lint_effect_neutral_source(
             )
     findings.extend(_literal_cap_findings(source, relative_path=relative_path))
     findings.extend(_review_bypass_findings(source, relative_path=relative_path))
+    findings.extend(_required_architecture_findings(source, relative_path=relative_path))
     return tuple(sorted(findings, key=lambda item: (item.line, item.column, item.code)))
 
 
@@ -462,6 +611,8 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
                 relative_path=relative,
             )
         )
+    topology_findings = public_receipt_topology_findings(root)
+    findings.extend(topology_findings)
     inventory = _inventory(root)
     counts = Counter(item.classification for item in inventory)
     commit, tree = repository_identity(root)
@@ -477,7 +628,7 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
         "shared_effect_neutral_sources": scanned,
         "lint_definition_path": LINT_DEFINITION_PATH,
         "forbidden_rule_codes": [code for code, _pattern, _message in _FORBIDDEN_TEXT]
-        + ["T09S011", "T09S012", "T09S013", "T09S014", "T09S015", "T09S016"],
+        + [f"T09S{index:03d}" for index in range(11, 25)],
         "findings": [asdict(item) for item in findings],
         "assumption_inventory": [asdict(item) for item in inventory],
         "classification_counts": {
@@ -488,6 +639,14 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
                 "historical test fixture",
                 "documentation",
             )
+        },
+        "public_receipt_topology_scan": {
+            "root": PUBLIC_RECEIPT_ROOT,
+            "files_scanned": len(tuple((root / PUBLIC_RECEIPT_ROOT).rglob("*.json"))),
+            "forbidden_path_markers": list(_RUNTIME_TOPOLOGY_MARKERS),
+            "forbidden_filesystem_fields": ["device", "inode", "uid"],
+            "findings": len(topology_findings),
+            "complete": not topology_findings,
         },
         "complete": not findings,
     }
@@ -500,5 +659,6 @@ __all__ = [
     "BASE_SHADOW_ASSUMPTION_INVENTORY",
     "SHARED_EFFECT_NEUTRAL_SOURCES",
     "lint_effect_neutral_source",
+    "public_receipt_topology_findings",
     "validate_anti_shadow_lint",
 ]

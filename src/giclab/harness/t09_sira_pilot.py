@@ -1333,6 +1333,8 @@ def initialize_pilot_state(
     execution_contract_sha256: str,
     pilot_started_at_epoch: float,
     lambda_started_at_epoch: float,
+    prior_campaign_lambda_duration_seconds: float = 0.0,
+    prior_campaign_lambda_cost_usd: float = 0.0,
 ) -> None:
     """Create the one sequential attempt ledger during an authorized preflight."""
 
@@ -1347,6 +1349,13 @@ def initialize_pilot_state(
     for value in (pilot_started_at_epoch, lambda_started_at_epoch):
         if not math.isfinite(value) or value <= 0:
             raise T09PilotError("pilot and Lambda start epochs must be positive and finite")
+    if (
+        not math.isfinite(prior_campaign_lambda_duration_seconds)
+        or prior_campaign_lambda_duration_seconds < 0
+        or not math.isfinite(prior_campaign_lambda_cost_usd)
+        or prior_campaign_lambda_cost_usd < 0
+    ):
+        raise T09PilotError("prior provider lifecycle accounting must be finite and nonnegative")
     document = {
         "schema_version": "0.2.0",
         "plan_id": provider_contract.plan_id,
@@ -1355,8 +1364,8 @@ def initialize_pilot_state(
         "lambda_started_at_epoch": lambda_started_at_epoch,
         "campaign_started_at_epoch": pilot_started_at_epoch,
         "owned_lambda_started_at_epoch": lambda_started_at_epoch,
-        "prior_campaign_lambda_duration_seconds": 0.0,
-        "prior_campaign_lambda_cost_usd": 0.0,
+        "prior_campaign_lambda_duration_seconds": prior_campaign_lambda_duration_seconds,
+        "prior_campaign_lambda_cost_usd": prior_campaign_lambda_cost_usd,
         "first_pair_started_at_epoch": pilot_started_at_epoch,
         "second_pair_started_at_epoch": None,
         "empirical_attempts_entered": [],
@@ -2821,8 +2830,8 @@ class PairCheckpointInput:
     next_attempt_hard_wall_seconds: int
     prior_t09_cost_usd: float
     cumulative_t09_cost_cap_usd: float
-    valid_scored_attempt: tuple[bool, bool] = (True, True)
-    finalizer_closure_valid: bool = True
+    valid_scored_attempt: tuple[bool, bool]
+    finalizer_closure_valid: bool
 
 
 def first_pair_decision(value: PairCheckpointInput) -> dict[str, object]:

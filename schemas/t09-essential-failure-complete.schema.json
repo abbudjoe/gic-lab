@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-essential-failure-complete.schema.json",
+  "title": "T09 essential-failure seal receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "run_id", "essential_failure_seal_complete",
+    "attempt_identity_consumed", "infrastructure_invalid", "unscored",
+    "evaluator_permitted", "condition_retry_permitted", "manifest_sha256",
+    "payload_file_count", "payload_total_bytes", "writers_closed",
+    "browser_descendants_closed", "credential_cleanup_clean", "core_dump_present",
+    "structural_privacy_findings", "cleanup_ready"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "run_id": {"type": "string", "minLength": 1},
+    "essential_failure_seal_complete": {"const": true},
+    "attempt_identity_consumed": {"const": true},
+    "infrastructure_invalid": {"const": true},
+    "unscored": {"const": true},
+    "evaluator_permitted": {"const": false},
+    "condition_retry_permitted": {"const": false},
+    "manifest_sha256": {"$ref": "#/$defs/sha"},
+    "payload_file_count": {"type": "integer", "minimum": 1, "maximum": 4093},
+    "payload_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+    "writers_closed": {"const": true},
+    "browser_descendants_closed": {"const": true},
+    "credential_cleanup_clean": {"const": true},
+    "core_dump_present": {"const": false},
+    "structural_privacy_findings": {"type": "array", "maxItems": 0},
+    "cleanup_ready": {"const": true}
+  },
+  "$defs": {"sha": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}
+}

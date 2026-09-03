@@ -150,12 +150,16 @@ class ShadowFaultPlan:
     failure_export_interruption_count: int = 0
     essential_target_bytes: int | None = None
     essential_artifact_fault: str | None = None
+    essential_envelope_fault: str | None = None
     mutate_essential_during_export: bool = False
     evaluator_unscored_run_index: int | None = None
     evaluator_invalid_run_index: int | None = None
     task_a_zero_scores: bool = False
     checkpoint_missing_raw_after_task_a: bool = False
     held_identity_fault: str | None = None
+    root_replacement_before_cleanup: bool = False
+    provider_cost_receipt_fault: str | None = None
+    provider_lifecycle_source_fault: str | None = None
 
 
 class DeterministicRuntimeClock(RuntimeClock):
@@ -431,6 +435,7 @@ class DeterministicLowLevelEffects:
         self._termination_calls = 0
         self._cleanup_calls = 0
         self._failure_export_calls: dict[str, int] = {}
+        self._essential_envelope_targets: dict[str, int] = {}
         self._effect_counts: dict[str, int] = {}
         self._public_ipv4 = "203.0.113.71"
         self._public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDeterministicNoNetworkOnly"
@@ -535,28 +540,58 @@ class DeterministicLowLevelEffects:
         if handle is None or started is None:
             raise AdapterFailure("deterministic provider cost lacks its active owner")
         values = {
+            "provider_contract_version": self.contract.version,
+            "plan_id": self.contract.plan_id,
             "owned_instance_identity": request.provider_handle.opaque_identity,
             "launch_ordinal": request.provider_handle.launch_ordinal,
-            "hourly_price_usd": 0.0,
-            "active_started_wall_time": started,
+            "provider_profile_sha256": request.provider_profile_sha256,
+            "provider_price_source_sha256": request.provider_price_source_sha256,
+            "active_entry_receipt_sha256": request.active_entry_receipt_sha256,
+            "closed_slot_receipt_sha256s": request.closed_slot_receipt_sha256s,
+            "hourly_price_usd": request.frozen_hourly_price_usd,
+            "active_started_wall_time": request.active_started_wall_time,
             "active_ended_wall_time": None,
             "observed_wall_time": request.observed_wall_time,
-            "prior_preflight_cost_usd": 0.0,
-            "current_empirical_cost_usd": 0.0,
-            "cumulative_provider_cost_usd": 0.0,
+            "observed_monotonic": request.observed_monotonic,
+            "prior_preflight_cost_usd": request.prior_preflight_cost_usd,
+            "current_empirical_cost_usd": request.current_empirical_cost_usd,
+            "cumulative_provider_cost_usd": request.cumulative_provider_cost_usd,
             "real_provider_effects": False,
         }
+        fault = self.fault_plan.provider_cost_receipt_fault
+        if fault == "zero-price":
+            values["hourly_price_usd"] = 0.0
+        elif fault == "wrong-price":
+            values["hourly_price_usd"] = request.frozen_hourly_price_usd + 1.0
+        elif fault == "shifted-active-start":
+            values["active_started_wall_time"] = request.observed_wall_time
+        elif fault == "active-end-before-start":
+            values["active_ended_wall_time"] = request.active_started_wall_time - 1.0
+        elif fault == "active-end-after-observation":
+            values["active_ended_wall_time"] = request.observed_wall_time + 1.0
+        elif fault == "wrong-owner":
+            values["owned_instance_identity"] = "f" * 64
+        elif fault == "wrong-ordinal":
+            values["launch_ordinal"] = request.provider_handle.launch_ordinal + 1
+        elif fault == "wrong-profile-hash":
+            values["provider_profile_sha256"] = "f" * 64
+        elif fault == "wrong-price-source-hash":
+            values["provider_price_source_sha256"] = "f" * 64
+        elif fault == "wrong-entry-hash":
+            values["active_entry_receipt_sha256"] = "f" * 64
+        elif fault == "omitted-closed-slot":
+            values["closed_slot_receipt_sha256s"] = ()
+        elif fault == "omitted-preflight-cost":
+            values["prior_preflight_cost_usd"] = 0.0
+        elif fault == "understated-self-hashed":
+            values["current_empirical_cost_usd"] = 0.0
+            values["cumulative_provider_cost_usd"] = 0.0
+        elif fault == "stale-observation":
+            values["observed_wall_time"] = request.observed_wall_time - 60.0
+        elif fault == "cross-domain-observation":
+            values["observed_monotonic"] = request.observed_wall_time
         return ProviderCostReceipt(
-            owned_instance_identity=request.provider_handle.opaque_identity,
-            launch_ordinal=request.provider_handle.launch_ordinal,
-            hourly_price_usd=0.0,
-            active_started_wall_time=started,
-            active_ended_wall_time=None,
-            observed_wall_time=request.observed_wall_time,
-            prior_preflight_cost_usd=0.0,
-            current_empirical_cost_usd=0.0,
-            cumulative_provider_cost_usd=0.0,
-            real_provider_effects=False,
+            **values,  # type: ignore[arg-type]
             receipt_sha256=_identity(values),
         )
 
@@ -1066,13 +1101,15 @@ class DeterministicLowLevelEffects:
 
         execution = request.execution
         essential_root = request.partial_raw_root.parent / "essential-failure"
-        manifest_path = request.partial_raw_root.parent / "essential-failure-manifest.json"
-        receipt_path = request.partial_raw_root.parent / "essential-failure-complete.json"
         essential_root.mkdir(parents=True, mode=0o700, exist_ok=True)
-        call_ledger = essential_root / "provider-call-accounting.json"
-        browser_ledger = essential_root / "browser-action-ledger.json"
-        process_path = essential_root / "process-outcome.json"
-        completion_path = essential_root / "completion-state.json"
+        payload_root = essential_root / "payload"
+        payload_root.mkdir(mode=0o700, exist_ok=True)
+        manifest_path = essential_root / "essential-failure-manifest.json"
+        receipt_path = essential_root / "essential-failure-complete.json"
+        call_ledger = payload_root / "provider-call-accounting.json"
+        browser_ledger = payload_root / "browser-action-ledger.json"
+        process_path = payload_root / "process-outcome.json"
+        completion_path = payload_root / "completion-state.json"
         documents: list[tuple[Path, object]] = [
             (
                 call_ledger,
@@ -1128,34 +1165,17 @@ class DeterministicLowLevelEffects:
             else:
                 path.write_bytes(encoded)
                 path.chmod(0o400)
-        target_bytes = self.fault_plan.essential_target_bytes
-        if target_bytes is not None:
-            current = sum(path.stat().st_size for path, _document in documents)
-            padding_bytes = target_bytes - current
-            if padding_bytes < 0:
-                raise AdapterFailure("deterministic essential target is below required evidence")
-            padding = essential_root / "bounded-padding.bin"
-            if padding.exists():
-                if padding.stat().st_size != padding_bytes:
-                    raise AdapterFailure("deterministic essential padding resume drifted")
-            else:
-                descriptor = os.open(
-                    padding,
-                    os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
-                    0o400,
-                )
-                try:
-                    os.ftruncate(descriptor, padding_bytes)
-                    os.fsync(descriptor)
-                finally:
-                    os.close(descriptor)
+        if self.fault_plan.essential_target_bytes is not None:
+            self._essential_envelope_targets[execution.run_id] = (
+                self.fault_plan.essential_target_bytes
+            )
         artifact_fault = self.fault_plan.essential_artifact_fault
         if artifact_fault == "symlink":
-            (essential_root / "unsafe-symlink").symlink_to(call_ledger.name)
+            (payload_root / "unsafe-symlink").symlink_to(call_ledger.name)
         elif artifact_fault == "nonregular":
-            os.mkfifo(essential_root / "unsafe-fifo", mode=0o400)
+            os.mkfifo(payload_root / "unsafe-fifo", mode=0o400)
         elif artifact_fault == "hardlink":
-            os.link(call_ledger, essential_root / "unsafe-hardlink.json")
+            os.link(call_ledger, payload_root / "unsafe-hardlink.json")
         files = sorted(
             [
                 {
@@ -1163,7 +1183,7 @@ class DeterministicLowLevelEffects:
                     "bytes": path.stat().st_size,
                     "sha256": _file_sha256(path),
                 }
-                for path in essential_root.iterdir()
+                for path in payload_root.iterdir()
                 if path.is_file() and not path.is_symlink()
             ],
             key=lambda item: cast(str, item["path"]),
@@ -1175,7 +1195,7 @@ class DeterministicLowLevelEffects:
         ):
             raise AdapterFailure("deterministic essential-failure bundle exceeds its cap")
         manifest = {
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "provider_contract_version": execution.provider_contract_version,
             "plan_id": execution.plan_id,
             "run_id": execution.run_id,
@@ -1187,9 +1207,12 @@ class DeterministicLowLevelEffects:
             "command_sha256": execution.command_sha256,
             "failure_class": request.failure_class.value,
             "evidence_root": "essential-failure",
+            "manifest_scope": "payload-members-only-noncircular",
             "files": files,
-            "file_count": len(files),
-            "total_bytes": total,
+            "payload_file_count": len(files),
+            "payload_total_bytes": total,
+            "envelope_file_cap": request.essential_failure_file_cap,
+            "envelope_total_bytes_cap": request.essential_failure_cap_bytes,
             "unknown_call_ids": list(request.unknown_call_ids),
             "failure_reconstructable": True,
             "private_access_controlled": True,
@@ -1204,7 +1227,7 @@ class DeterministicLowLevelEffects:
             manifest_path.write_bytes(manifest_encoded)
             manifest_path.chmod(0o400)
         receipt = {
-            "schema_version": "1.0.0",
+            "schema_version": "2.0.0",
             "run_id": execution.run_id,
             "essential_failure_seal_complete": True,
             "attempt_identity_consumed": True,
@@ -1213,8 +1236,8 @@ class DeterministicLowLevelEffects:
             "evaluator_permitted": False,
             "condition_retry_permitted": False,
             "manifest_sha256": _file_sha256(manifest_path),
-            "essential_file_count": len(files),
-            "essential_total_bytes": total,
+            "payload_file_count": len(files),
+            "payload_total_bytes": total,
             "writers_closed": True,
             "browser_descendants_closed": True,
             "credential_cleanup_clean": True,
@@ -1229,6 +1252,56 @@ class DeterministicLowLevelEffects:
         else:
             receipt_path.write_bytes(receipt_encoded)
             receipt_path.chmod(0o400)
+        envelope_fault = self.fault_plan.essential_envelope_fault
+
+        def replace_bytes(path: Path, encoded: bytes) -> None:
+            path.chmod(0o600)
+            path.write_bytes(encoded)
+            path.chmod(0o400)
+
+        if envelope_fault == "oversized-manifest":
+            replace_bytes(
+                manifest_path,
+                _canonical_bytes({**manifest, "padding": "x" * 1_048_576}),
+            )
+        elif envelope_fault == "oversized-completion-receipt":
+            replace_bytes(
+                receipt_path,
+                _canonical_bytes({**receipt, "padding": "x" * 1_048_576}),
+            )
+        elif envelope_fault == "secret-manifest-field":
+            replace_bytes(
+                manifest_path, _canonical_bytes({**manifest, "credential_hash": "f" * 64})
+            )
+        elif envelope_fault == "header-completion-field":
+            replace_bytes(receipt_path, _canonical_bytes({**receipt, "headers": {"x": "y"}}))
+        elif envelope_fault == "private-absolute-path":
+            replace_bytes(manifest_path, _canonical_bytes({**manifest, "private_path": "/tmp/x"}))
+        elif envelope_fault == "duplicate-json-key":
+            replace_bytes(
+                manifest_path,
+                b'{"schema_version":"2.0.0","schema_version":"2.0.0"}\n',
+            )
+        elif envelope_fault == "noncanonical-json":
+            replace_bytes(manifest_path, json.dumps(manifest, indent=2).encode() + b"\n")
+        elif envelope_fault == "undeclared-field":
+            replace_bytes(manifest_path, _canonical_bytes({**manifest, "undeclared": False}))
+        elif envelope_fault == "manifest-symlink":
+            manifest_path.unlink()
+            manifest_path.symlink_to(call_ledger.relative_to(essential_root))
+        elif envelope_fault == "receipt-symlink":
+            receipt_path.unlink()
+            receipt_path.symlink_to(call_ledger.relative_to(essential_root))
+        elif envelope_fault == "manifest-hardlink":
+            os.link(manifest_path, essential_root / "manifest-second-link.json")
+        elif envelope_fault == "receipt-hardlink":
+            os.link(receipt_path, essential_root / "receipt-second-link.json")
+        preexport_members = tuple(
+            path
+            for path in sorted(essential_root.rglob("*"))
+            if path.is_file() and not path.is_symlink()
+        )
+        preexport_total = sum(path.stat().st_size for path in preexport_members)
         return ConditionInfrastructureFailureOutcome(
             run_id=execution.run_id,
             evaluator_run_id=execution.evaluator_run_id,
@@ -1246,8 +1319,10 @@ class DeterministicLowLevelEffects:
             completion_path=completion_path,
             stdout_path=None,
             stderr_path=None,
-            essential_file_count=len(files),
-            essential_total_bytes=total,
+            payload_file_count=len(files),
+            payload_total_bytes=total,
+            essential_file_count=len(preexport_members),
+            essential_total_bytes=preexport_total,
             output_bytes=request.output_bytes,
             unknown_call_ids=request.unknown_call_ids,
             writers_closed=True,
@@ -1270,7 +1345,7 @@ class DeterministicLowLevelEffects:
                 "deterministic essential-failure export interrupted"
             )
         if self.fault_plan.mutate_essential_during_export:
-            process_path = request.essential_root / "process-outcome.json"
+            process_path = request.essential_root / "payload/process-outcome.json"
             process_path.chmod(0o600)
             process_path.write_bytes(process_path.read_bytes() + b"\n")
             process_path.chmod(0o400)
@@ -1292,11 +1367,97 @@ class DeterministicLowLevelEffects:
             destination.write_bytes(encoded)
             destination.chmod(0o400)
         values = {
+            "schema_version": "2.0.0",
             **destination_document,
             "destination_identity": _file_sha256(destination),
             "export_complete": True,
             "resumed": calls > 1,
         }
+        acknowledgement = request.essential_root / "export-acknowledgement.json"
+        target = self._essential_envelope_targets.get(request.run_id)
+        padding_path = request.essential_root / "envelope-padding.bin"
+        padding_bytes = 0
+        padding_sha256: str | None = None
+
+        def zero_sha256(size: int) -> str:
+            digest = hashlib.sha256()
+            block = b"\0" * (1024 * 1024)
+            remaining = size
+            while remaining:
+                chunk = block if remaining >= len(block) else block[:remaining]
+                digest.update(chunk)
+                remaining -= len(chunk)
+            return digest.hexdigest()
+
+        def acknowledgement_document() -> dict[str, object]:
+            return {
+                **values,
+                "envelope_padding": (
+                    None
+                    if padding_sha256 is None
+                    else {
+                        "path": padding_path.name,
+                        "bytes": padding_bytes,
+                        "sha256": padding_sha256,
+                    }
+                ),
+            }
+
+        if target is not None:
+            padding_bytes = max(0, target - request.essential_total_bytes - 1024)
+            for _iteration in range(16):
+                padding_sha256 = zero_sha256(padding_bytes)
+                acknowledgement_encoded = _canonical_bytes(acknowledgement_document())
+                delta = target - (
+                    request.essential_total_bytes + padding_bytes + len(acknowledgement_encoded)
+                )
+                if delta == 0:
+                    break
+                padding_bytes += delta
+                if padding_bytes < 0:
+                    raise AdapterFailure("deterministic essential target is below its envelope")
+            else:
+                raise AdapterFailure("deterministic essential envelope target did not converge")
+            descriptor = os.open(
+                padding_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+                0o400,
+            )
+            try:
+                os.ftruncate(descriptor, padding_bytes)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+        acknowledgement_encoded = _canonical_bytes(acknowledgement_document())
+        acknowledgement_fault = self.fault_plan.essential_envelope_fault
+        if acknowledgement_fault == "oversized-export-acknowledgement":
+            acknowledgement_encoded = _canonical_bytes(
+                {**acknowledgement_document(), "padding_text": "x" * 1_048_576}
+            )
+        elif acknowledgement_fault == "sensitive-export-acknowledgement":
+            acknowledgement_encoded = _canonical_bytes(
+                {**acknowledgement_document(), "authorization_header": "not-a-secret"}
+            )
+        if acknowledgement.exists():
+            if acknowledgement.read_bytes() != acknowledgement_encoded:
+                raise AdapterFailure("deterministic failure export acknowledgement drifted")
+        else:
+            acknowledgement.write_bytes(acknowledgement_encoded)
+            acknowledgement.chmod(0o400)
+        receipt_sha256 = _file_sha256(acknowledgement)
+        if acknowledgement_fault == "mutated-export-acknowledgement":
+            mutated = bytearray(acknowledgement.read_bytes())
+            mutated[-2] = 0x20 if mutated[-2] != 0x20 else 0x09
+            acknowledgement.chmod(0o600)
+            acknowledgement.write_bytes(mutated)
+            acknowledgement.chmod(0o400)
+        if acknowledgement_fault == "same-size-manifest-swap-during-export":
+            manifest = request.essential_manifest_path
+            encoded_manifest = manifest.read_bytes()
+            displaced = manifest.with_name(manifest.name + ".displaced")
+            manifest.rename(displaced)
+            manifest.write_bytes(encoded_manifest)
+            manifest.chmod(0o400)
         return ConditionFailureExportReceipt(
             run_id=request.run_id,
             export_identity=request.export_identity,
@@ -1305,9 +1466,11 @@ class DeterministicLowLevelEffects:
             essential_receipt_sha256=request.essential_receipt_sha256,
             essential_file_count=request.essential_file_count,
             essential_total_bytes=request.essential_total_bytes,
+            acknowledgement_path=acknowledgement,
+            acknowledgement_bytes=len(acknowledgement_encoded),
             export_complete=True,
             resumed=calls > 1,
-            receipt_sha256=_identity(values),
+            receipt_sha256=receipt_sha256,
         )
 
     def execute_condition(
@@ -1790,6 +1953,19 @@ class DeterministicLowLevelEffects:
             missing_required_evidence=False,
             receipt_sha256=_identity(values),
         )
+        if run_index == 1:
+            source_fault = self.fault_plan.provider_lifecycle_source_fault
+            campaign_roots = sorted((self._root / "private").glob("campaign-slot-*"))
+            if source_fault is not None and not campaign_roots:
+                raise AdapterFailure("provider lifecycle fault lacks retained campaign roots")
+            if source_fault == "active-entry-receipt-mutated":
+                path = campaign_roots[-1] / "entry-source/entry-receipt.json"
+                path.write_bytes(path.read_bytes() + b"\n")
+            elif source_fault == "active-price-source-mutated":
+                path = campaign_roots[-1] / "entry-source/001-instance-types.json"
+                path.write_bytes(path.read_bytes() + b"\n")
+            elif source_fault == "closed-slot-omitted":
+                (campaign_roots[0] / "replacement-launch-eligibility.json").unlink()
         if self.fault_plan.checkpoint_missing_raw_after_task_a and run_index == 1:
             first_manifest = sorted(self._root.rglob("raw-attempt-manifest.json"))[0]
             first_manifest.unlink()
@@ -1802,6 +1978,14 @@ class DeterministicLowLevelEffects:
         self._cleanup_calls += 1
         if self._cleanup_calls <= self.fault_plan.cleanup_interruption_count:
             raise CleanupInterrupted("deterministic cleanup interruption")
+        if self.fault_plan.root_replacement_before_cleanup and self._cleanup_calls == 1:
+            original = request.held_transaction_root.path
+            displaced = original.with_name(original.name + "-held-owned")
+            original.rename(displaced)
+            original.mkdir(mode=0o700)
+            sentinel = original / "replacement-sentinel.bin"
+            sentinel.write_bytes(b"replacement-directory-must-remain-unchanged\n")
+            sentinel.chmod(0o400)
         findings: tuple[str, ...] = ()
         if (
             self.fault_plan.name == "structural-privacy-finding"
@@ -1923,13 +2107,14 @@ def build_live_shaped_no_network_effects(
     authorization_context: EffectAuthorizationContext,
     authority: EffectAuthorityGrant,
     held_transaction_root: HeldTransactionRoot,
+    fault_plan: ShadowFaultPlan | None = None,
 ) -> LowLevelEffects:
     """Construct the test-only live-shaped package effect by composition."""
 
     delegate = DeterministicLowLevelEffects(
         repository=repository,
         contract=contract,
-        fault_plan=ShadowFaultPlan("live-shaped-conformance"),
+        fault_plan=fault_plan or ShadowFaultPlan("live-shaped-conformance"),
         fixed_tick=2000,
         transaction_root=held_transaction_root.path,
     )

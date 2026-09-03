@@ -80,7 +80,7 @@ def test_every_post_entry_failure_is_sealed_exported_unscored_and_zero_retry(
     assert receipt["earliest_stopping_phase"] == "condition-execution"
     assert counts["condition_reservations"] == 1
     assert counts["condition_entries"] == 1
-    assert essential["file_count"] >= 4
+    assert essential["file_count"] >= 7
     assert 0 < essential["total_bytes"] <= MAX_ESSENTIAL_FAILURE_BYTES
     assert len(essential["manifest_sha256"]) == 64
     assert len(essential["receipt_sha256"]) == 64
@@ -194,6 +194,109 @@ def test_essential_bundle_one_byte_over_cap_fails_closed() -> None:
     assert isinstance(evidence, dict)
     assert evidence["essential_failures"] == {}
     assert receipt["scientific_interpretation_allowed"] is False
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "oversized-manifest",
+        "oversized-completion-receipt",
+        "oversized-export-acknowledgement",
+    ],
+)
+def test_every_essential_envelope_member_has_a_finite_size_cap(fault: str) -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            f"essential-member-cap-{fault}",
+            fail_operation="condition.run",
+            essential_envelope_fault=fault,
+        ),
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["essential_failures"] == {}
+    assert "could not be sealed and exported" in str(receipt["stop_reason"])
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "secret-manifest-field",
+        "header-completion-field",
+        "private-absolute-path",
+        "duplicate-json-key",
+        "noncanonical-json",
+        "undeclared-field",
+        "sensitive-export-acknowledgement",
+    ],
+)
+def test_essential_envelope_rejects_noncanonical_extensions_and_private_fields(
+    fault: str,
+) -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            f"essential-schema-privacy-{fault}",
+            fail_operation="condition.run",
+            essential_envelope_fault=fault,
+        ),
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["essential_failures"] == {}
+    assert "could not be sealed and exported" in str(receipt["stop_reason"])
+    if fault in {
+        "secret-manifest-field",
+        "header-completion-field",
+        "private-absolute-path",
+        "sensitive-export-acknowledgement",
+    }:
+        assert receipt["cleanup"]["privacy_clean"] is False  # type: ignore[index]
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["manifest-symlink", "receipt-symlink", "manifest-hardlink", "receipt-hardlink"],
+)
+def test_manifest_and_completion_receipt_require_single_link_regular_identities(
+    fault: str,
+) -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            f"essential-envelope-identity-{fault}",
+            fail_operation="condition.run",
+            essential_envelope_fault=fault,
+        ),
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["essential_failures"] == {}
+    assert "could not be sealed and exported" in str(receipt["stop_reason"])
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["mutated-export-acknowledgement", "same-size-manifest-swap-during-export"],
+)
+def test_export_acknowledgement_or_sealed_member_mutation_fails(fault: str) -> None:
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan(
+            f"essential-envelope-mutation-{fault}",
+            fail_operation="condition.run",
+            essential_envelope_fault=fault,
+        ),
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["essential_failures"] == {}
+    assert "could not be sealed and exported" in str(receipt["stop_reason"])
 
 
 @pytest.mark.parametrize("fault", ["symlink", "nonregular", "hardlink"])

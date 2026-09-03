@@ -9,6 +9,7 @@ from jsonschema import Draft202012Validator
 
 from giclab.control.anti_shadow_lint import (
     lint_effect_neutral_source,
+    public_receipt_topology_findings,
     validate_anti_shadow_lint,
 )
 from giclab.control.live_conformance import run_live_effect_conformance
@@ -193,8 +194,12 @@ def test_live_shaped_checkpoint_authority_and_held_identity_repairs(
     assert checkpoint["decision"] == "continue-to-task-b"
     assert checkpoint["reasons"] == []
     assert checkpoint["task_b_admitted_only_after_retained_decision"] is True
+    assert checkpoint["safety_fields_have_no_defaults"] is True
     assert isinstance(provider_cost, dict)
+    assert provider_cost["hourly_price_usd"] == 1.29
     assert provider_cost["cumulative_provider_cost_usd"] == 0.0
+    assert provider_cost["shared_lifecycle_value_authoritative"] is True
+    assert len(provider_cost["shared_lifecycle_proof_sha256"]) == 64
     assert provider_cost["zero_real_provider_effects"] is True
     assert isinstance(authorization, dict)
     assert str(authorization["reference"]).startswith("AUTH-T09-V16-")
@@ -240,6 +245,12 @@ def test_live_shaped_review_failure_subreceipts_are_complete(
         "effect-module-replacement-rejection",
         "symlink-transaction-root-rejection",
         "raw-replacement-rejection",
+        "understated-provider-cost-rejection",
+        "omitted-provider-slot-rejection",
+        "oversized-essential-manifest-rejection",
+        "sensitive-essential-receipt-rejection",
+        "root-replacement-terminalization",
+        "public-runtime-topology-injection-rejection",
     }
     assert failures["unscored-task-a-checkpoint-stop"]["task_b_condition_entries"] == 0
     assert failures["ambiguous-send-essential-failure"]["sealed"] is True
@@ -248,6 +259,22 @@ def test_live_shaped_review_failure_subreceipts_are_complete(
     assert failures["effect-module-replacement-rejection"]["same_size_replacement_rejected"] is True
     assert failures["symlink-transaction-root-rejection"]["root_symlink_rejected"] is True
     assert failures["raw-replacement-rejection"]["evaluator_calls"] == 0
+    assert (
+        failures["understated-provider-cost-rejection"]["self_hashed_effect_receipt_rejected"]
+        is True
+    )
+    assert failures["omitted-provider-slot-rejection"]["closed_replacement_slot_required"] is True
+    assert (
+        failures["oversized-essential-manifest-rejection"]["complete_envelope_cap_enforced"] is True
+    )
+    assert failures["sensitive-essential-receipt-rejection"]["privacy_clean"] is False
+    assert failures["root-replacement-terminalization"]["authority_terminal_state"] == (
+        "terminal-failed-nonreplayable"
+    )
+    assert failures["root-replacement-terminalization"]["held_descriptors_released"] is True
+    assert (
+        failures["public-runtime-topology-injection-rejection"]["forbidden_inode_rejected"] is True
+    )
 
 
 def test_anti_shadow_lint_inventory_and_mutations() -> None:
@@ -300,6 +327,17 @@ decision = {"decision": "continue-to-task-b"}
         "T09S015",
         "T09S016",
     }
+
+
+def test_public_receipt_topology_injection_is_rejected(tmp_path: Path) -> None:
+    receipt_root = tmp_path / "control/receipts/packages/v16"
+    receipt_root.mkdir(parents=True)
+    (receipt_root / "injected.json").write_text(
+        '{"held_transaction_root":{"device":1,"path":"/tmp/private-root"}}\n',
+        encoding="utf-8",
+    )
+    findings = public_receipt_topology_findings(tmp_path)
+    assert {finding.code for finding in findings} == {"T09S023", "T09S024"}
 
 
 def test_conformance_semantic_hash_is_exact(conformance: dict[str, object]) -> None:
