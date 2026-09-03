@@ -357,12 +357,14 @@ def test_controller_releases_held_descriptors_only_after_terminal_result() -> No
 
 def test_full_live_shaped_controller_terminalizes_after_root_path_replacement(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     package = materialize_runtime_package(
         ROOT,
         tmp_path,
         effect_source=ROOT_REPLACEMENT_SOURCE,
         prepare_execution=True,
+        registry_monkeypatch=monkeypatch,
     )
     assert package.rehearsal is not None
     loaded = package.load()

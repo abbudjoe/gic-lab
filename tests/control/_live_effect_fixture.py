@@ -4,9 +4,11 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from _synthetic_successor import (
     commit_repository,
+    install_synthetic_registry,
     materialize_synthetic_successor,
     synthetic_contract,
 )
@@ -69,6 +71,7 @@ def materialize_runtime_package(
     *,
     effect_source: bytes | None = None,
     prepare_execution: bool = False,
+    registry_monkeypatch: Any | None = None,
 ) -> RuntimePackage:
     external_root = root.resolve(strict=True)
     repository = external_root / "repository"
@@ -84,6 +87,9 @@ def materialize_runtime_package(
     rehearsal = None
     control_binding_semantic_sha256 = "a" * 64
     if prepare_execution:
+        if registry_monkeypatch is None:
+            raise ValueError("prepared synthetic execution requires an isolated registry patch")
+        install_synthetic_registry(registry_monkeypatch, contract)
         from _category3_test_support import validated_rehearsal
 
         rehearsal = validated_rehearsal(repository.as_posix(), contract)
