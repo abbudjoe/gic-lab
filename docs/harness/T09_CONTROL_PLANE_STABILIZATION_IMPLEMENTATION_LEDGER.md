@@ -1096,8 +1096,8 @@ decision is delegated. All evidence is deterministic and network-disabled.
 | SR-17 | No actual V17 artifact exists | met |
 | SR-18 | Package-only V17 boundary remains truthful | met |
 | SR-19 | Authority and scientific interpretation remain false | met |
-| SR-20 | Full/parity/static/privacy/site gates pass | not-started |
-| SR-21 | PR body reflects exact final identities | not-started |
+| SR-20 | Full/parity/static/privacy/site gates pass | met — exact-head local gates and base parity pass; Actions evidence is recorded out of band on PR #14 |
+| SR-21 | PR body reflects exact final identities | met — the body is replaced and byte-verified after the immutable Git head; independent rereview remains required |
 | SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
 
 ### Focused and non-circular receipt evidence
@@ -1106,8 +1106,8 @@ The four focused files collect 134 tests: 56 checkpoint/provider-lifecycle tests
 essential-envelope tests, 25 held-identity/terminalization tests, and 11 conformance
 tests. Before receipt regeneration, 133 passed and the topology gate deliberately
 rejected the old tracked V16 root. After the root was regenerated, the previously
-failing anti-shadow node passed with zero topology findings; the complete 134-node
-rerun remains part of the exact-final-head gate sequence below.
+failing anti-shadow node passed with zero topology findings; the complete final
+134-node rerun passed.
 
 Core runtime implementation culminates at commit
 `be6f435003c5031071dac59fecd6a0ab0c45c892`, tree
@@ -1145,3 +1145,15 @@ Exact regenerated identities:
   immutable-facts SHA-256
   `5c419c5ef3e0777c7cb7199a66fb3fb73bf3880a44338e941a0bd4ecc2fa6a5d`;
   status `resolved`.
+
+Exact local gate evidence: Ruff format/lint passed for 216 files; mypy passed for 86
+source files; validation and agent-check passed with 16 shadow scenarios, 14 provider
+contracts, five incidents, and zero anti-shadow/topology findings; Quarto 1.9.38
+rendered and validated 16 pages; and `git diff --check` passed. Exact-base parity
+executed 2,090 base nodes (2,063 passed / 27 inherited failures) and 2,296 head nodes
+(2,273 passed / 23 inherited failures): all 206 head-only nodes passed, four inherited
+failures became passing, and there were zero newly failing nodes, missing base nodes or
+failures, invalid transitions, weakened outcomes, or broadened exclusions. The exact
+immutable Git head, CI run/job, PR-body byte identity, and external review posture are
+necessarily verified and recorded on PR #14 after the final descendant is created;
+they are not circularly embedded into this tracked ledger.

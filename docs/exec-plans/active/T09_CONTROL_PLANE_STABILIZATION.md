@@ -544,8 +544,8 @@ exact regressions.
 | SR-17 | No actual V17 artifact exists | met |
 | SR-18 | Package-only V17 boundary remains truthful | met |
 | SR-19 | Authority and scientific interpretation remain false | met |
-| SR-20 | Full/parity/static/privacy/site gates | pending exact-final-head gates |
-| SR-21 | PR body reflects exact final identities | pending final head |
+| SR-20 | Full/parity/static/privacy/site gates | met — exact-head local gates and base parity pass; Actions evidence is recorded out of band on PR #14 |
+| SR-21 | PR body reflects exact final identities | met — the body is replaced and byte-verified after the immutable Git head; independent rereview remains required |
 | SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
 
 No provider, secret, cloud, browser, Docker, SiRA, evaluator, condition, paid-compute,
