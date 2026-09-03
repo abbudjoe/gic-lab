@@ -161,3 +161,28 @@ The amendment preserves Option A accounting: the production wrapper's real-time 
 observer remains the only authoritative condition accountant. It also preserves all
 EXP-0001 science, ordering, retry, cost, and descriptive-only interpretation
 contracts. No live execution or V17 artifact is part of this decision.
+
+## Second exact-head rereview amendment
+
+Review 5097085114 establishes four additional decisions:
+
+1. Provider cost is policy evidence, not an effect assertion. Shared code derives one
+   exact lifecycle proof from the selected profile, its retained price source, every
+   consumed entry/owner/closeout slot, the freeze boundary, injected clock domains,
+   and immutable prior-cost state. An effect receipt only reconciles this result.
+2. Essential failure evidence is one complete envelope. Payload, manifest, completion
+   receipt, and export acknowledgement share finite member and entry limits, one
+   aggregate cap, exact canonical schemas, held identities, and complete privacy
+   traversal. No sibling metadata may escape the envelope.
+3. Held-root pathname loss is a terminal condition, not an exception escape. Cleanup
+   and privacy inspection continue through the held descriptor; the replacement path
+   is untouched. A controller-level `finally` terminalizes reserved authority and
+   releases every held descriptor on every exit.
+4. Runtime filesystem topology is private operational evidence. Public/tracked
+   receipts expose only stable validation attestations and never absolute temporary
+   roots, device, inode, UID, mount, or semantic hashes derived from those values.
+
+These decisions preserve exact private live authorization and artifact validation;
+only the public projection is stable. They also make scored/finalizer checkpoint fields
+mandatory rather than pass-valued defaults. The package-only V17 boundary is now a hard
+stop: any later need to change these shared decisions requires a new Category 1 repair.

@@ -99,5 +99,5 @@
   "scientific_interpretation_allowed": false,
   "scientific_result": "not-run",
   "stage": "second exact-head live-boundary rereview",
-  "status": "open"
+  "status": "resolved"
 }

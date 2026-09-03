@@ -505,3 +505,50 @@ The review incident
 regression nodes pass. `blocking_incident` remains null. The external governance gate
 is independent exact-head rereview and explicit merge authorization; the next
 technical subgoal remains package-only V17 generation only after reviewed merge.
+
+## PR #14 second exact-head rereview repair
+
+Review ID 5097085114 examined commit
+`a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f`, tree
+`32986899e94f980bdf648872cb82cb8f3b8c1700`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`. The accepted retained checkpoint,
+typed failure, unified authority, held identity, shared controller/assembly, and
+package-only boundary remain in force.
+
+The repair derives provider cost from retained lifecycle sources; makes both scored
+attempt and finalizer closure mandatory checkpoint inputs; moves all essential failure
+members under one bounded, canonical, privacy-scanned envelope; guarantees held-root
+privacy, authority terminalization, and descriptor release at controller scope; and
+publishes stable topology-free control evidence. Incident
+`INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY` links the reviewed identity and
+exact regressions.
+
+| ID | Second-rereview outcome | Evidence state |
+| --- | --- | --- |
+| SR-01 | Exact PR/base/reviewed-head preflight | met |
+| SR-02 | Prior four headline repairs preserved | met |
+| SR-03 | Provider price and intervals bind retained lifecycle evidence | met |
+| SR-04 | Every consumed provider slot is cost-accounted | met |
+| SR-05 | Effect cannot understate provider cost | met |
+| SR-06 | Mandatory checkpoint evidence has no pass defaults | met |
+| SR-07 | Complete essential envelope is finitely bounded | met |
+| SR-08 | Every envelope member is schema/privacy validated | met |
+| SR-09 | Terminal privacy includes failure envelopes and export | met |
+| SR-10 | Root replacement cannot escape controller terminalization | met |
+| SR-11 | Reserved authority reaches one terminal single-use state | met |
+| SR-12 | Descriptor release is guaranteed | met |
+| SR-13 | Public/tracked receipts retain no runtime topology | pending regenerated receipt root |
+| SR-14 | Updated conformance proves all residual repairs | pending regenerated receipt root |
+| SR-15 | Incident and state capsule are truthful | in progress |
+| SR-16 | Historical V16 proof remains valid | pending regenerated receipt root |
+| SR-17 | No actual V17 artifact exists | met |
+| SR-18 | Package-only V17 boundary remains truthful | met |
+| SR-19 | Authority and scientific interpretation remain false | met |
+| SR-20 | Full/parity/static/privacy/site gates | pending exact-final-head gates |
+| SR-21 | PR body reflects exact final identities | pending final head |
+| SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
+
+No provider, secret, cloud, browser, Docker, SiRA, evaluator, condition, paid-compute,
+or scientific effect is authorized or executed by this repair. OpenAI and provider
+cost added by it remain USD 0.00. The cumulative historical T09 cost remains
+USD 36.36170860803283125.

@@ -92,18 +92,27 @@ PR 2 may not change:
 ```text
 src/giclab/control/adapters.py
 src/giclab/control/agent_check.py
+src/giclab/control/anti_shadow_lint.py
 src/giclab/control/category3.py
+src/giclab/control/cli.py
 src/giclab/control/production.py
 src/giclab/control/effects.py
 src/giclab/control/proofs.py
 src/giclab/control/composition.py
 src/giclab/control/consumers.py
+src/giclab/control/contracts.py
+src/giclab/control/live_conformance.py
 src/giclab/control/registry_validation.py
 src/giclab/control/shadow.py
 src/giclab/control/shadow_effects.py
 src/giclab/control/state_capsule.py
 src/giclab/control/target.py
 src/giclab/control/version_lint.py
+src/giclab/harness/t09_cleanup_state.py
+src/giclab/harness/t09_pragmatic_provider.py
+src/giclab/harness/t09_sira_pilot.py
+src/giclab/validation.py
+containers/sira-smoke/pragmatic/t09_remote_runner.py
 Makefile
 .github/workflows/ci.yml
 ```
@@ -121,3 +130,14 @@ authority transaction, held module/root/artifact identities, and byte-identical
 public conformance projection. These are shared prerequisites, not files PR 2 may
 repair. If any later V17 fixture needs another shared change, package generation must
 stop.
+
+PR #14 review 5097085114 additionally requires retained-source provider lifecycle
+cost proof, a complete bounded and privacy-scanned essential-failure envelope,
+controller-guaranteed authority terminalization and descriptor release after held-root
+pathname loss, and topology-free deterministic public receipts. Those cost-proof,
+failure-envelope, terminalization, held-identity, loader, authority, conformance, and
+public-projection implementations are also frozen shared control. A future V17 PR may
+add only the listed package declaration/data/effect/policy/root/doc/test surfaces. If
+it needs any shared file above—or another shared controller, loader, authority,
+cost-proof, failure-envelope, held-identity, conformance, proof, target, or capsule
+change—it must stop and open a separate Category 1 repair.

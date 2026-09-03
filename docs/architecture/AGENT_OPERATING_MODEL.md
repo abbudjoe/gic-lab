@@ -237,3 +237,46 @@ No V17 package, effect module, receipt root, external overlay, run root, or
 `AUTONOMOUS-0010` identity is created by this repair. Repository, Category 3, live,
 and scientific authority remain false. The exact package-only successor allowlist and
 no-touch shared-source list are maintained in the T09 preauthorization packet.
+
+## Second exact-head rereview repair
+
+Review 5097085114 of PR #14 found four transitive gaps at reviewed commit
+`a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f`: provider cost could still be selected
+by a self-consistent effect receipt, failure-envelope metadata sat outside the bounded
+payload, a held-root pathname mismatch could interrupt controller terminalization,
+and public receipts retained unstable filesystem topology.
+
+Provider cost is now a shared-derived lifecycle proof. The wrapper reloads the exact
+provider profile and retained price source, validates every consumed entry/owner and
+closeout record by launch ordinal and opaque owner, reconstructs closed and active
+wall-time intervals with exact decimal arithmetic, reconciles prior preflight and
+current empirical cost, and only then asks the effect to acknowledge that proof. The
+effect cannot omit a slot, move an interval, substitute a zero price, or understate a
+self-hashed total. `PairCheckpointInput` requires explicit scored-attempt and finalizer
+closure evidence at every call site.
+
+An essential failure is one complete finite envelope. Its payload, canonical manifest,
+canonical completion receipt, and canonical export acknowledgement are all regular,
+single-link, current-user files beneath the held transaction root. Per-member caps, a
+finite entry cap, and the 67,108,864-byte aggregate cap cover the complete declared
+envelope. Structural and byte-level privacy checks include every member before and
+after export and again at terminal scanning; rejected evidence remains unscored and
+publication-blocked.
+
+Privacy scanning and cleanup use the held root descriptor when its original pathname
+is replaced. The replacement pathname is neither scanned nor mutated. The controller
+owns an outer `finally` that terminalizes every validated live authority as complete or
+failed-nonreplayable and then releases every artifact, overlay, effect-source, and root
+descriptor. Terminal evidence is materialized before release, and an in-memory
+empirical/raw prefix remains honest when the durable pathname is unavailable.
+
+Public control evidence uses stable attestations rather than absolute roots, device,
+inode, UID, mount, or topology-derived hashes. Exact values remain private and held for
+runtime revalidation. Deterministic shadow capability identities are derived from a
+validated root-relative role, and local-secret cleanup authority is root-relative, so
+equivalent runs under different private roots produce the same public semantic receipt.
+This projection does not weaken the exact private identity used by live authorization.
+
+The real-time typed event observer remains the only condition accountant. All EXP-0001
+science, ordering, retry, and cost contracts remain unchanged; this repair performed no
+live or scientific execution and creates no V17 artifact or authority.

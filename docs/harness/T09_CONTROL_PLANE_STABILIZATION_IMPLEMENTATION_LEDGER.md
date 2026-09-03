@@ -1030,3 +1030,72 @@ exact-head rereview plus explicit merge authorization remains the external gover
 gate. The next technical subgoal is package-only V17 generation after reviewed merge.
 No live authorization, secret, provider, cloud, browser, SiRA, evaluator, condition,
 or scientific execution occurred; added OpenAI/provider cost is USD 0.00.
+
+## PR #14 second exact-head rereview 5097085114 repair assembly
+
+Status: **repair implemented; regenerated receipts and exact-final-head gates pending**
+
+The pre-edit audit verified exact reviewed head
+`a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f`, tree
+`32986899e94f980bdf648872cb82cb8f3b8c1700`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`, tree
+`eb70e20024559d65b3fadd240f72d3522895ef04`. PR #14 remains open, draft,
+unmerged, and without auto-merge; exact-head Actions run 33687000382/job
+100436733425 remains successful. Review 5097085114 is the only newer review and has
+no unresolved thread. The task worktree, destination, branch head, no-V17 boundary,
+and false repository/Category 3/live/scientific authority state all match the
+operator contract.
+
+No implementation, testing, review, Git, architecture, or scientific-boundary
+decision is delegated. All evidence is deterministic and network-disabled.
+
+### Residual findings and planned evidence
+
+1. **Provider lifecycle cost:** replaced effect-authoritative self-consistent cost with
+   a shared-derived proof over the exact provider profile/price source, retained
+   provider entry/ownership/closeout intervals, prior preflight history, injected
+   wall/monotonic observation, and exact monetary arithmetic. Checkpoint safety
+   defaults are removed. Evidence: direct lifecycle mutation matrix and checkpoint
+   coupling tests pass.
+2. **Essential failure envelope:** payload, manifest, completion receipt, and
+   export acknowledgement inside one finite envelope; enforce exact canonical schemas,
+   complete aggregate/member caps, held identities, and complete privacy traversal.
+   Evidence: cap, schema, privacy, mutation, export, and inherited failure matrices
+   pass.
+3. **Held-root terminalization:** privacy scanning is descriptor-rooted after a
+   pathname mismatch, return typed unresolved privacy state when needed, and guarantee
+   authority terminalization plus all descriptor release through a controller-level
+   `finally`. Evidence: full-controller root-replacement and injected terminal failure
+   tests pass.
+4. **Public runtime topology:** public evidence uses only the stable held-root projection
+   and a
+   repository receipt privacy gate for absolute runtime roots and device/inode/UID
+   values. Evidence: fresh-root byte identity and injected topology tests pass. The
+   old tracked receipt tree is deliberately rejected until non-circular regeneration.
+
+### Second-rereview definition of done
+
+| ID | Required outcome | Status |
+| --- | --- | --- |
+| SR-01 | Exact PR/base/head identity verified | met |
+| SR-02 | Prior four headline repairs preserved | met |
+| SR-03 | Provider price and intervals bind retained lifecycle evidence | met |
+| SR-04 | Every consumed provider slot is cost-accounted | met |
+| SR-05 | Provider cost cannot be understated by an effect | met |
+| SR-06 | Mandatory checkpoint evidence has no pass defaults | met |
+| SR-07 | Complete essential envelope is finitely bounded | met |
+| SR-08 | Every essential envelope member is schema/privacy validated | met |
+| SR-09 | Terminal privacy scan includes failure envelopes and exports | met |
+| SR-10 | Root pathname replacement cannot escape controller terminalization | met |
+| SR-11 | Every reserved authority exit reaches a terminal single-use state | met |
+| SR-12 | Descriptor release is guaranteed | met |
+| SR-13 | Public/tracked receipts retain no runtime topology | pending regenerated receipt root |
+| SR-14 | Updated conformance proves all residual repairs | pending regenerated receipt root |
+| SR-15 | Incident and state capsule are truthful | met |
+| SR-16 | Historical V16 proof remains valid | pending regenerated receipt root |
+| SR-17 | No actual V17 artifact exists | met |
+| SR-18 | Package-only V17 boundary remains truthful | met |
+| SR-19 | Authority and scientific interpretation remain false | met |
+| SR-20 | Full/parity/static/privacy/site gates pass | not-started |
+| SR-21 | PR body reflects exact final identities | not-started |
+| SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
