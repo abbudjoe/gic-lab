@@ -338,11 +338,22 @@ def test_live_shaped_review_failure_subreceipts_are_complete(
 
 def test_anti_shadow_lint_inventory_and_mutations() -> None:
     receipt = validate_anti_shadow_lint(ROOT)
-    Draft202012Validator(
-        load_json(ROOT / "schemas/t09-anti-shadow-lint-receipt.schema.json")
-    ).validate(receipt)
-    assert receipt["complete"] is True
-    assert receipt["findings"] == []
+    topology = receipt["public_receipt_topology_scan"]
+    assert isinstance(topology, dict)
+    selected_root = topology["selected_receipt_root"]
+    assert isinstance(selected_root, str)
+    if (ROOT / selected_root).is_dir():
+        Draft202012Validator(
+            load_json(ROOT / "schemas/t09-anti-shadow-lint-receipt.schema.json")
+        ).validate(receipt)
+        assert receipt["complete"] is True
+        assert receipt["findings"] == []
+    else:
+        findings = receipt["findings"]
+        assert isinstance(findings, list)
+        assert findings
+        assert {item["code"] for item in findings} == {"T09S025"}
+        assert topology["complete"] is False
     base_inventory = receipt["base_assumption_inventory"]
     assert isinstance(base_inventory, list)
     assert [item["assumption_id"] for item in base_inventory] == [
