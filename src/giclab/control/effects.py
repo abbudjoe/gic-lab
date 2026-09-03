@@ -291,6 +291,15 @@ class HeldTransactionRoot:
         document["public_attestation_semantic_sha256"] = _sha256(document)
         return document
 
+    @property
+    def public_attestation_semantic_sha256(self) -> str:
+        """Return the stable public attestation identity for shadow-only bindings."""
+
+        value = self.to_public_document()["public_attestation_semantic_sha256"]
+        if not isinstance(value, str):  # pragma: no cover - constructed immediately above
+            raise AssertionError("held-root public attestation identity is not a string")
+        return value
+
 
 def hold_transaction_root(path: Path) -> HeldTransactionRoot:
     """Open and validate one exact private root without following symlinks."""

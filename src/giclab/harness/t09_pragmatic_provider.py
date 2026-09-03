@@ -477,6 +477,33 @@ class ShadowCampaignLowLevelControls:
             raise T09ProviderError("shadow launch slot escaped the selected contract")
         return self.capability_root / f"launch-slot-{launch_slot:02d}.json"
 
+    def private_root_identity_sha256(self, private_root: Path) -> str:
+        """Return a stable fake-only role identity after exact containment checks."""
+
+        if self._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
+            raise T09ProviderError("shadow campaign controls are invalid")
+        root = private_root.resolve(strict=True)
+        transaction_root = self.capability_root.parent
+        try:
+            relative = root.relative_to(transaction_root)
+        except ValueError as exc:
+            raise T09ProviderError("shadow provider root escaped its held transaction") from exc
+        if (
+            len(relative.parts) != 2
+            or relative.parts[0] != "control-private"
+            or not relative.parts[1].startswith("campaign-slot-")
+        ):
+            raise T09ProviderError("shadow provider root escaped its held transaction")
+        return _sha256_bytes(
+            _canonical_bytes(
+                {
+                    "purpose": "deterministic-shadow-provider-private-root-role",
+                    "package_commit": self.expected_package_commit,
+                    "relative_role": relative.as_posix(),
+                }
+            )
+        )
+
     def verify_package(self, repository: Path, package_commit: str) -> None:
         if self._proof is not _SHADOW_CAMPAIGN_CONTROLS_PROOF:
             raise T09ProviderError("shadow campaign controls are invalid")
@@ -522,6 +549,15 @@ def _mint_shadow_campaign_low_level_controls(
     object.__setattr__(value, "image_fixture", image)
     object.__setattr__(value, "_proof", _SHADOW_CAMPAIGN_CONTROLS_PROOF)
     return value
+
+
+def _private_root_identity_sha256(private_root: Path) -> str:
+    """Bind a live root to its exact path and a shadow root to its stable role."""
+
+    shadow_controls = _SHADOW_CAMPAIGN_CONTROLS.get()
+    if shadow_controls is not None:
+        return shadow_controls.private_root_identity_sha256(private_root)
+    return _sha256_bytes(str(private_root.resolve(strict=True)).encode())
 
 
 @contextlib.contextmanager
@@ -798,9 +834,7 @@ def _consume_launch_capability(
                 "launch_body_sha256": _sha256_bytes(
                     _canonical_bytes(_launch_body(contract=contract))
                 ),
-                "private_root_identity_sha256": _sha256_bytes(
-                    str(private_root.resolve(strict=True)).encode()
-                ),
+                "private_root_identity_sha256": _private_root_identity_sha256(private_root),
                 "launch_slot": launch_slot,
                 "launch_capability_limit": contract.max_launch_count,
                 "launch_capability_state": "consumed-cleanup-only-after-this-point",
@@ -2051,7 +2085,7 @@ def _initial_preflight_cleanup_state(
             launch_slot=launch_slot,
             replacement_eligibility_sha256=replacement_eligibility_sha256,
             firewall_baseline_identity_sha256=baseline_identity,
-            temporary_local_secret_locator=str(private_root / "openai-secret-upload"),
+            temporary_local_secret_locator="openai-secret-upload",
             temporary_remote_secret_locator=("/home/ubuntu/.config/giclab/sira_api_key"),
             clock=clock,
         )
@@ -2070,7 +2104,6 @@ def _initial_cleanup_compatibility_projection(
 ) -> dict[str, object]:
     """Project the versioned authority for existing exact-owner closeout code."""
 
-    local_upload_path = private_root / "openai-secret-upload"
     return {
         "schema_version": "1.0.0",
         "state_type": "t09-versioned-preflight-cleanup-authority-projection",
@@ -2096,7 +2129,7 @@ def _initial_cleanup_compatibility_projection(
         ],
         "temporary_firewall_resource_ids": [],
         "temporary_ruleset_resource_ids": [],
-        "temporary_local_secret_locations": [str(local_upload_path)],
+        "temporary_local_secret_locations": ["openai-secret-upload"],
         "temporary_remote_secret_locations": ["/home/ubuntu/.config/giclab/sira_api_key"],
         "planned_remote_artifact_root": contract.remote_root,
         "source_staging_started": False,
@@ -2272,7 +2305,7 @@ def _record_provider_closeout_cleanup(
         ),
         None,
     )
-    if target is None or target.locator != str(local_credential):
+    if target is None or target.locator != "openai-secret-upload":
         raise T09ProviderError("local secret cleanup authority drifted")
     if os.path.lexists(local_credential):
         metadata = local_credential.lstat()
@@ -2345,8 +2378,8 @@ def _provisional_owner_binding(
 
     owned_identity = _instance_identity_sha256(instance_id)
     capability = _load_json(capability_path, maximum_bytes=65_536)
-    expected_private_root_identity = source_private_root_identity_sha256 or _sha256_bytes(
-        str(private_root.resolve(strict=True)).encode()
+    expected_private_root_identity = (
+        source_private_root_identity_sha256 or _private_root_identity_sha256(private_root)
     )
     if (
         _HEX64.fullmatch(expected_private_root_identity) is None
@@ -5487,7 +5520,7 @@ def _resolve_provider_entry_replacement_authority(
 
     direct = _provider_entry_authority_for_root(
         root,
-        source_private_root_identity_sha256=_sha256_bytes(str(root.resolve(strict=True)).encode()),
+        source_private_root_identity_sha256=_private_root_identity_sha256(root),
         normalized_manifest_path=None,
     )
     direct_presence = [
@@ -6497,7 +6530,7 @@ def _replacement_launch_eligibility_path(
     if not history:
         return current
     entry_path = root / "entry-source/entry-receipt.json"
-    source_private_root_identity = _sha256_bytes(str(root.resolve(strict=True)).encode())
+    source_private_root_identity = _private_root_identity_sha256(root)
     try:
         if os.path.lexists(entry_path):
             entry = validate_entry_receipt_source_bound(

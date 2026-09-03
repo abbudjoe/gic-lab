@@ -5190,6 +5190,11 @@ def build_production_adapter_assembly(
     root = repository.resolve(strict=True)
     commit, tree = _git_identity(root)
     command_sha = contract.expected_command_manifest_sha256
+    expected_transaction_root_identity = (
+        held_transaction_root.semantic_sha256
+        if authorization_context.authority_kind is EffectAuthorityKind.LIVE_AUTHORIZED
+        else held_transaction_root.public_attestation_semantic_sha256
+    )
     if (
         command_sha is None
         or authorization_context.control_commit != commit
@@ -5202,7 +5207,7 @@ def build_production_adapter_assembly(
         or authorization_context.command_package_sha256 != command_sha
         or authorization_context.effect_implementation
         != low_level_effects.implementation_identity()
-        or authorization_context.transaction_root_identity != held_transaction_root.semantic_sha256
+        or authorization_context.transaction_root_identity != expected_transaction_root_identity
         or authorization_context.cost_limits.preflight_provider_cost_usd
         != contract.preflight_lambda_cost_cap_usd
         or authorization_context.cost_limits.campaign_provider_cost_usd

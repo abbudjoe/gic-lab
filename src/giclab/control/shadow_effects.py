@@ -2198,7 +2198,10 @@ def build_production_shadow_assembly(
         command_package_sha256=command_sha,
         control_binding_semantic_sha256=binding_sha,
         effect_implementation=effects.implementation_identity(),
-        transaction_root_identity=held_transaction_root.semantic_sha256,
+        # Shadow authority binds the shared-held root's stable attestation rather
+        # than leaking nondeterministic private inode/path identity into receipts.
+        # Live authority continues to bind the exact runtime-private identity.
+        transaction_root_identity=held_transaction_root.public_attestation_semantic_sha256,
         external_authorization_reference=None,
         external_authorization_source_sha256=None,
         cost_limits=EffectAuthorizationLimits(

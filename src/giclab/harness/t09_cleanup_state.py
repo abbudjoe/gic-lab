@@ -282,10 +282,16 @@ def _validate_locator(value: str, *, kind: CleanupTargetKind | None = None) -> N
         "entry-source/provider-firewall-baseline"
     ):
         raise EarlyCleanupStateError("firewall cleanup locator is not the exact baseline alias")
-    if kind in {
-        CleanupTargetKind.TEMPORARY_LOCAL_CREDENTIAL,
-        CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
-    }:
+    if kind is CleanupTargetKind.TEMPORARY_LOCAL_CREDENTIAL:
+        # Current journals bind this target as one root-relative role so the
+        # held private-root descriptor, rather than an unstable absolute
+        # pathname, owns cleanup. Historical absolute locators remain readable.
+        path = Path(value)
+        if value != "openai-secret-upload" and (
+            not path.is_absolute() or ".." in path.parts or path == Path(path.anchor)
+        ):
+            raise EarlyCleanupStateError("temporary-secret cleanup locator is not an exact path")
+    if kind is CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL:
         path = Path(value)
         if not path.is_absolute() or ".." in path.parts or path == Path(path.anchor):
             raise EarlyCleanupStateError("temporary-secret cleanup locator is not an exact path")
