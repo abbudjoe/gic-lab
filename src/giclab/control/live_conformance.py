@@ -479,7 +479,8 @@ def _root_replacement_terminalization_subreceipt(
     held_source = hold_package_effect_registration(repository, contract)
     if held_source is None:
         raise ValueError("root-replacement probe lacks its held package source")
-    transaction_root = repository.parent / "private-root-mismatch-transaction"
+    external_root = repository.parent.resolve(strict=True)
+    transaction_root = external_root / "private-root-mismatch-transaction"
     transaction_root.mkdir(mode=0o700)
     held_root = hold_transaction_root(transaction_root)
     prefix = contract.authorization_prefix
@@ -497,7 +498,7 @@ def _root_replacement_terminalization_subreceipt(
         current_turn_scope=turn_scope,
         execution_mode=EffectExecutionMode.DETERMINISTIC_NO_NETWORK,
     )
-    overlay_path = repository.parent / "private-root-mismatch-overlay.json"
+    overlay_path = external_root / "private-root-mismatch-overlay.json"
     overlay_path.write_bytes(_canonical_bytes(overlay_document))
     overlay_path.chmod(0o600)
     context, authority = validate_external_live_effect_authority(
