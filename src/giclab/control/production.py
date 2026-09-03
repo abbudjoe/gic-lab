@@ -3835,26 +3835,27 @@ class ProductionCategory3World:
         commit, _tree = _git_identity(self.repository)
         plan_sha = _file_sha256(self.repository / self.contract.provider_profile_path)
         if entry_path.is_file() and closeout_path.is_file():
-            entry = provider.validate_entry_receipt_source_bound(
-                entry_path,
-                entry_source,
-                contract=self.contract,
-                package_commit=commit,
-                plan_sha256=plan_sha,
-            )
-            closeout = provider.validate_closeout_receipt(
-                closeout_path,
-                root / "closeout-source",
-                contract=self.contract,
-                entry_receipt_path=entry_path,
-                entry_source_root=entry_source,
-                package_commit=commit,
-                plan_sha256=plan_sha,
-                lifecycle=provider.load_campaign_lifecycle(
-                    self.repository,
+            with self.low_level_effects.campaign_scope():
+                entry = provider.validate_entry_receipt_source_bound(
+                    entry_path,
+                    entry_source,
                     contract=self.contract,
-                ),
-            )
+                    package_commit=commit,
+                    plan_sha256=plan_sha,
+                )
+                closeout = provider.validate_closeout_receipt(
+                    closeout_path,
+                    root / "closeout-source",
+                    contract=self.contract,
+                    entry_receipt_path=entry_path,
+                    entry_source_root=entry_source,
+                    package_commit=commit,
+                    plan_sha256=plan_sha,
+                    lifecycle=provider.load_campaign_lifecycle(
+                        self.repository,
+                        contract=self.contract,
+                    ),
+                )
             owner = cast(str, entry["owned_instance_identity_sha256"])
             started = finite_time(
                 entry.get("owned_lambda_started_at_epoch"),
@@ -3903,17 +3904,17 @@ class ProductionCategory3World:
         if ended < started:
             raise AdapterFailure("closed provider interval ends before it starts")
         interval_cost = (Decimal(str(ended)) - Decimal(str(started))) * price / Decimal(3600)
-        derived_cumulative = prior_cumulative + interval_cost
+        billable = (
+            self.authorization_context.execution_mode
+            is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+        )
+        derived_cumulative = prior_cumulative + (interval_cost if billable else Decimal(0))
         tolerance = Decimal("0.000000001")
         if (
             abs(retained_cumulative - cumulative) > tolerance
             or abs(derived_cumulative - cumulative) > tolerance
         ):
             raise AdapterFailure("closed provider interval cost is not source-derived")
-        billable = (
-            self.authorization_context.execution_mode
-            is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
-        )
         interval = ProviderLifecycleInterval(
             launch_ordinal=ordinal,
             owned_instance_identity=owner,
@@ -3975,13 +3976,14 @@ class ProductionCategory3World:
             raise AdapterFailure("provider lifecycle lacks its active source-bound entry")
         entry_source = active_root / "entry-source"
         commit, _tree = _git_identity(self.repository)
-        entry = provider.validate_entry_receipt_source_bound(
-            entry_path,
-            entry_source,
-            contract=self.contract,
-            package_commit=commit,
-            plan_sha256=profile_sha,
-        )
+        with self.low_level_effects.campaign_scope():
+            entry = provider.validate_entry_receipt_source_bound(
+                entry_path,
+                entry_source,
+                contract=self.contract,
+                package_commit=commit,
+                plan_sha256=profile_sha,
+            )
         price, active_price_sha = self._retained_provider_price(entry_source)
         if _decimal_number(entry.get("hourly_price_usd"), label="entry hourly price") != price:
             raise AdapterFailure("provider entry price differs from its retained offer")
@@ -4536,50 +4538,70 @@ class ProductionCategory3World:
         return _identity(values)
 
     def _destroy_secret_file(self, path: Path) -> None:
-        """Destroy one top-level secret through the held root descriptor."""
+        """Destroy one exact root-relative secret through no-follow directory FDs."""
 
         try:
             relative = path.relative_to(self.root).as_posix()
         except ValueError as exc:
             raise AdapterFailure("secret cleanup path escaped the held root") from exc
-        if "/" in relative or relative in {"", ".", ".."}:
-            raise AdapterFailure("secret cleanup path is not one exact root member")
+        pure = PurePosixPath(relative)
+        if pure.is_absolute() or relative in {"", ".", ".."} or ".." in pure.parts:
+            raise AdapterFailure("secret cleanup path is not one exact root-relative member")
         self.held_transaction_root.revalidate_descriptor()
-        try:
-            named = os.stat(
-                relative,
-                dir_fd=self.held_transaction_root.descriptor,
-                follow_symlinks=False,
+        parent_relative = pure.parent.as_posix()
+        if parent_relative == ".":
+            parent_descriptor = os.dup(self.held_transaction_root.descriptor)
+        else:
+            parent_descriptor = self.held_transaction_root.open_relative_no_follow(
+                parent_relative,
+                flags=os.O_RDONLY | os.O_DIRECTORY,
             )
-        except FileNotFoundError:
-            return
-        if not stat.S_ISREG(named.st_mode) or named.st_uid != os.getuid() or named.st_nlink != 1:
-            raise AdapterFailure("secret cleanup target identity is unsafe")
-        descriptor = self.held_transaction_root.open_relative_no_follow(
-            relative,
-            flags=os.O_RDWR,
-        )
+        leaf = pure.name
         try:
-            metadata_value = os.fstat(descriptor)
+            try:
+                named = os.stat(leaf, dir_fd=parent_descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                return
             if (
-                not stat.S_ISREG(metadata_value.st_mode)
-                or metadata_value.st_uid != os.getuid()
-                or metadata_value.st_nlink != 1
+                not stat.S_ISREG(named.st_mode)
+                or named.st_uid != os.getuid()
+                or named.st_nlink != 1
             ):
                 raise AdapterFailure("secret cleanup target identity is unsafe")
-            size = metadata_value.st_size
-            offset = 0
-            block = b"\x00" * min(1_048_576, max(1, size))
-            while offset < size:
-                written = os.pwrite(descriptor, block[: min(len(block), size - offset)], offset)
-                if written <= 0:
-                    raise AdapterFailure("secret cleanup overwrite made no progress")
-                offset += written
-            os.fsync(descriptor)
+            descriptor = os.open(
+                leaf,
+                os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC,
+                dir_fd=parent_descriptor,
+            )
+            try:
+                metadata_value = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(metadata_value.st_mode)
+                    or metadata_value.st_dev != named.st_dev
+                    or metadata_value.st_ino != named.st_ino
+                    or metadata_value.st_uid != os.getuid()
+                    or metadata_value.st_nlink != 1
+                ):
+                    raise AdapterFailure("secret cleanup target identity is unsafe")
+                size = metadata_value.st_size
+                offset = 0
+                block = b"\x00" * min(1_048_576, max(1, size))
+                while offset < size:
+                    written = os.pwrite(
+                        descriptor,
+                        block[: min(len(block), size - offset)],
+                        offset,
+                    )
+                    if written <= 0:
+                        raise AdapterFailure("secret cleanup overwrite made no progress")
+                    offset += written
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            os.unlink(leaf, dir_fd=parent_descriptor)
+            os.fsync(parent_descriptor)
         finally:
-            os.close(descriptor)
-        os.unlink(relative, dir_fd=self.held_transaction_root.descriptor)
-        os.fsync(self.held_transaction_root.descriptor)
+            os.close(parent_descriptor)
 
     def cleanup(self, handle: ProviderHandle | None) -> str:
         operation = "host.cleanup"
