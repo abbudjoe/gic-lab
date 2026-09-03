@@ -656,12 +656,26 @@ def _scan_bound_receipt_root(
             )
             continue
 
-        raw_scan = source
-        if PurePosixPath(relative).name == "anti-shadow-lint.json":
-            for marker in _RUNTIME_TOPOLOGY_MARKERS:
-                raw_scan = raw_scan.replace(json.dumps(marker), "")
+        document: object = None
+        structured_error: Exception | None = None
+        try:
+            if path.suffix.casefold() == ".json":
+                document = loads_json(encoded)
+            elif path.suffix.casefold() in {".yaml", ".yml"}:
+                document = load_yaml(path)
+        except (UnicodeError, json.JSONDecodeError, DuplicateKeyError, ValueError) as exc:
+            structured_error = exc
+
+        declared_marker_allowance = Counter[str]()
+        if PurePosixPath(relative).name == "anti-shadow-lint.json" and isinstance(document, dict):
+            topology = document.get("public_receipt_topology_scan")
+            declared = (
+                topology.get("forbidden_path_markers") if isinstance(topology, dict) else None
+            )
+            if declared == list(_RUNTIME_TOPOLOGY_MARKERS):
+                declared_marker_allowance.update(cast(list[str], declared))
         for marker in _RUNTIME_TOPOLOGY_MARKERS:
-            if marker in raw_scan:
+            if source.count(marker) > declared_marker_allowance[marker]:
                 findings.append(
                     _topology_finding(
                         display_path,
@@ -670,19 +684,12 @@ def _scan_bound_receipt_root(
                     )
                 )
 
-        try:
-            if path.suffix.casefold() == ".json":
-                document: object = loads_json(encoded)
-            elif path.suffix.casefold() in {".yaml", ".yml"}:
-                document = load_yaml(path)
-            else:
-                document = None
-        except (UnicodeError, json.JSONDecodeError, DuplicateKeyError, ValueError) as exc:
+        if structured_error is not None:
             findings.append(
                 _topology_finding(
                     display_path,
                     "T09S028",
-                    f"bound structured receipt member is invalid: {exc}",
+                    f"bound structured receipt member is invalid: {structured_error}",
                 )
             )
             continue

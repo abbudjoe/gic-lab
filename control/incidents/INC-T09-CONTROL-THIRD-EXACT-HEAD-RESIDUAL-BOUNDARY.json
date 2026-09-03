@@ -74,6 +74,10 @@
     },
     {
       "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_anti_shadow_declared_marker_exception_does_not_hide_another_field"
+    },
+    {
+      "kind": "test-node",
       "reference": "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra"
     },
     {

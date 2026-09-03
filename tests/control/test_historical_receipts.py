@@ -201,6 +201,28 @@ def test_selected_v17_bound_goal_record_is_topology_scanned(
     assert any(finding.path.endswith("bound-goal-record.yaml") for finding in findings)
 
 
+def test_anti_shadow_declared_marker_exception_does_not_hide_another_field(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    path = repository / "control/receipts/packages/v17/anti-shadow-lint.json"
+    original = path.read_bytes()
+    document = json.loads(original)
+    document["third_rereview_runtime_path_probe"] = "/tmp/selected-v17-runtime"
+    try:
+        path.write_text(
+            json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        findings = public_receipt_topology_findings(repository)
+    finally:
+        path.write_bytes(original)
+    assert any(
+        finding.code == "T09S023" and finding.path.endswith("anti-shadow-lint.json")
+        for finding in findings
+    )
+
+
 def test_selected_v17_scan_rejects_bound_omission_and_unbound_extra(
     successor_receipt_repository: tuple[Path, object],
 ) -> None:
