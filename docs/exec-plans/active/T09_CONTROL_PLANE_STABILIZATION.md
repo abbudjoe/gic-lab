@@ -537,10 +537,10 @@ exact regressions.
 | SR-10 | Root replacement cannot escape controller terminalization | met |
 | SR-11 | Reserved authority reaches one terminal single-use state | met |
 | SR-12 | Descriptor release is guaranteed | met |
-| SR-13 | Public/tracked receipts retain no runtime topology | pending regenerated receipt root |
-| SR-14 | Updated conformance proves all residual repairs | pending regenerated receipt root |
-| SR-15 | Incident and state capsule are truthful | in progress |
-| SR-16 | Historical V16 proof remains valid | pending regenerated receipt root |
+| SR-13 | Public/tracked receipts retain no runtime topology | met |
+| SR-14 | Updated conformance proves all residual repairs | met |
+| SR-15 | Incident and state capsule are truthful | met |
+| SR-16 | Historical V16 proof remains valid | met |
 | SR-17 | No actual V17 artifact exists | met |
 | SR-18 | Package-only V17 boundary remains truthful | met |
 | SR-19 | Authority and scientific interpretation remain false | met |
@@ -552,3 +552,10 @@ No provider, secret, cloud, browser, Docker, SiRA, evaluator, condition, paid-co
 or scientific effect is authorized or executed by this repair. OpenAI and provider
 cost added by it remain USD 0.00. The cumulative historical T09 cost remains
 USD 36.36170860803283125.
+
+The immutable source/state binding ancestor is commit
+`db32bba7b87cae7e08083d6f6b332b126f8ff57a`, tree
+`3dc148643ddf610d2b3698898296de98381f827a`. The regenerated V16 aggregate binding
+has file SHA-256 `59cd459072359c75395a796b2e7edbe0370d309bdd2596e894148f942c7d0038`
+and semantic SHA-256
+`f5c04f8d7ef31aad5dbfc9dc37cfba142bd4dcf962e8edd83e4f2120cd00dfeb`.

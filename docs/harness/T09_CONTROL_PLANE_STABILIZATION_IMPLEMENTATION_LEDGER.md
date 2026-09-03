@@ -1033,7 +1033,7 @@ or scientific execution occurred; added OpenAI/provider cost is USD 0.00.
 
 ## PR #14 second exact-head rereview 5097085114 repair assembly
 
-Status: **repair implemented; regenerated receipts and exact-final-head gates pending**
+Status: **repair and non-circular receipt regeneration complete; exact-final-head gates pending**
 
 The pre-edit audit verified exact reviewed head
 `a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f`, tree
@@ -1089,13 +1089,59 @@ decision is delegated. All evidence is deterministic and network-disabled.
 | SR-10 | Root pathname replacement cannot escape controller terminalization | met |
 | SR-11 | Every reserved authority exit reaches a terminal single-use state | met |
 | SR-12 | Descriptor release is guaranteed | met |
-| SR-13 | Public/tracked receipts retain no runtime topology | pending regenerated receipt root |
-| SR-14 | Updated conformance proves all residual repairs | pending regenerated receipt root |
+| SR-13 | Public/tracked receipts retain no runtime topology | met |
+| SR-14 | Updated conformance proves all residual repairs | met |
 | SR-15 | Incident and state capsule are truthful | met |
-| SR-16 | Historical V16 proof remains valid | pending regenerated receipt root |
+| SR-16 | Historical V16 proof remains valid | met |
 | SR-17 | No actual V17 artifact exists | met |
 | SR-18 | Package-only V17 boundary remains truthful | met |
 | SR-19 | Authority and scientific interpretation remain false | met |
 | SR-20 | Full/parity/static/privacy/site gates pass | not-started |
 | SR-21 | PR body reflects exact final identities | not-started |
 | SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
+
+### Focused and non-circular receipt evidence
+
+The four focused files collect 134 tests: 56 checkpoint/provider-lifecycle tests, 42
+essential-envelope tests, 25 held-identity/terminalization tests, and 11 conformance
+tests. Before receipt regeneration, 133 passed and the topology gate deliberately
+rejected the old tracked V16 root. After the root was regenerated, the previously
+failing anti-shadow node passed with zero topology findings; the complete 134-node
+rerun remains part of the exact-final-head gate sequence below.
+
+Core source/tests culminate at commit
+`be6f435003c5031071dac59fecd6a0ab0c45c892`, tree
+`134d232b64c3c8957168d07705fd2d827bf64c8b`. Incident/goal/document inputs were
+frozen at receipt-binding ancestor
+`db32bba7b87cae7e08083d6f6b332b126f8ff57a`, tree
+`3dc148643ddf610d2b3698898296de98381f827a`. The receipt descendant is commit
+`39df4177fa8b89816c1cddbf884fa81a5d41ac4e`, tree
+`443324a504d1900206e8d0bda12a5c9151f04d37`.
+
+Exact regenerated identities:
+
+- `live-effect-conformance.json`: 17,131 bytes; file SHA-256
+  `dd4f58ce79b136c70daf2a3c19d7a14681771c3269f3cc279becaf5b7efec063`;
+  semantic SHA-256
+  `43de22eb09b4890e5f3fdab6e6e8b64dec9cb3fa5df5c44db66161e2ff13770b`.
+- `anti-shadow-lint.json`: 7,648 bytes; file SHA-256
+  `1ad1919eae920c31e105427f78f988228a8deae6c3d803ce26fd6441bf967745`;
+  semantic SHA-256
+  `cf2f6c3b76d81a9f332286e641871dbbe750727449bbd2dbfb47ae9667b56bd2`.
+- `incidents.json`: 8,159 bytes; file SHA-256
+  `ec85d7ebac2595732ff89914db50bf0088a80555018f5244f04cc0bf94c2bfc5`;
+  semantic SHA-256
+  `6a8eb978c5d245e655b098ebaa3ee341c84980fced74398d5b92ffc3f3b308c0`.
+- source binding: 6,662 bytes; file SHA-256
+  `61603781e0c06e5cc0294313e341c283d520abee64720947c3ee7620ed3ef1d9`;
+  semantic SHA-256
+  `cf3292e576ebd4d3fc909309c678f5979ff168822f693d9d053da4994e0a295c`.
+- aggregate binding: 9,288 bytes; file SHA-256
+  `59cd459072359c75395a796b2e7edbe0370d309bdd2596e894148f942c7d0038`;
+  semantic SHA-256
+  `f5c04f8d7ef31aad5dbfc9dc37cfba142bd4dcf962e8edd83e4f2120cd00dfeb`.
+- linked incident source: 4,942 bytes; file SHA-256
+  `f33aada9e8504f7eaf6805ec6df2c561e0be82d523d350533e2c99952402fa66`;
+  immutable-facts SHA-256
+  `5c419c5ef3e0777c7cb7199a66fb3fb73bf3880a44338e941a0bd4ecc2fa6a5d`;
+  status `resolved`.
