@@ -1109,37 +1109,37 @@ rejected the old tracked V16 root. After the root was regenerated, the previousl
 failing anti-shadow node passed with zero topology findings; the complete 134-node
 rerun remains part of the exact-final-head gate sequence below.
 
-Core source/tests culminate at commit
+Core runtime implementation culminates at commit
 `be6f435003c5031071dac59fecd6a0ab0c45c892`, tree
-`134d232b64c3c8957168d07705fd2d827bf64c8b`. Incident/goal/document inputs were
-frozen at receipt-binding ancestor
-`db32bba7b87cae7e08083d6f6b332b126f8ff57a`, tree
-`3dc148643ddf610d2b3698898296de98381f827a`. The receipt descendant is commit
-`39df4177fa8b89816c1cddbf884fa81a5d41ac4e`, tree
-`443324a504d1900206e8d0bda12a5c9151f04d37`.
+`134d232b64c3c8957168d07705fd2d827bf64c8b`. Incident, goal, documents, and the two
+preservation-test corrections were frozen at final receipt-binding ancestor
+`bdeff53182b4ba648f691333bdbedb737853e757`, tree
+`dc78cf2bdfb46e2e3426fd091de9c55fd13aa105`. The final receipt descendant is commit
+`48c5e4b36c61be19783befbd8b6ad488f7d61f66`, tree
+`5353521869272fa2b523d8c36167b075ee8171e7`.
 
 Exact regenerated identities:
 
 - `live-effect-conformance.json`: 17,131 bytes; file SHA-256
-  `dd4f58ce79b136c70daf2a3c19d7a14681771c3269f3cc279becaf5b7efec063`;
+  `3b7ca0b349d3331a58769035d8026d111d4f473d51e34154bb634b2ac8773531`;
   semantic SHA-256
-  `43de22eb09b4890e5f3fdab6e6e8b64dec9cb3fa5df5c44db66161e2ff13770b`.
+  `f5c7c751796fb49bfac1db02ad599e3540ae58eac801e1b245830662cac8c362`.
 - `anti-shadow-lint.json`: 7,648 bytes; file SHA-256
-  `1ad1919eae920c31e105427f78f988228a8deae6c3d803ce26fd6441bf967745`;
+  `6968729b3fd38c70a861ce415cb9752fc2bf051a658a08bbb826a62e8a45fd72`;
   semantic SHA-256
-  `cf2f6c3b76d81a9f332286e641871dbbe750727449bbd2dbfb47ae9667b56bd2`.
+  `8e8bd30138013677eaa3d14f529dd0a3030b0729ede50f0cd12ca19533b607c5`.
 - `incidents.json`: 8,159 bytes; file SHA-256
-  `ec85d7ebac2595732ff89914db50bf0088a80555018f5244f04cc0bf94c2bfc5`;
+  `e6c6af7cea956cffc49bd074275175e00e34230146d64c33eba2c2628387bf21`;
   semantic SHA-256
-  `6a8eb978c5d245e655b098ebaa3ee341c84980fced74398d5b92ffc3f3b308c0`.
+  `087ff2877fa723b7178d5c9feffeeb6abde8585d23555ed3d9457191fabed809`.
 - source binding: 6,662 bytes; file SHA-256
-  `61603781e0c06e5cc0294313e341c283d520abee64720947c3ee7620ed3ef1d9`;
+  `b9ab3af1a26593b9cce3c1ab8c67fad637b2487066775c34d97f706f66bbf271`;
   semantic SHA-256
-  `cf3292e576ebd4d3fc909309c678f5979ff168822f693d9d053da4994e0a295c`.
+  `4c645b624777950dd8ce95f73938892c9aa4a25f512a50c1f2f1db4c780088ae`.
 - aggregate binding: 9,288 bytes; file SHA-256
-  `59cd459072359c75395a796b2e7edbe0370d309bdd2596e894148f942c7d0038`;
+  `79cb3ba35245c3a285b6ca96445d79c096764f0f0bd3cbd24e892f31e9c627c3`;
   semantic SHA-256
-  `f5c04f8d7ef31aad5dbfc9dc37cfba142bd4dcf962e8edd83e4f2120cd00dfeb`.
+  `df0c51b68e430f60a4c4c12dff8cdc7dcd0311fb24f4c36379df2a59dc011b65`.
 - linked incident source: 4,942 bytes; file SHA-256
   `f33aada9e8504f7eaf6805ec6df2c561e0be82d523d350533e2c99952402fa66`;
   immutable-facts SHA-256
