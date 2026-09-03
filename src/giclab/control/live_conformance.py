@@ -174,7 +174,21 @@ def _copy_working_repository(source: Path, destination: Path) -> None:
         source_path = source / relative
         destination_path = destination / relative
         destination_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source_path, destination_path, follow_symlinks=False)
+        if os.path.lexists(source_path):
+            shutil.copy2(source_path, destination_path, follow_symlinks=False)
+            continue
+        if not relative.startswith("control/receipts/"):
+            raise FileNotFoundError(source_path)
+        retained = subprocess.run(
+            ["git", "-C", str(source), "show", f"HEAD:{relative}"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=30,
+        )
+        if retained.returncode != 0:
+            raise FileNotFoundError(source_path)
+        destination_path.write_bytes(retained.stdout)
 
 
 def _commit_temporary_package(repository: Path) -> tuple[str, str]:

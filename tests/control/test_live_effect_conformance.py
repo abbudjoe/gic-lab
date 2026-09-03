@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,10 +14,45 @@ from giclab.control.anti_shadow_lint import (
     public_receipt_topology_findings,
     validate_anti_shadow_lint,
 )
-from giclab.control.live_conformance import run_live_effect_conformance
+from giclab.control.live_conformance import _copy_working_repository, run_live_effect_conformance
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_conformance_copy_recovers_intentionally_removed_tracked_receipt(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True)
+    receipt = source / "control/receipts/packages/v16/receipt.json"
+    receipt.parent.mkdir(parents=True)
+    expected = b'{"sealed":true}\n'
+    receipt.write_bytes(expected)
+    subprocess.run(["git", "-C", str(source), "add", "--all"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=GIC Lab Test",
+            "-c",
+            "user.email=gic-lab-test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "sealed receipt fixture",
+        ],
+        check=True,
+    )
+    receipt.unlink()
+
+    destination = tmp_path / "destination"
+    _copy_working_repository(source, destination)
+
+    assert (destination / receipt.relative_to(source)).read_bytes() == expected
 
 
 @pytest.fixture(scope="module")
