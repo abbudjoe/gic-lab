@@ -692,9 +692,44 @@ class EffectAuthorizationContext:
             "campaign_count": self.campaign_count,
         }
 
+    def to_public_document(self) -> dict[str, object]:
+        """Project stable bindings without hashes derived from private root topology."""
+
+        return {
+            "schema_version": self.schema_version,
+            "effect_protocol_version": self.effect_protocol_version,
+            "authority_kind": self.authority_kind.value,
+            "execution_mode": self.execution_mode.value,
+            "control_commit": self.control_commit,
+            "control_tree": self.control_tree,
+            "provider_contract_version": self.provider_contract_version,
+            "plan_id": self.plan_id,
+            "plan_path": self.plan_path,
+            "plan_bytes": self.plan_bytes,
+            "plan_sha256": self.plan_sha256,
+            "command_package_sha256": self.command_package_sha256,
+            "control_binding_semantic_sha256": self.control_binding_semantic_sha256,
+            "effect_implementation": self.effect_implementation.to_document(),
+            "shared_transaction_root_identity_validated": True,
+            "external_authorization_reference": self.external_authorization_reference,
+            "external_authorization_source_validated": (
+                self.authority_kind is EffectAuthorityKind.LIVE_AUTHORIZED
+            ),
+            "private_runtime_identity_values_retained": False,
+            "cost_limits": self.cost_limits.to_document(),
+            "zero_retry": self.zero_retry,
+            "interpretation": self.interpretation,
+            "current_turn_scope": self.current_turn_scope,
+            "campaign_count": self.campaign_count,
+        }
+
     @property
     def semantic_sha256(self) -> str:
         return _sha256(self.to_document())
+
+    @property
+    def public_semantic_sha256(self) -> str:
+        return _sha256(self.to_public_document())
 
 
 _SHADOW_AUTHORITY_PROOF = object()

@@ -303,10 +303,36 @@ def test_held_artifact_public_binding_excludes_unstable_inode_values() -> None:
     assert "spec_from_file_location" not in source
 
 
-def test_public_shadow_receipt_is_stable_across_fresh_transaction_roots() -> None:
+def test_public_shadow_receipt_is_stable_across_fresh_transaction_roots(
+    tmp_path: Path,
+) -> None:
     plan = ShadowFaultPlan("public-held-root-projection-stability")
-    first = execute_shadow_plan(ROOT, V16_PROVIDER_CONTRACT, plan)
-    second = execute_shadow_plan(ROOT, V16_PROVIDER_CONTRACT, plan)
+    rehearsal = validated_rehearsal(ROOT.as_posix(), V16_PROVIDER_CONTRACT)
+
+    def execute_at(root: Path) -> dict[str, object]:
+        root.mkdir(mode=0o700)
+        world = build_production_shadow_assembly(
+            ROOT,
+            V16_PROVIDER_CONTRACT,
+            plan,
+            rehearsal=rehearsal,
+            transaction_root=root,
+        )
+        commit, tree = repository_identity(ROOT)
+        return execute_category3_transaction(
+            Category3Request(
+                repository=ROOT,
+                contract=V16_PROVIDER_CONTRACT,
+                scenario=plan.name,
+                expected_repository_commit=commit,
+                expected_repository_tree=tree,
+                control_proof=rehearsal,
+            ),
+            adapters=world.adapters(),
+        )
+
+    first = execute_at(tmp_path / "root-a")
+    second = execute_at(tmp_path / "root-b")
     first_evidence = first["production_control_evidence"]
     second_evidence = second["production_control_evidence"]
     assert isinstance(first_evidence, dict) and isinstance(second_evidence, dict)

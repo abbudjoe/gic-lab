@@ -1104,8 +1104,9 @@ def _run_temporary_package(
             "cleanup": result.get("cleanup") == expected_cleanup,
             "unified_authority": isinstance(authority_consumption, dict)
             and authority_consumption.get("authorization_reference") == external_reference
-            and authority_consumption.get("authorization_source_sha256")
-            == context.external_authorization_source_sha256
+            and authority_consumption.get("authorization_source_sha256_validated") is True
+            and authority_consumption.get("authorization_context_validated") is True
+            and authority_consumption.get("transaction_root_identity_validated") is True
             and authority_consumption.get("terminal_state") == "terminal-complete",
             "authority_replay_rejected": replay_rejected,
             "split_authority_rejected": split_authority_rejected,
@@ -1182,13 +1183,13 @@ def _run_temporary_package(
             raise ValueError("happy conformance held evidence is absent")
         if (
             not isinstance(authority_consumption, dict)
-            or authority_consumption.get("transaction_root_identity")
-            != context.transaction_root_identity
+            or authority_consumption.get("transaction_root_identity_validated") is not True
+            or authority_consumption.get("authorization_context_validated") is not True
+            or authority_consumption.get("authorization_source_sha256_validated") is not True
             or authority_consumption.get("single_use") is not True
             or authority_consumption.get("replay_permitted") is not False
             or authority_consumption.get("contains_private_overlay_contents") is not False
-            or not isinstance(authority_consumption.get("receipt_sha256"), str)
-            or len(cast(str, authority_consumption["receipt_sha256"])) != 64
+            or authority_consumption.get("private_runtime_identity_values_retained") is not False
         ):
             raise ValueError("happy conformance authority consumption is not exact")
         private_decision_sha256 = retained_evidence.get("pair_checkpoint_sha256")

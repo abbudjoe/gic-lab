@@ -502,7 +502,9 @@ def _result_document(
         "scenario": request.scenario,
         "implementation_flavor": adapters.implementation_flavor.value,
         "effect_authority": adapters.authority.kind.value,
-        "effect_authorization_context_sha256": adapters.authorization_context.semantic_sha256,
+        "effect_authorization_context_sha256": (
+            adapters.authorization_context.public_semantic_sha256
+        ),
         "provider_contract_version": request.contract.version,
         "repository_commit": request.expected_repository_commit,
         "repository_tree": request.expected_repository_tree,

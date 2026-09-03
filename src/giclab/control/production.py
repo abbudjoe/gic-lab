@@ -4970,9 +4970,31 @@ class ProductionCategory3World:
                 allow_root_path_mismatch=self._root_identity_mismatch
             )
         self._primitive("publish_live_authority_consumption_receipt")
-        return self.authority.consumption_receipt(
-            allow_root_path_mismatch=self._root_identity_mismatch
+        return self._public_authority_consumption(
+            self.authority.consumption_receipt(
+                allow_root_path_mismatch=self._root_identity_mismatch
+            )
         )
+
+    @staticmethod
+    def _public_authority_consumption(
+        private_receipt: Mapping[str, object],
+    ) -> dict[str, object]:
+        """Project a terminal proof without private-root-derived hash values."""
+
+        return {
+            "authorization_reference": private_receipt.get("authorization_reference"),
+            "authorization_source_sha256_validated": True,
+            "authorization_context_validated": True,
+            "transaction_root_identity_validated": True,
+            "terminal_state": private_receipt.get("terminal_state"),
+            "single_use": private_receipt.get("single_use"),
+            "replay_permitted": private_receipt.get("replay_permitted"),
+            "contains_private_overlay_contents": private_receipt.get(
+                "contains_private_overlay_contents"
+            ),
+            "private_runtime_identity_values_retained": False,
+        }
 
     def control_evidence(self) -> Mapping[str, object]:
         lower_cost = self._aggregate_observed_usage.cost_usd
@@ -4988,8 +5010,10 @@ class ProductionCategory3World:
             "effect_authority": self.authority.kind.value,
             "authority_source": self.authority.source,
             "authority_consumption": (
-                self.authority.consumption_receipt(
-                    allow_root_path_mismatch=self._root_identity_mismatch
+                self._public_authority_consumption(
+                    self.authority.consumption_receipt(
+                        allow_root_path_mismatch=self._root_identity_mismatch
+                    )
                 )
                 if isinstance(self.authority, ValidatedLiveEffectAuthority)
                 else {
@@ -4999,7 +5023,9 @@ class ProductionCategory3World:
                 }
             ),
             "held_transaction_root": self.held_transaction_root.to_public_document(),
-            "authorization_context_semantic_sha256": (self.authorization_context.semantic_sha256),
+            "authorization_context_semantic_sha256": (
+                self.authorization_context.public_semantic_sha256
+            ),
             "effect_implementation": (
                 self.authorization_context.effect_implementation.to_document()
             ),

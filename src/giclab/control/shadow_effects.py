@@ -2136,6 +2136,7 @@ def build_deterministic_effects(
     authority: object | None = None,
     fault_plan: ShadowFaultPlan | None = None,
     fixed_tick: int = 1000,
+    transaction_root: Path | None = None,
 ) -> DeterministicLowLevelEffects:
     """Factory used by public CI; optional authority arguments are never grants."""
 
@@ -2145,6 +2146,7 @@ def build_deterministic_effects(
         contract=contract,
         fault_plan=fault_plan or ShadowFaultPlan("happy-path"),
         fixed_tick=fixed_tick,
+        transaction_root=transaction_root,
     )
 
 
@@ -2156,6 +2158,7 @@ def build_production_shadow_assembly(
     rehearsal: ValidatedShadowRehearsal | None = None,
     control_binding_semantic_sha256: str | None = None,
     fixed_tick: int = 1000,
+    transaction_root: Path | None = None,
 ) -> ProductionCategory3World:
     """Bind deterministic effects to the exact same production assembly."""
 
@@ -2164,6 +2167,7 @@ def build_production_shadow_assembly(
         contract=contract,
         fault_plan=fault_plan,
         fixed_tick=fixed_tick,
+        transaction_root=transaction_root,
     )
     held_transaction_root = hold_transaction_root(effects.transaction_root())
     commit, tree = _git_identity(repository)
