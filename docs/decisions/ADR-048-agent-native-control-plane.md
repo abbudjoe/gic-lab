@@ -186,3 +186,24 @@ These decisions preserve exact private live authorization and artifact validatio
 only the public projection is stable. They also make scored/finalizer checkpoint fields
 mandatory rather than pass-valued defaults. The package-only V17 boundary is now a hard
 stop: any later need to change these shared decisions requires a new Category 1 repair.
+
+## Third exact-head rereview amendment
+
+Review 5101177903 adds two final shared-control decisions:
+
+1. Complete failure-envelope admission is descriptor-derived. Candidate names may be
+   discovered through held directories, but every type, owner, link, mode, per-member
+   size, file-count, and aggregate-byte decision comes from the descriptors retained
+   across parsing, privacy inspection, export validation, and terminal evidence. A
+   retained writer cannot turn a previously small pathname into an oversized accepted
+   member, and a special file cannot block the admission opener.
+2. Public topology certification follows `SelectedRuntimeTarget`, not a package-version
+   literal. It scans the exact selected root and all sealed historical roots under
+   their own proofs, covers every bound JSON/YAML/text member, and rejects both bound
+   omissions and unbound additions. Receipt generation uses the same target-aware
+   scanner before and after the non-circular aggregate seal.
+
+The temporary successor proof selects V17, emits a V17 topology receipt through the
+normal generator, preserves the sealed V16 proof, and leaves the shared source byte map
+unchanged. Therefore the package-only boundary is evidence-backed; it is not permission
+to create V17 or to perform live/scientific effects in this PR.

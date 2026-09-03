@@ -1187,6 +1187,7 @@ def _validate_control_receipt_set(
     if binding_version == "5.0.0":
         anti_shadow = documents["anti_shadow_lint_receipt"]
         anti_counts = anti_shadow.get("classification_counts")
+        anti_topology = anti_shadow.get("public_receipt_topology_scan")
         conformance = documents["live_effect_conformance_receipt"]
         temporary_package = conformance.get("temporary_package")
         base_inventory = anti_shadow.get("base_assumption_inventory")
@@ -1200,6 +1201,24 @@ def _validate_control_receipt_set(
             != [f"SA-{index:02d}" for index in range(1, 13)]
         ):
             raise ControlProofError("anti-shadow source lint receipt is incomplete")
+        if anti_shadow.get("schema_version") == "3.0.0":
+            expected_receipt_root = f"control/receipts/packages/{contract.version.lower()}"
+            sealed_roots = (
+                anti_topology.get("sealed_roots_scanned")
+                if isinstance(anti_topology, dict)
+                else None
+            )
+            if (
+                not isinstance(anti_topology, dict)
+                or anti_topology.get("selected_provider_contract_version") != contract.version
+                or anti_topology.get("selected_receipt_root") != expected_receipt_root
+                or anti_topology.get("selected_root_matches_version") is not True
+                or not isinstance(sealed_roots, list)
+                or expected_receipt_root not in sealed_roots
+            ):
+                raise ControlProofError(
+                    "anti-shadow topology receipt does not bind the selected package root"
+                )
         if (
             conformance.get("complete") is not True
             or conformance.get("shared_source_byte_map_unchanged") is not True

@@ -1157,3 +1157,47 @@ failures, invalid transitions, weakened outcomes, or broadened exclusions. The e
 immutable Git head, CI run/job, PR-body byte identity, and external review posture are
 necessarily verified and recorded on PR #14 after the final descendant is created;
 they are not circularly embedded into this tracked ledger.
+
+## PR #14 third exact-head rereview 5101177903 repair assembly
+
+Status: **in-progress**
+
+Pre-edit evidence: PR #14 is open, draft, unmerged, based on exact
+`f1d872d59c4952eb98467c2506850af7772f4454`, and has auto-merge disabled. Local,
+remote-branch, and PR head all equal reviewed
+`b73acefd41bf129a7e0264b93995b36249bc0270`, tree
+`0038a556c54e2fc95362a78c71914281f8dad28c`; CI run `33732600844`, job
+`100575744758`, succeeded at that head. The worktree was clean, the destination branch
+still equaled the base, review `5101177903` was the newest review with no review
+threads, no actual V17/AUTONOMOUS-0010 path existed, and all authority/science flags
+remained false. Baseline deterministic state-capsule and agent-check both passed.
+
+Assembly workstream A maps TR-03 through TR-08 to a held-first envelope primitive:
+candidate names are descriptor-enumerated, every member is opened no-follow and
+fstat-admitted before reading, and count/bytes/caps are derived solely from retained
+held identities. Workstream B maps TR-09 through TR-15 to one selected-target/root
+topology contract that validates every bound member in every sealed root. TR-16
+through TR-22 remain the incident, non-circular receipts, full gates, and PR handoff.
+Direct operator-required self-review replaces delegation.
+
+Implementation checkpoint: TR-03 through TR-17 and TR-22 are met. Candidate names are
+descriptor-enumerated; held `fstat` values enforce the 1,048,576-byte JSON/JSONL cap,
+finite non-JSON cap, 4,096-member cap, and 67,108,864-byte aggregate before reads or
+retention. Deterministic mutations after enumeration grow the acknowledgement, grow a
+payload JSON member, grow a non-JSON member, and replace a name with a larger inode;
+each fails closed with cleanup available and no scientific interpretation. A separate
+cross-binding node proves one held count/total in the outcome, acknowledgement,
+controller record, public evidence, and evidence-binding SHA-256.
+
+The target-driven scanner derives the exact selected root, validates every sealed root
+under its own binding, and compares the full bound inventory against every regular
+member. The 19-node historical/successor module passed in 265.68 seconds: its normal
+receipt generator selected V17, emitted a V17 anti-shadow receipt naming
+`control/receipts/packages/v17`, scanned `bound-goal-record.yaml`, rejected V17-only
+path/device/inode/UID injection plus omission and unbound-extra mutations, and retained
+independent V16 validity. The shared-source byte-map successor test passed separately;
+no V17 artifact survived in the actual repository. Incident
+`INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY` is resolved by the exact listed
+nodes with no live environment, authority, provider, or scientific effect. TR-18
+through TR-21 remain pending immutable-ancestor receipt regeneration, complete gates,
+and exact PR/CI publication.

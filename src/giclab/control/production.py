@@ -2201,14 +2201,47 @@ class ProductionCategory3World:
     def _artifact_binding(artifacts: tuple[HeldArtifact, ...]) -> str:
         return _identity([artifact.to_public_document() for artifact in artifacts])
 
-    def _hold_artifact_set(self, paths: tuple[Path, ...]) -> tuple[HeldArtifact, ...]:
+    def _hold_artifact_set(
+        self,
+        paths: tuple[Path, ...],
+        *,
+        max_member_bytes: int | None = None,
+        max_json_member_bytes: int | None = None,
+        max_files: int | None = None,
+        max_total_bytes: int | None = None,
+    ) -> tuple[HeldArtifact, ...]:
+        """Hold one exact set and derive every optional admission value from fstat."""
+
         held: list[HeldArtifact] = []
         try:
-            for path in sorted(set(paths), key=lambda item: item.as_posix()):
-                held.append(hold_sealed_artifact(self.held_transaction_root, path))
+            candidates = tuple(sorted(set(paths), key=lambda item: item.as_posix()))
+            if max_files is not None and len(candidates) > max_files:
+                raise AdapterFailure("held artifact set exceeds its finite entry cap")
+            for path in candidates:
+                member_cap = max_member_bytes
+                if (
+                    path.suffix.casefold() in {".json", ".jsonl"}
+                    and max_json_member_bytes is not None
+                ):
+                    member_cap = (
+                        max_json_member_bytes
+                        if member_cap is None
+                        else min(member_cap, max_json_member_bytes)
+                    )
+                held.append(
+                    hold_sealed_artifact(
+                        self.held_transaction_root,
+                        path,
+                        max_bytes=member_cap,
+                    )
+                )
             identities = {(item.device, item.inode) for item in held}
             if len(identities) != len(held):
                 raise AdapterFailure("held artifact roles share one filesystem identity")
+            if max_files is not None and len(held) > max_files:
+                raise AdapterFailure("held artifact set exceeds its finite entry cap")
+            if max_total_bytes is not None and sum(item.bytes for item in held) > max_total_bytes:
+                raise AdapterFailure("held artifact set exceeds its aggregate byte cap")
             return tuple(held)
         except BaseException:
             for artifact in held:
@@ -2302,36 +2335,79 @@ class ProductionCategory3World:
         if errors:
             raise AdapterFailure(f"{label} fails its exact schema: {errors[0].message}")
 
-    @staticmethod
-    def _enumerate_essential_envelope(root: Path) -> tuple[Path, ...]:
-        """Return every safe regular member of one complete private envelope."""
+    def _enumerate_essential_envelope(self, root: Path) -> tuple[Path, ...]:
+        """Enumerate candidate names through held no-follow directory descriptors."""
 
+        try:
+            relative_root = root.relative_to(self.held_transaction_root.path).as_posix()
+        except ValueError as exc:
+            raise AdapterFailure("essential failure root is outside the held transaction") from exc
+        try:
+            root_fd = self.held_transaction_root.open_relative_no_follow(
+                relative_root,
+                flags=os.O_RDONLY | os.O_DIRECTORY,
+            )
+        except (OSError, ValueError) as exc:
+            raise AdapterFailure("essential failure root cannot be held for enumeration") from exc
         members: list[Path] = []
-        for path in sorted(root.rglob("*")):
-            metadata_value = path.stat(follow_symlinks=False)
-            mode = stat.S_IMODE(metadata_value.st_mode)
-            if stat.S_ISDIR(metadata_value.st_mode):
-                if stat.S_ISLNK(metadata_value.st_mode) or mode & 0o022:
-                    raise AdapterFailure("essential failure contains an unsafe directory")
-                continue
-            if (
-                stat.S_ISLNK(metadata_value.st_mode)
-                or not stat.S_ISREG(metadata_value.st_mode)
-                or metadata_value.st_uid != os.getuid()
-                or metadata_value.st_nlink != 1
-                or mode & 0o022
-            ):
-                raise AdapterFailure("essential failure contains an unsealed artifact")
-            if (
-                path.suffix in {".json", ".jsonl"}
-                and metadata_value.st_size > MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES
-            ):
-                raise AdapterFailure("essential failure JSON member exceeds its finite cap")
-            if metadata_value.st_size > MAX_ESSENTIAL_FAILURE_BYTES:
-                raise AdapterFailure("essential failure member exceeds its finite cap")
-            members.append(path)
-        if len(members) > MAX_ESSENTIAL_FAILURE_FILES:
-            raise AdapterFailure("essential failure exceeds its finite entry cap")
+
+        def visit(directory_fd: int, prefix: PurePosixPath) -> None:
+            try:
+                names = sorted(os.listdir(directory_fd))
+            except OSError as exc:
+                raise AdapterFailure("essential failure directory enumeration failed") from exc
+            for name in names:
+                if not name or name in {".", ".."} or "/" in name:
+                    raise AdapterFailure("essential failure contains an unsafe member name")
+                relative = prefix / name
+                try:
+                    metadata_value = os.stat(
+                        name,
+                        dir_fd=directory_fd,
+                        follow_symlinks=False,
+                    )
+                except OSError as exc:
+                    raise AdapterFailure(
+                        "essential failure member changed during enumeration"
+                    ) from exc
+                mode = stat.S_IMODE(metadata_value.st_mode)
+                if stat.S_ISDIR(metadata_value.st_mode):
+                    if metadata_value.st_uid != os.getuid() or mode & 0o022:
+                        raise AdapterFailure("essential failure contains an unsafe directory")
+                    try:
+                        child_fd = os.open(
+                            name,
+                            os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                            dir_fd=directory_fd,
+                        )
+                    except OSError as exc:
+                        raise AdapterFailure(
+                            "essential failure directory changed during enumeration"
+                        ) from exc
+                    try:
+                        held_metadata = os.fstat(child_fd)
+                        if (
+                            (held_metadata.st_dev, held_metadata.st_ino)
+                            != (metadata_value.st_dev, metadata_value.st_ino)
+                            or not stat.S_ISDIR(held_metadata.st_mode)
+                            or held_metadata.st_uid != os.getuid()
+                            or stat.S_IMODE(held_metadata.st_mode) & 0o022
+                        ):
+                            raise AdapterFailure(
+                                "essential failure directory identity changed during enumeration"
+                            )
+                        visit(child_fd, relative)
+                    finally:
+                        os.close(child_fd)
+                    continue
+                members.append(self.held_transaction_root.path / Path(relative.as_posix()))
+                if len(members) > MAX_ESSENTIAL_FAILURE_FILES:
+                    raise AdapterFailure("essential failure exceeds its finite candidate cap")
+
+        try:
+            visit(root_fd, PurePosixPath(relative_root))
+        finally:
+            os.close(root_fd)
         return tuple(members)
 
     @staticmethod
@@ -2498,11 +2574,26 @@ class ProductionCategory3World:
             )
         evidence_paths = self._enumerate_essential_envelope(root)
         host = _host_module(self.repository)
-        if host.privacy_violations(root):
-            raise AdapterFailure("essential failure contains private or credential-like material")
         held_failure: tuple[HeldArtifact, ...] = ()
         try:
-            held_failure = self._hold_artifact_set(evidence_paths)
+            held_failure = self._hold_artifact_set(
+                evidence_paths,
+                max_member_bytes=MAX_ESSENTIAL_FAILURE_BYTES,
+                max_json_member_bytes=MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
+                max_files=preservation.essential_failure_file_cap,
+                max_total_bytes=preservation.essential_failure_cap_bytes,
+            )
+            if any(
+                self._privacy_findings_for_bytes(
+                    host,
+                    relative=artifact.relative_path,
+                    encoded=artifact.read_bytes(),
+                )
+                for artifact in held_failure
+            ):
+                raise AdapterFailure(
+                    "essential failure contains private or credential-like material"
+                )
             by_path = {artifact.path: artifact for artifact in held_failure}
             if len(by_path) != len(held_failure) or any(
                 path not in by_path for path in (manifest_path, receipt_path, *role_paths)
@@ -2797,15 +2888,16 @@ class ProductionCategory3World:
             if acknowledgement_path != root / "export-acknowledgement.json":
                 raise AdapterFailure("essential failure acknowledgement path drifted")
             complete_paths = self._enumerate_essential_envelope(root)
-            complete_total = sum(
-                path.stat(follow_symlinks=False).st_size for path in complete_paths
+            complete_held = self._hold_artifact_set(
+                complete_paths,
+                max_member_bytes=MAX_ESSENTIAL_FAILURE_BYTES,
+                max_json_member_bytes=MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
+                max_files=preservation.essential_failure_file_cap,
+                max_total_bytes=preservation.essential_failure_cap_bytes,
             )
-            if (
-                complete_total > preservation.essential_failure_cap_bytes
-                or len(complete_paths) > preservation.essential_failure_file_cap
-            ):
-                raise AdapterFailure("complete essential failure envelope exceeds its cap")
-            complete_held = self._hold_artifact_set(complete_paths)
+            complete_total = sum(artifact.bytes for artifact in complete_held)
+            if len(complete_held) != len(complete_paths):
+                raise AdapterFailure("complete essential failure held inventory drifted")
             complete_by_path = {artifact.path: artifact for artifact in complete_held}
             acknowledgement_artifact = complete_by_path.get(acknowledgement_path)
             if acknowledgement_artifact is None:
@@ -2859,8 +2951,8 @@ class ProductionCategory3World:
                 or acknowledgement.get("export_identity") != export_identity
                 or acknowledgement.get("essential_manifest_sha256") != manifest_sha
                 or acknowledgement.get("essential_receipt_sha256") != receipt_sha
-                or acknowledgement.get("essential_file_count") != len(preexport_artifacts)
-                or acknowledgement.get("essential_total_bytes") != preexport_total
+                or acknowledgement.get("essential_file_count") != len(complete_held)
+                or acknowledgement.get("essential_total_bytes") != complete_total
                 or acknowledgement.get("destination_identity") != export.destination_identity
                 or acknowledgement.get("export_complete") is not True
                 or acknowledgement.get("resumed") is not resumed
@@ -2869,8 +2961,8 @@ class ProductionCategory3World:
                 or _HEX64.fullmatch(export.destination_identity) is None
                 or export.essential_manifest_sha256 != manifest_sha
                 or export.essential_receipt_sha256 != receipt_sha
-                or export.essential_file_count != len(preexport_artifacts)
-                or export.essential_total_bytes != preexport_total
+                or export.essential_file_count != len(complete_held)
+                or export.essential_total_bytes != complete_total
                 or export.acknowledgement_bytes != acknowledgement_artifact.bytes
                 or not export.export_complete
                 or export.resumed is not resumed
@@ -2888,7 +2980,14 @@ class ProductionCategory3World:
                 acknowledgement,
                 label="essential failure export acknowledgement",
             )
-            if host.privacy_violations(root):
+            if any(
+                self._privacy_findings_for_bytes(
+                    host,
+                    relative=artifact.relative_path,
+                    encoded=artifact.read_bytes(),
+                )
+                for artifact in complete_held
+            ):
                 raise AdapterFailure("complete essential envelope failed privacy validation")
             self._revalidate_artifacts(held_failure)
             self._revalidate_artifacts(complete_held)
@@ -2918,6 +3017,8 @@ class ProductionCategory3World:
                 manifest_sha256=manifest_sha,
                 receipt_sha256=receipt_sha,
                 export_receipt_sha256=export.receipt_sha256,
+                essential_file_count=len(complete_held),
+                essential_total_bytes=complete_total,
                 evidence_binding_sha256=_identity(
                     {
                         "manifest_sha256": manifest_sha,

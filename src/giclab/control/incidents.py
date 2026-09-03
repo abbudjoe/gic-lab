@@ -19,7 +19,7 @@ from giclab.registry import load_json
 INCIDENT_SCHEMA_VERSION: Final = "1.0.0"
 INCIDENT_ROOT: Final = "control/incidents"
 INCIDENT_SCHEMA: Final = "schemas/agent-incident.schema.json"
-INCIDENT_REGRESSION_TIMEOUT_SECONDS: Final = 300
+INCIDENT_REGRESSION_TIMEOUT_SECONDS: Final = 600
 
 
 class IncidentValidationError(ValueError):

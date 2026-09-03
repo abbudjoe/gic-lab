@@ -47,6 +47,10 @@ def test_generated_identity_formatting_passes() -> None:
     assert _codes('identifier = f"pilot-{contract.version.lower()}"\n') == set()
 
 
+def test_literal_package_receipt_root_fails() -> None:
+    assert _codes('root = "control/receipts/packages/v17"\n') == {"T09V009"}
+
+
 def test_central_registry_declarations_pass() -> None:
     source = (
         'V16_PROVIDER_CONTRACT = _contract(version="V16")\n'
@@ -161,6 +165,15 @@ def test_make_quoted_or_equals_literal_active_selector_fails() -> None:
     for selector in ('--provider-contract="V16"', "--provider-contract 'V16'"):
         findings = lint_active_selection_text(selector, relative_path="Makefile")
         assert {item.code for item in findings} == {"T09V005"}
+
+
+def test_make_or_ci_literal_package_receipt_root_fails() -> None:
+    for relative in ("Makefile", ".github/workflows/ci.yml"):
+        findings = lint_active_selection_text(
+            "giclab-control refresh-receipts --output-root control/receipts/packages/v17\n",
+            relative_path=relative,
+        )
+        assert {item.code for item in findings} == {"T09V009"}
 
 
 def test_make_default_has_no_hardcoded_active_v16_selector() -> None:

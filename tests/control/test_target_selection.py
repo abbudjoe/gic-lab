@@ -490,8 +490,9 @@ def test_synthetic_successor_full_aggregate_and_receipt_path(
         target=target,
         execute_incident_regressions=False,
     )
-    assert agent["complete"] is True
+    assert agent["complete"] is False
     assert agent["selected_runtime_target"]["selected_provider_contract_version"] == "V17"
+    assert agent["checks"]["anti_shadow_lint"]["complete"] is False
 
     assert cli.main(["compose", "--repository", str(repository)]) == 0
     cli_composition = json.loads(capsys.readouterr().out)
@@ -535,6 +536,13 @@ def test_synthetic_successor_full_aggregate_and_receipt_path(
     assert refresh["control_commit"] == commit
     assert refresh["control_tree"] == tree
     assert (output / "v17-composition.json").is_file()
+    anti_shadow = json.loads((output / "anti-shadow-lint.json").read_bytes())
+    topology = anti_shadow["public_receipt_topology_scan"]
+    assert topology["selected_provider_contract_version"] == "V17"
+    assert topology["selected_receipt_root"] == "control/receipts/packages/v17"
+    assert "control/receipts/packages/v16" in topology["sealed_roots_scanned"]
+    assert "control/receipts/packages/v17" in topology["sealed_roots_scanned"]
+    assert topology["complete"] is True
     binding = json.loads((output / "t09-control-receipt-bindings.json").read_bytes())
     selected = binding["selected_runtime_target"]
     assert selected["selected_provider_contract_version"] == "V17"
@@ -551,6 +559,14 @@ def test_synthetic_successor_full_aggregate_and_receipt_path(
         not Path(path).is_absolute() and ".." not in Path(path).parts for path in artifact_paths
     )
     assert all((output / path).is_file() for path in artifact_paths)
+
+    final_agent = run_agent_check(
+        repository,
+        target=target,
+        execute_incident_regressions=False,
+    )
+    assert final_agent["complete"] is True
+    assert final_agent["checks"]["anti_shadow_lint"]["complete"] is True
 
     shared_after = {
         relative: hashlib.sha256((repository / relative).read_bytes()).hexdigest()

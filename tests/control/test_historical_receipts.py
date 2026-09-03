@@ -19,6 +19,10 @@ from _synthetic_successor import (
 from giclab import validation
 from giclab.control import agent_check as agent_check_module
 from giclab.control import cli
+from giclab.control.anti_shadow_lint import (
+    public_receipt_topology_findings,
+    validate_anti_shadow_lint,
+)
 from giclab.control.incidents import validate_incidents as validate_incidents_without_adapter
 from giclab.control.proofs import (
     REPOSITORY_SLUG,
@@ -27,6 +31,7 @@ from giclab.control.proofs import (
     validate_control_receipt_set,
     validate_current_control_receipt_set,
 )
+from giclab.control.target import resolve_selected_runtime_target
 from giclab.harness import t09_provider_contracts
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -126,6 +131,120 @@ def test_synthetic_v17_and_retained_v16_roots_validate_simultaneously(
     assert historical.provider_contract_version == "V16"
     assert current.provider_contract_version == "V17"
     assert validation.validate_tracked_control_receipts(repository) == []
+
+
+def test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_roots(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    receipt = json.loads(
+        (repository / "control/receipts/packages/v17/anti-shadow-lint.json").read_bytes()
+    )
+    topology = receipt["public_receipt_topology_scan"]
+    assert receipt["schema_version"] == "3.0.0"
+    assert topology["selected_provider_contract_version"] == "V17"
+    assert topology["selected_receipt_root"] == "control/receipts/packages/v17"
+    assert topology["selected_root_matches_version"] is True
+    assert topology["complete"] is True
+    assert topology["findings"] == 0
+    assert "control/receipts" in topology["sealed_roots_scanned"]
+    assert "control/receipts/packages/v16" in topology["sealed_roots_scanned"]
+    assert "control/receipts/packages/v17" in topology["sealed_roots_scanned"]
+    assert all(
+        topology["member_count_by_root"][root] > 0 for root in topology["sealed_roots_scanned"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "expected_code"),
+    [
+        ("runtime_path", "/tmp/selected-v17-runtime", "T09S023"),
+        ("device", 17, "T09S024"),
+        ("inode", 19, "T09S024"),
+        ("uid", 23, "T09S024"),
+    ],
+)
+def test_selected_v17_receipt_runtime_topology_is_rejected(
+    successor_receipt_repository: tuple[Path, object],
+    field: str,
+    value: object,
+    expected_code: str,
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    path = repository / "control/receipts/packages/v17/state-capsule.json"
+    original = path.read_bytes()
+    document = json.loads(original)
+    document["third_rereview_topology_probe"] = {field: value}
+    try:
+        path.write_text(
+            json.dumps(document, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        findings = public_receipt_topology_findings(repository)
+    finally:
+        path.write_bytes(original)
+    assert expected_code in {finding.code for finding in findings}
+
+
+def test_selected_v17_bound_goal_record_is_topology_scanned(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    path = repository / "control/receipts/packages/v17/bound-goal-record.yaml"
+    original = path.read_bytes()
+    try:
+        path.write_bytes(original + b"third_rereview_runtime_path: /tmp/private-root\n")
+        findings = public_receipt_topology_findings(repository)
+    finally:
+        path.write_bytes(original)
+    assert "T09S023" in {finding.code for finding in findings}
+    assert any(finding.path.endswith("bound-goal-record.yaml") for finding in findings)
+
+
+def test_selected_v17_scan_rejects_bound_omission_and_unbound_extra(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    root = repository / "control/receipts/packages/v17"
+    bound = root / "state-capsule.json"
+    omitted = repository / ".third-rereview-state-capsule.omitted"
+    bound.rename(omitted)
+    try:
+        omission_findings = public_receipt_topology_findings(repository)
+    finally:
+        omitted.rename(bound)
+    assert any(
+        finding.code == "T09S027"
+        and finding.path.endswith("state-capsule.json")
+        and "omitted" in finding.message
+        for finding in omission_findings
+    )
+
+    extra = root / "third-rereview-unbound.txt"
+    try:
+        extra.write_text("no runtime topology\n", encoding="utf-8")
+        extra_findings = public_receipt_topology_findings(repository)
+    finally:
+        extra.unlink(missing_ok=True)
+    assert any(
+        finding.code == "T09S027"
+        and finding.path.endswith("third-rereview-unbound.txt")
+        and "unbound" in finding.message
+        for finding in extra_findings
+    )
+
+
+def test_restored_selected_v17_and_retained_v16_topology_both_validate(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    target = resolve_selected_runtime_target(repository)
+    receipt = validate_anti_shadow_lint(repository, target=target)
+    assert receipt["complete"] is True
+    topology = receipt["public_receipt_topology_scan"]
+    assert topology["selected_provider_contract_version"] == "V17"
+    assert topology["selected_receipt_root"] == "control/receipts/packages/v17"
+    assert topology["findings"] == 0
 
 
 def test_direct_historical_v16_validation_ignores_current_v17_goal_selection(

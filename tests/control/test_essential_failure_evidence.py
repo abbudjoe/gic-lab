@@ -1,12 +1,22 @@
 from __future__ import annotations
 
+import hashlib
+import json
+import os
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from _category3_test_support import execute_shadow_plan
 
 from giclab.control import production
-from giclab.control.effects import MAX_ESSENTIAL_FAILURE_BYTES
+from giclab.control.effects import (
+    MAX_ESSENTIAL_FAILURE_BYTES,
+    MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
+    HeldArtifact,
+    hold_sealed_artifact,
+    hold_transaction_root,
+)
 from giclab.control.shadow_effects import ShadowFaultPlan
 from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 
@@ -67,6 +77,45 @@ def _essential(receipt: dict[str, object]) -> dict[str, object]:
     value = next(iter(failures.values()))
     assert isinstance(value, dict)
     return value
+
+
+def _canonical_sha256(value: object) -> str:
+    encoded = (
+        json.dumps(value, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n"
+    ).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _execute_with_post_enumeration_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    plan: ShadowFaultPlan,
+    mutation: Callable[[Path], None],
+) -> dict[str, object]:
+    """Mutate once after candidate-name enumeration and before held admission."""
+
+    original = production.ProductionCategory3World._enumerate_essential_envelope
+    mutated = False
+
+    def enumerate_then_mutate(
+        world: production.ProductionCategory3World,
+        root: Path,
+    ) -> tuple[Path, ...]:
+        nonlocal mutated
+        paths = original(world, root)
+        if not mutated and any(path.name == "export-acknowledgement.json" for path in paths):
+            mutation(root)
+            mutated = True
+        return paths
+
+    monkeypatch.setattr(
+        production.ProductionCategory3World,
+        "_enumerate_essential_envelope",
+        enumerate_then_mutate,
+    )
+    receipt = execute_shadow_plan(ROOT, V16_PROVIDER_CONTRACT, plan)
+    assert mutated is True
+    return receipt
 
 
 @pytest.mark.parametrize("case", tuple(FAILURE_PLANS))
@@ -194,6 +243,203 @@ def test_essential_bundle_one_byte_over_cap_fails_closed() -> None:
     assert isinstance(evidence, dict)
     assert evidence["essential_failures"] == {}
     assert receipt["scientific_interpretation_allowed"] is False
+
+
+@pytest.mark.parametrize(
+    "mutation_name",
+    [
+        "grow-export-acknowledgement",
+        "grow-payload-json",
+        "replace-export-acknowledgement-with-larger-inode",
+    ],
+)
+def test_complete_envelope_mutation_after_enumeration_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    mutation_name: str,
+) -> None:
+    def mutation(root: Path) -> None:
+        target = (
+            root / "payload/completion-state.json"
+            if mutation_name == "grow-payload-json"
+            else root / "export-acknowledgement.json"
+        )
+        encoded = target.read_bytes()
+        if mutation_name == "replace-export-acknowledgement-with-larger-inode":
+            displaced = target.with_name(target.name + ".enumerated-inode")
+            target.rename(displaced)
+            target.write_bytes(encoded + b" ")
+            target.chmod(0o400)
+            displaced.unlink()
+        else:
+            target.chmod(0o600)
+            target.write_bytes(encoded + b" ")
+            target.chmod(0o400)
+
+    receipt = _execute_with_post_enumeration_mutation(
+        monkeypatch,
+        plan=ShadowFaultPlan(
+            f"essential-post-enumeration-{mutation_name}",
+            fail_operation="condition.run",
+        ),
+        mutation=mutation,
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["essential_failures"] == {}
+    retained = receipt["evidence_retained"]
+    assert isinstance(retained, dict)
+    assert retained["essential_failures"] == []
+    assert "could not be sealed and exported" in str(receipt["stop_reason"])
+    assert receipt["cleanup"]["state"] == "complete"  # type: ignore[index]
+    assert receipt["scientific_interpretation_allowed"] is False
+
+
+def test_non_json_member_growth_after_enumeration_uses_held_aggregate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutation(root: Path) -> None:
+        padding = root / "envelope-padding.bin"
+        padding.chmod(0o600)
+        os.truncate(padding, padding.stat(follow_symlinks=False).st_size + 1)
+        padding.chmod(0o400)
+
+    receipt = _execute_with_post_enumeration_mutation(
+        monkeypatch,
+        plan=ShadowFaultPlan(
+            "essential-post-enumeration-non-json-growth",
+            fail_operation="condition.run",
+            essential_target_bytes=MAX_ESSENTIAL_FAILURE_BYTES,
+        ),
+        mutation=mutation,
+    )
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    assert evidence["essential_failures"] == {}
+    retained = receipt["evidence_retained"]
+    assert isinstance(retained, dict)
+    assert retained["essential_failures"] == []
+    assert "could not be sealed and exported" in str(receipt["stop_reason"])
+    assert receipt["cleanup"]["state"] == "complete"  # type: ignore[index]
+    assert receipt["scientific_interpretation_allowed"] is False
+
+
+def test_held_json_member_cap_is_applied_before_read(tmp_path: Path) -> None:
+    root = tmp_path / "held-json-cap"
+    root.mkdir(mode=0o700)
+    member = root / "member.json"
+    exact = b'"' + b"x" * (MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES - 3) + b'"\n'
+    assert len(exact) == MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES
+    member.write_bytes(exact)
+    member.chmod(0o400)
+    held_root = hold_transaction_root(root)
+    artifact: HeldArtifact | None = None
+    try:
+        artifact = hold_sealed_artifact(
+            held_root,
+            member,
+            max_bytes=MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
+        )
+        assert artifact.bytes == MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES
+        artifact.close()
+        artifact = None
+        member.chmod(0o600)
+        member.write_bytes(exact + b" ")
+        member.chmod(0o400)
+        with pytest.raises(ValueError, match="pre-read byte cap"):
+            hold_sealed_artifact(
+                held_root,
+                member,
+                max_bytes=MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
+            )
+    finally:
+        if artifact is not None:
+            artifact.close()
+        held_root.close()
+
+
+def test_complete_envelope_totals_cross_bind_every_retained_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+    original_hold = production.ProductionCategory3World._hold_artifact_set
+    original_evidence = production.ProductionCategory3World.control_evidence
+
+    def capture_complete_held(
+        world: production.ProductionCategory3World,
+        paths: tuple[Path, ...],
+        **limits: int | None,
+    ) -> tuple[HeldArtifact, ...]:
+        held = original_hold(world, paths, **limits)
+        if any(path.name == "export-acknowledgement.json" for path in paths):
+            observed["file_count"] = len(held)
+            observed["total_bytes"] = sum(artifact.bytes for artifact in held)
+            acknowledgement = next(
+                artifact for artifact in held if artifact.path.name == "export-acknowledgement.json"
+            )
+            observed["acknowledgement"] = json.loads(acknowledgement.read_bytes())
+        return held
+
+    def capture_retained_outcome(
+        world: production.ProductionCategory3World,
+    ) -> dict[str, object]:
+        if world._condition_failures:
+            outcome = next(iter(world._condition_failures.values()))
+            observed["outcome_file_count"] = outcome.essential_file_count
+            observed["outcome_total_bytes"] = outcome.essential_total_bytes
+        return original_evidence(world)
+
+    monkeypatch.setattr(
+        production.ProductionCategory3World,
+        "_hold_artifact_set",
+        capture_complete_held,
+    )
+    monkeypatch.setattr(
+        production.ProductionCategory3World,
+        "control_evidence",
+        capture_retained_outcome,
+    )
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan("essential-held-total-cross-binding", fail_operation="condition.run"),
+    )
+    essential = _essential(receipt)
+    retained = receipt["evidence_retained"]
+    assert isinstance(retained, dict)
+    records = retained["essential_failures"]
+    assert isinstance(records, list) and len(records) == 1
+    record = records[0]
+    assert isinstance(record, dict)
+    count = observed["file_count"]
+    total = observed["total_bytes"]
+    acknowledgement = observed["acknowledgement"]
+    assert isinstance(count, int) and isinstance(total, int) and isinstance(acknowledgement, dict)
+    assert essential["file_count"] == count
+    assert essential["total_bytes"] == total
+    assert record["essential_file_count"] == count
+    assert record["essential_total_bytes"] == total
+    assert acknowledgement["essential_file_count"] == count
+    assert acknowledgement["essential_total_bytes"] == total
+    assert observed["outcome_file_count"] == count
+    assert observed["outcome_total_bytes"] == total
+    production_evidence = receipt["production_control_evidence"]
+    assert isinstance(production_evidence, dict)
+    accounting = production_evidence["accounting"]
+    assert isinstance(accounting, dict)
+    conditions = accounting["conditions"]
+    assert isinstance(conditions, dict)
+    run_id = V16_PROVIDER_CONTRACT.run_ids[0]
+    assert record["evidence_binding_sha256"] == _canonical_sha256(
+        {
+            "manifest_sha256": essential["manifest_sha256"],
+            "receipt_sha256": essential["receipt_sha256"],
+            "export_receipt_sha256": essential["export_receipt_sha256"],
+            "essential_file_count": count,
+            "essential_total_bytes": total,
+            "held_artifact_binding_sha256": essential["held_artifact_binding_sha256"],
+            "accounting": conditions[run_id],
+        }
+    )
 
 
 @pytest.mark.parametrize(

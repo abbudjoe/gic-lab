@@ -33,7 +33,8 @@
         "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
         "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
         "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
-        "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY"
+        "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY",
+        "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY"
       ]
     },
     "observed_package": {
@@ -293,6 +294,55 @@
           },
           "repair": {
             "const": "source-bound-cost-complete-envelope-guaranteed-terminal-public-projection"
+          },
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "b73acefd41bf129a7e0264b93995b36249bc0270"
+              }
+            }
+          },
+          "stage": {"const": "third exact-head live-boundary rereview"},
+          "failed_invariant": {
+            "const": "complete essential envelopes must be admitted from held descriptor metadata and public topology validation must follow the selected target while preserving every sealed historical root"
+          },
+          "root_cause": {
+            "const": "pathname size checks preceded held opens and the public topology gate selected V16 literally while omitting non-JSON bound members"
+          },
+          "earliest_detectable_stage": {
+            "const": "third exact-head live-boundary rereview"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/essential-failure-held-size-admission",
+              "shared-control/successor-public-topology-selection"
+            ]
+          },
+          "repair": {
+            "const": "held-first-envelope-and-selected-target-public-topology"
           },
           "coverage": {
             "const": [

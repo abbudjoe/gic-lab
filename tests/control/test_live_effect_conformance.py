@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+from _synthetic_successor import copy_working_repository
 from jsonschema import Draft202012Validator
 
 from giclab.control.anti_shadow_lint import (
@@ -255,6 +256,12 @@ def test_live_shaped_review_failure_subreceipts_are_complete(
         "sensitive-essential-receipt-rejection",
         "root-replacement-terminalization",
         "public-runtime-topology-injection-rejection",
+        "essential-envelope-growth-after-enumeration",
+        "oversized-held-json-member",
+        "oversized-held-complete-envelope",
+        "selected-v17-topology-injection",
+        "selected-v17-bound-goal-topology-injection",
+        "selected-v17-scan-omission",
     }
     assert failures["unscored-task-a-checkpoint-stop"]["task_b_condition_entries"] == 0
     assert failures["ambiguous-send-essential-failure"]["sealed"] is True
@@ -279,6 +286,18 @@ def test_live_shaped_review_failure_subreceipts_are_complete(
     assert (
         failures["public-runtime-topology-injection-rejection"]["forbidden_inode_rejected"] is True
     )
+    assert (
+        failures["essential-envelope-growth-after-enumeration"]["held_fstat_sizes_authoritative"]
+        is True
+    )
+    assert failures["oversized-held-json-member"]["maximum_bytes"] == 1_048_576
+    assert failures["oversized-held-complete-envelope"]["maximum_bytes"] == 67_108_864
+    assert (
+        failures["selected-v17-topology-injection"]["json_path_and_filesystem_fields_rejected"]
+        is True
+    )
+    assert failures["selected-v17-bound-goal-topology-injection"]["bound_goal_yaml_scanned"] is True
+    assert failures["selected-v17-scan-omission"]["unbound_extra_rejected"] is True
 
 
 def test_anti_shadow_lint_inventory_and_mutations() -> None:
@@ -334,14 +353,18 @@ decision = {"decision": "continue-to-task-b"}
 
 
 def test_public_receipt_topology_injection_is_rejected(tmp_path: Path) -> None:
-    receipt_root = tmp_path / "control/receipts/packages/v16"
-    receipt_root.mkdir(parents=True)
-    (receipt_root / "injected.json").write_text(
-        '{"held_transaction_root":{"device":1,"path":"/tmp/private-root"}}\n',
+    repository = tmp_path / "repository"
+    copy_working_repository(ROOT, repository)
+    receipt_root = repository / "control/receipts/packages/v16"
+    receipt_path = receipt_root / "state-capsule.json"
+    receipt = json.loads(receipt_path.read_bytes())
+    receipt["held_transaction_root"] = {"device": 1, "path": "/tmp/private-root"}
+    receipt_path.write_text(
+        json.dumps(receipt, allow_nan=False, separators=(",", ":"), sort_keys=True) + "\n",
         encoding="utf-8",
     )
-    findings = public_receipt_topology_findings(tmp_path)
-    assert {finding.code for finding in findings} == {"T09S023", "T09S024"}
+    findings = public_receipt_topology_findings(repository)
+    assert {"T09S023", "T09S024", "T09S026"} <= {finding.code for finding in findings}
 
 
 def test_conformance_semantic_hash_is_exact(conformance: dict[str, object]) -> None:

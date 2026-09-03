@@ -802,6 +802,8 @@ def _run_conditions(
                     "manifest_sha256": record.manifest_sha256,
                     "receipt_sha256": record.receipt_sha256,
                     "export_receipt_sha256": record.export_receipt_sha256,
+                    "essential_file_count": record.essential_file_count,
+                    "essential_total_bytes": record.essential_total_bytes,
                     "evidence_binding_sha256": record.evidence_binding_sha256,
                     "infrastructure_invalid": True,
                     "unscored": True,

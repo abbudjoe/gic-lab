@@ -371,7 +371,7 @@ class HeldArtifact:
         return self._root.path / self.relative_path
 
     def read_bytes(self) -> builtins.bytes:
-        return _read_held_bytes(self.descriptor)
+        return _read_held_bytes(self.descriptor, byte_cap=self.bytes)
 
     def revalidate(self, *, allow_root_path_mismatch: bool = False) -> None:
         if self._closed:
@@ -383,7 +383,7 @@ class HeldArtifact:
         reopened = _open_relative_no_symlinks(
             self._root.descriptor,
             self.relative_path,
-            flags=os.O_RDONLY,
+            flags=os.O_RDONLY | getattr(os, "O_NONBLOCK", 0),
         )
         try:
             held = os.fstat(self._fd)
@@ -404,6 +404,8 @@ class HeldArtifact:
                     held.st_size,
                 )
                 != expected
+                or not stat.S_ISREG(held.st_mode)
+                or held.st_nlink != 1
                 or (
                     named.st_dev,
                     named.st_ino,
@@ -412,8 +414,12 @@ class HeldArtifact:
                     named.st_size,
                 )
                 != expected
-                or hashlib.sha256(_read_held_bytes(self._fd)).hexdigest() != self.sha256
-                or hashlib.sha256(_read_held_bytes(reopened)).hexdigest() != self.sha256
+                or not stat.S_ISREG(named.st_mode)
+                or named.st_nlink != 1
+                or hashlib.sha256(_read_held_bytes(self._fd, byte_cap=self.bytes)).hexdigest()
+                != self.sha256
+                or hashlib.sha256(_read_held_bytes(reopened, byte_cap=self.bytes)).hexdigest()
+                != self.sha256
             ):
                 raise ValueError("held artifact identity changed")
         finally:
@@ -453,15 +459,23 @@ def hold_sealed_artifact(
     path: Path,
     *,
     seal: bool = True,
+    max_bytes: int | None = None,
 ) -> HeldArtifact:
-    """Hold one exact root-relative regular file and remove write permission."""
+    """Hold one exact regular file, admitting its held size before reading it."""
+
+    if max_bytes is not None and (type(max_bytes) is not int or max_bytes < 0):
+        raise ValueError("held artifact byte cap must be a non-negative integer")
 
     root.revalidate()
     try:
         relative = path.relative_to(root.path).as_posix()
     except ValueError as exc:
         raise ValueError("artifact is outside the held transaction root") from exc
-    fd = _open_relative_no_symlinks(root.descriptor, relative, flags=os.O_RDONLY)
+    fd = _open_relative_no_symlinks(
+        root.descriptor,
+        relative,
+        flags=os.O_RDONLY | getattr(os, "O_NONBLOCK", 0),
+    )
     try:
         metadata = os.fstat(fd)
         mode = stat.S_IMODE(metadata.st_mode)
@@ -472,12 +486,23 @@ def hold_sealed_artifact(
             or mode & 0o022
         ):
             raise ValueError("artifact is not a safe current-user regular file")
+        if max_bytes is not None and metadata.st_size > max_bytes:
+            raise ValueError("held artifact exceeds its pre-read byte cap")
         if seal and mode & 0o222:
             mode &= ~0o222
             os.fchmod(fd, mode)
             os.fsync(fd)
             metadata = os.fstat(fd)
-        encoded = _read_held_bytes(fd)
+            if max_bytes is not None and metadata.st_size > max_bytes:
+                raise ValueError("held artifact grew beyond its pre-read byte cap")
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or metadata.st_nlink != 1
+                or stat.S_IMODE(metadata.st_mode) & 0o022
+            ):
+                raise ValueError("artifact identity changed while it was sealed")
+        encoded = _read_held_bytes(fd, byte_cap=max_bytes)
         sha256 = hashlib.sha256(encoded).hexdigest()
         public_document = {
             "relative_path": relative,

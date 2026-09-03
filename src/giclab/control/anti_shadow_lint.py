@@ -5,15 +5,24 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
+import stat
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
-from pathlib import Path
-from typing import Final
+from pathlib import Path, PurePosixPath
+from typing import Final, cast
 
 from giclab.control.category3 import repository_identity
+from giclab.control.target import (
+    SelectedRuntimeTarget,
+    resolve_selected_runtime_target,
+    validate_selected_runtime_target,
+)
+from giclab.registry import DuplicateKeyError, load_yaml, loads_json
 
-ANTI_SHADOW_LINT_SCHEMA_VERSION: Final = "2.0.0"
+ANTI_SHADOW_LINT_SCHEMA_VERSION: Final = "3.0.0"
 AUDITED_BASE_COMMIT: Final = "f1d872d59c4952eb98467c2506850af7772f4454"
 AUDITED_BASE_TREE: Final = "eb70e20024559d65b3fadd240f72d3522895ef04"
 SHARED_EFFECT_NEUTRAL_SOURCES: Final = (
@@ -33,8 +42,10 @@ INVENTORY_ROOTS: Final = (
 )
 INVENTORY_SUFFIXES: Final = frozenset({".json", ".md", ".py", ".yaml", ".yml"})
 LINT_DEFINITION_PATH: Final = "src/giclab/control/anti_shadow_lint.py"
-PUBLIC_RECEIPT_ROOT: Final = "control/receipts/packages/v16"
 _RUNTIME_TOPOLOGY_MARKERS: Final = ("/private/", "/var/folders/", "/tmp/", "/Users/")
+_PACKAGE_RECEIPT_PREFIX: Final = PurePosixPath("control/receipts/packages")
+_BOUND_GOAL_RECORD: Final = "bound-goal-record.yaml"
+_BINDING_DOCUMENT: Final = "t09-control-receipt-bindings.json"
 
 _FORBIDDEN_TEXT: Final = (
     ("T09S001", re.compile(r"_FAKE_OPENAI_VALUE"), "fake OpenAI credential constant"),
@@ -455,39 +466,244 @@ def _required_architecture_findings(
     return findings
 
 
-def public_receipt_topology_findings(repository: Path) -> tuple[AntiShadowFinding, ...]:
-    """Reject unstable runtime topology from tracked V16 public receipts."""
+def _topology_finding(path: str, code: str, message: str) -> AntiShadowFinding:
+    return AntiShadowFinding(path=path, line=1, column=1, code=code, message=message)
 
-    root = repository.resolve(strict=True)
-    receipt_root = root / PUBLIC_RECEIPT_ROOT
+
+def _selected_receipt_root(target: SelectedRuntimeTarget) -> str:
+    return (_PACKAGE_RECEIPT_PREFIX / target.selected_contract.version.lower()).as_posix()
+
+
+def _bound_member_paths(binding: Mapping[str, object]) -> frozenset[str]:
+    """Return the exact sealed inventory named by one aggregate binding."""
+
+    artifacts = binding.get("artifacts")
+    if not isinstance(artifacts, dict):
+        raise ValueError("receipt binding lacks its artifact inventory")
+    members = {_BINDING_DOCUMENT}
+    for name, reference in artifacts.items():
+        references = (
+            reference.values()
+            if name == "shadow_failures" and isinstance(reference, dict)
+            else (reference,)
+        )
+        for item in references:
+            if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                raise ValueError("receipt binding contains a malformed artifact reference")
+            relative = cast(str, item["path"])
+            pure = PurePosixPath(relative)
+            if pure.is_absolute() or ".." in pure.parts or pure.as_posix() != relative:
+                raise ValueError("receipt binding contains an unsafe artifact path")
+            members.add(relative)
+    return frozenset(members)
+
+
+def _validate_bound_root_proof(
+    repository: Path,
+    receipt_root: Path,
+    binding: Mapping[str, object],
+) -> None:
+    """Validate one root under its own immutable goal, contract, and revision."""
+
+    from giclab.control.proofs import (  # local import keeps the lint layer acyclic
+        REPOSITORY_SLUG,
+        ControlProofReference,
+        validate_control_receipt_set,
+    )
+    from giclab.harness import t09_provider_contracts as provider_contracts
+
+    revision = binding.get("control_plane_revision")
+    selected = binding.get("selected_runtime_target")
+    if not isinstance(revision, dict) or not isinstance(selected, dict):
+        raise ValueError("receipt binding identity sections are malformed")
+    version = selected.get("selected_provider_contract_version")
+    if not isinstance(version, str) or version not in provider_contracts.PROVIDER_CONTRACTS:
+        raise ValueError("receipt binding selects an unregistered contract")
+    binding_path = receipt_root / _BINDING_DOCUMENT
+    encoded = binding_path.read_bytes()
+    validate_control_receipt_set(
+        repository,
+        provider_contracts.PROVIDER_CONTRACTS[version],
+        ControlProofReference(
+            approved_root=receipt_root,
+            binding_path=binding_path,
+            expected_file_sha256=hashlib.sha256(encoded).hexdigest(),
+            expected_control_commit=str(revision.get("commit")),
+            expected_control_tree=str(revision.get("tree")),
+            expected_repository_slug=str(binding.get("repository_slug", REPOSITORY_SLUG)),
+            expected_provider_contract_version=version,
+            expected_plan_id=str(selected.get("selected_plan_id")),
+            expected_command_package_sha256=str(selected.get("selected_command_package_sha256")),
+            expected_target_source=str(selected.get("source")),
+            expected_goal_record_sha256=str(selected.get("goal_record_sha256")),
+            expected_target_semantic_sha256=str(selected.get("semantic_sha256")),
+        ),
+    )
+
+
+def _scan_bound_receipt_root(
+    repository: Path,
+    receipt_root: Path,
+    *,
+    display_root: str,
+    validate_seal: bool,
+) -> tuple[list[AntiShadowFinding], int, dict[str, object] | None]:
+    """Scan every and only member named by one sealed binding."""
+
     findings: list[AntiShadowFinding] = []
-    for path in sorted(receipt_root.rglob("*.json")):
-        relative = path.relative_to(root).as_posix()
-        source = path.read_text(encoding="utf-8")
+    binding_path = receipt_root / _BINDING_DOCUMENT
+    try:
+        encoded_binding = binding_path.read_bytes()
+        binding_value = loads_json(encoded_binding)
+        if not isinstance(binding_value, dict):
+            raise ValueError("binding is not one object")
+        binding = cast(dict[str, object], binding_value)
+        expected = _bound_member_paths(binding)
+    except (OSError, UnicodeError, json.JSONDecodeError, DuplicateKeyError, ValueError) as exc:
+        findings.append(
+            _topology_finding(
+                display_root,
+                "T09S026",
+                f"sealed public receipt binding is invalid: {exc}",
+            )
+        )
+        return findings, 0, None
+
+    selected_value = binding.get("selected_runtime_target")
+    bound_target = (
+        cast(dict[str, object], selected_value) if isinstance(selected_value, dict) else None
+    )
+    if validate_seal:
         try:
-            document = json.loads(source)
-        except json.JSONDecodeError:
+            _validate_bound_root_proof(repository, receipt_root, binding)
+        except (OSError, ValueError) as exc:
+            findings.append(
+                _topology_finding(
+                    display_root,
+                    "T09S026",
+                    f"sealed public receipt root fails its immutable proof: {exc}",
+                )
+            )
+
+    observed: set[str] = set()
+    legacy = receipt_root == repository / "control/receipts"
+    try:
+        candidates = sorted(receipt_root.rglob("*"), key=lambda item: item.as_posix())
+    except OSError as exc:
+        findings.append(
+            _topology_finding(display_root, "T09S027", f"receipt inventory failed: {exc}")
+        )
+        return findings, 0, bound_target
+    for path in candidates:
+        relative_path = path.relative_to(receipt_root)
+        if legacy and relative_path.parts[:1] == ("packages",):
+            continue
+        try:
+            metadata = path.stat(follow_symlinks=False)
+        except OSError as exc:
+            findings.append(
+                _topology_finding(
+                    f"{display_root}/{relative_path.as_posix()}",
+                    "T09S027",
+                    f"bound receipt member is unavailable: {exc}",
+                )
+            )
+            continue
+        if stat.S_ISDIR(metadata.st_mode):
+            continue
+        relative = relative_path.as_posix()
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            findings.append(
+                _topology_finding(
+                    f"{display_root}/{relative}",
+                    "T09S027",
+                    "public receipt root contains a nonregular or symlink member",
+                )
+            )
+            continue
+        observed.add(relative)
+
+    for relative in sorted(expected - observed):
+        findings.append(
+            _topology_finding(
+                f"{display_root}/{relative}",
+                "T09S027",
+                "bound public receipt member was omitted from the scan",
+            )
+        )
+    for relative in sorted(observed - expected):
+        findings.append(
+            _topology_finding(
+                f"{display_root}/{relative}",
+                "T09S027",
+                "sealed public receipt root contains an unbound extra member",
+            )
+        )
+
+    for relative in sorted(expected & observed):
+        path = receipt_root / relative
+        display_path = f"{display_root}/{relative}"
+        try:
+            encoded = path.read_bytes()
+            source = encoded.decode("utf-8")
+        except (OSError, UnicodeError) as exc:
+            findings.append(
+                _topology_finding(
+                    display_path,
+                    "T09S028",
+                    f"bound receipt member is not readable text: {exc}",
+                )
+            )
+            continue
+
+        raw_scan = source
+        if PurePosixPath(relative).name == "anti-shadow-lint.json":
+            for marker in _RUNTIME_TOPOLOGY_MARKERS:
+                raw_scan = raw_scan.replace(json.dumps(marker), "")
+        for marker in _RUNTIME_TOPOLOGY_MARKERS:
+            if marker in raw_scan:
+                findings.append(
+                    _topology_finding(
+                        display_path,
+                        "T09S023",
+                        f"public receipt contains runtime path marker {marker}",
+                    )
+                )
+
+        try:
+            if path.suffix.casefold() == ".json":
+                document: object = loads_json(encoded)
+            elif path.suffix.casefold() in {".yaml", ".yml"}:
+                document = load_yaml(path)
+            else:
+                document = None
+        except (UnicodeError, json.JSONDecodeError, DuplicateKeyError, ValueError) as exc:
+            findings.append(
+                _topology_finding(
+                    display_path,
+                    "T09S028",
+                    f"bound structured receipt member is invalid: {exc}",
+                )
+            )
             continue
 
         def visit(
             value: object,
             *,
             parent_key: str | None = None,
-            relative_path: str = relative,
+            scanned_path: str = display_path,
         ) -> None:
             if isinstance(value, dict):
                 for key, child in value.items():
-                    if key.casefold() in {"device", "inode", "uid"}:
+                    if str(key).casefold() in {"device", "inode", "uid"}:
                         findings.append(
-                            AntiShadowFinding(
-                                relative_path,
-                                1,
-                                1,
+                            _topology_finding(
+                                scanned_path,
                                 "T09S024",
                                 f"public receipt retains runtime filesystem field {key}",
                             )
                         )
-                    visit(child, parent_key=key)
+                    visit(child, parent_key=str(key))
             elif isinstance(value, list):
                 for child in value:
                     visit(child, parent_key=parent_key)
@@ -495,17 +711,160 @@ def public_receipt_topology_findings(repository: Path) -> tuple[AntiShadowFindin
                 for marker in _RUNTIME_TOPOLOGY_MARKERS:
                     if marker in value:
                         findings.append(
-                            AntiShadowFinding(
-                                relative_path,
-                                1,
-                                1,
+                            _topology_finding(
+                                scanned_path,
                                 "T09S023",
                                 f"public receipt contains runtime path marker {marker}",
                             )
                         )
 
-        visit(document)
-    return tuple(sorted(findings, key=lambda item: (item.path, item.line, item.column, item.code)))
+        if document is not None:
+            visit(document)
+    return findings, len(expected & observed), bound_target
+
+
+def _public_receipt_topology_scan(
+    repository: Path,
+    *,
+    target: SelectedRuntimeTarget,
+    selected_receipt_root: Path | None = None,
+    validate_selected_seal: bool = True,
+) -> tuple[tuple[AntiShadowFinding, ...], dict[str, object]]:
+    """Validate the selected root plus every independently sealed historical root."""
+
+    from giclab.control.proofs import ControlProofError, discover_sealed_control_receipt_roots
+
+    root = repository.resolve(strict=True)
+    selected_relative = _selected_receipt_root(target)
+    selected_path = root / selected_relative
+    findings: list[AntiShadowFinding] = []
+    try:
+        discovered = list(discover_sealed_control_receipt_roots(root))
+    except (OSError, ControlProofError) as exc:
+        discovered = []
+        findings.append(
+            _topology_finding(
+                "control/receipts",
+                "T09S026",
+                f"sealed receipt-root inventory is invalid: {exc}",
+            )
+        )
+
+    explicit = selected_receipt_root
+    if explicit is not None:
+        explicit = Path(os.path.abspath(explicit))
+        expected_staging_prefix = f".{target.selected_contract.version.lower()}-receipt-staging-"
+        if explicit != selected_path and (
+            explicit.parent != selected_path.parent
+            or not explicit.name.startswith(expected_staging_prefix)
+        ):
+            findings.append(
+                _topology_finding(
+                    selected_relative,
+                    "T09S025",
+                    "selected receipt candidate is outside its exact publication boundary",
+                )
+            )
+            explicit = None
+    if explicit is not None:
+        discovered = [
+            candidate
+            for candidate in discovered
+            if candidate != selected_path or candidate == explicit
+        ]
+        if explicit not in discovered:
+            discovered.append(explicit)
+    elif selected_path not in discovered:
+        findings.append(
+            _topology_finding(
+                selected_relative,
+                "T09S025",
+                "selected runtime target lacks its exact sealed public receipt root",
+            )
+        )
+
+    sealed_roots: list[str] = []
+    counts: dict[str, int] = {}
+    selected_scanned = False
+    seen_paths: set[Path] = set()
+    for candidate in sorted(discovered, key=lambda item: item.as_posix()):
+        absolute = Path(os.path.abspath(candidate))
+        if absolute in seen_paths:
+            continue
+        seen_paths.add(absolute)
+        display = (
+            selected_relative
+            if explicit is not None and absolute == explicit
+            else absolute.relative_to(root).as_posix()
+        )
+        sealed_roots.append(display)
+        root_findings, count, bound_target = _scan_bound_receipt_root(
+            root,
+            absolute,
+            display_root=display,
+            validate_seal=(validate_selected_seal if display == selected_relative else True),
+        )
+        findings.extend(root_findings)
+        counts[display] = count
+        if display == selected_relative:
+            selected_scanned = bound_target == target.to_document()
+            if not selected_scanned:
+                findings.append(
+                    _topology_finding(
+                        display,
+                        "T09S025",
+                        "selected receipt root does not bind the exact selected runtime target",
+                    )
+                )
+    if not selected_scanned:
+        findings.append(
+            _topology_finding(
+                selected_relative,
+                "T09S025",
+                "selected provider contract was not scanned at its exact receipt root",
+            )
+        )
+    ordered_findings = tuple(
+        sorted(
+            findings, key=lambda item: (item.path, item.line, item.column, item.code, item.message)
+        )
+    )
+    summary: dict[str, object] = {
+        "selected_provider_contract_version": target.selected_contract.version,
+        "selected_receipt_root": selected_relative,
+        "selected_root_matches_version": selected_relative.endswith(
+            "/" + target.selected_contract.version.lower()
+        ),
+        "sealed_roots_scanned": sorted(sealed_roots),
+        "member_count_by_root": {key: counts[key] for key in sorted(counts)},
+        "forbidden_path_markers": list(_RUNTIME_TOPOLOGY_MARKERS),
+        "forbidden_filesystem_fields": ["device", "inode", "uid"],
+        "findings": len(ordered_findings),
+        "complete": not ordered_findings,
+    }
+    return ordered_findings, summary
+
+
+def public_receipt_topology_findings(
+    repository: Path,
+    *,
+    target: SelectedRuntimeTarget | None = None,
+    selected_receipt_root: Path | None = None,
+) -> tuple[AntiShadowFinding, ...]:
+    """Reject topology from the selected and every retained sealed receipt root."""
+
+    root = repository.resolve(strict=True)
+    selected = (
+        resolve_selected_runtime_target(root)
+        if target is None
+        else validate_selected_runtime_target(root, target)
+    )
+    findings, _summary = _public_receipt_topology_scan(
+        root,
+        target=selected,
+        selected_receipt_root=selected_receipt_root,
+    )
+    return findings
 
 
 def lint_effect_neutral_source(
@@ -585,10 +944,21 @@ def _inventory(repository: Path) -> tuple[ShadowAssumptionOccurrence, ...]:
     )
 
 
-def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
+def validate_anti_shadow_lint(
+    repository: Path,
+    *,
+    target: SelectedRuntimeTarget | None = None,
+    selected_receipt_root: Path | None = None,
+    validate_selected_seal: bool = True,
+) -> dict[str, object]:
     """Return a deterministic receipt for the exact effect-neutral source set."""
 
     root = repository.resolve(strict=True)
+    selected = (
+        resolve_selected_runtime_target(root)
+        if target is None
+        else validate_selected_runtime_target(root, target)
+    )
     findings: list[AntiShadowFinding] = []
     scanned: list[str] = []
     for relative in SHARED_EFFECT_NEUTRAL_SOURCES:
@@ -611,7 +981,12 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
                 relative_path=relative,
             )
         )
-    topology_findings = public_receipt_topology_findings(root)
+    topology_findings, topology_scan = _public_receipt_topology_scan(
+        root,
+        target=selected,
+        selected_receipt_root=selected_receipt_root,
+        validate_selected_seal=validate_selected_seal,
+    )
     findings.extend(topology_findings)
     inventory = _inventory(root)
     counts = Counter(item.classification for item in inventory)
@@ -628,7 +1003,7 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
         "shared_effect_neutral_sources": scanned,
         "lint_definition_path": LINT_DEFINITION_PATH,
         "forbidden_rule_codes": [code for code, _pattern, _message in _FORBIDDEN_TEXT]
-        + [f"T09S{index:03d}" for index in range(11, 25)],
+        + [f"T09S{index:03d}" for index in range(11, 29)],
         "findings": [asdict(item) for item in findings],
         "assumption_inventory": [asdict(item) for item in inventory],
         "classification_counts": {
@@ -640,14 +1015,7 @@ def validate_anti_shadow_lint(repository: Path) -> dict[str, object]:
                 "documentation",
             )
         },
-        "public_receipt_topology_scan": {
-            "root": PUBLIC_RECEIPT_ROOT,
-            "files_scanned": len(tuple((root / PUBLIC_RECEIPT_ROOT).rglob("*.json"))),
-            "forbidden_path_markers": list(_RUNTIME_TOPOLOGY_MARKERS),
-            "forbidden_filesystem_fields": ["device", "inode", "uid"],
-            "findings": len(topology_findings),
-            "complete": not topology_findings,
-        },
+        "public_receipt_topology_scan": topology_scan,
         "complete": not findings,
     }
     document["semantic_sha256"] = _canonical_sha256(document)

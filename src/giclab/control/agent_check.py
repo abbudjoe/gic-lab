@@ -79,9 +79,18 @@ def run_agent_check(
     if not isinstance(source_binding_files, list):
         raise ValueError("source-binding receipt files must be a list")
     anti_shadow = (
-        validate_anti_shadow_lint(root)
+        validate_anti_shadow_lint(root, target=selected_target)
         if anti_shadow_lint_receipt is None
         else dict(anti_shadow_lint_receipt)
+    )
+    anti_shadow_topology = anti_shadow.get("public_receipt_topology_scan")
+    anti_shadow_sealed_roots = (
+        anti_shadow_topology.get("sealed_roots_scanned")
+        if isinstance(anti_shadow_topology, dict)
+        else None
+    )
+    expected_receipt_root = (
+        f"control/receipts/packages/{selected_target.selected_contract.version.lower()}"
     )
     live_conformance = (
         run_live_effect_conformance(root)
@@ -97,6 +106,13 @@ def run_agent_check(
         and anti_shadow.get("repository_commit") == commit
         and anti_shadow.get("repository_tree") == tree
         and anti_shadow.get("complete") is True
+        and isinstance(anti_shadow_topology, dict)
+        and anti_shadow_topology.get("selected_provider_contract_version")
+        == selected_target.selected_contract.version
+        and anti_shadow_topology.get("selected_receipt_root") == expected_receipt_root
+        and anti_shadow_topology.get("selected_root_matches_version") is True
+        and isinstance(anti_shadow_sealed_roots, list)
+        and expected_receipt_root in anti_shadow_sealed_roots
         and _semantic_valid(anti_shadow)
     )
     live_conformance_valid = (

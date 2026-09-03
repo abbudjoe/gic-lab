@@ -1370,7 +1370,10 @@ class DeterministicLowLevelEffects:
             destination.chmod(0o400)
         values = {
             "schema_version": "2.0.0",
-            **destination_document,
+            "run_id": request.run_id,
+            "export_identity": request.export_identity,
+            "essential_manifest_sha256": request.essential_manifest_sha256,
+            "essential_receipt_sha256": request.essential_receipt_sha256,
             "destination_identity": _file_sha256(destination),
             "export_complete": True,
             "resumed": calls > 1,
@@ -1391,9 +1394,14 @@ class DeterministicLowLevelEffects:
                 remaining -= len(chunk)
             return digest.hexdigest()
 
+        complete_file_count = request.essential_file_count + 1
+        complete_total_bytes = request.essential_total_bytes
+
         def acknowledgement_document() -> dict[str, object]:
             return {
                 **values,
+                "essential_file_count": complete_file_count,
+                "essential_total_bytes": complete_total_bytes,
                 "envelope_padding": (
                     None
                     if padding_sha256 is None
@@ -1406,6 +1414,8 @@ class DeterministicLowLevelEffects:
             }
 
         if target is not None:
+            complete_file_count = request.essential_file_count + 2
+            complete_total_bytes = target
             padding_bytes = max(0, target - request.essential_total_bytes - 1024)
             for _iteration in range(16):
                 padding_sha256 = zero_sha256(padding_bytes)
@@ -1430,6 +1440,15 @@ class DeterministicLowLevelEffects:
                 os.fsync(descriptor)
             finally:
                 os.close(descriptor)
+        else:
+            for _iteration in range(16):
+                acknowledgement_encoded = _canonical_bytes(acknowledgement_document())
+                observed_total = request.essential_total_bytes + len(acknowledgement_encoded)
+                if observed_total == complete_total_bytes:
+                    break
+                complete_total_bytes = observed_total
+            else:
+                raise AdapterFailure("deterministic essential envelope total did not converge")
         acknowledgement_encoded = _canonical_bytes(acknowledgement_document())
         acknowledgement_fault = self.fault_plan.essential_envelope_fault
         if acknowledgement_fault == "oversized-export-acknowledgement":
@@ -1466,8 +1485,8 @@ class DeterministicLowLevelEffects:
             destination_identity=cast(str, values["destination_identity"]),
             essential_manifest_sha256=request.essential_manifest_sha256,
             essential_receipt_sha256=request.essential_receipt_sha256,
-            essential_file_count=request.essential_file_count,
-            essential_total_bytes=request.essential_total_bytes,
+            essential_file_count=complete_file_count,
+            essential_total_bytes=complete_total_bytes,
             acknowledgement_path=acknowledgement,
             acknowledgement_bytes=len(acknowledgement_encoded),
             export_complete=True,

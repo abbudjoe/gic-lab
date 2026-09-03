@@ -15,7 +15,7 @@
     "export_identity": {"$ref": "#/$defs/sha"},
     "essential_manifest_sha256": {"$ref": "#/$defs/sha"},
     "essential_receipt_sha256": {"$ref": "#/$defs/sha"},
-    "essential_file_count": {"type": "integer", "minimum": 1, "maximum": 4095},
+    "essential_file_count": {"type": "integer", "minimum": 1, "maximum": 4096},
     "essential_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
     "destination_identity": {"$ref": "#/$defs/sha"},
     "export_complete": {"const": true},

@@ -46,6 +46,7 @@ from giclab.control.production import build_production_adapter_assembly
 from giclab.control.proofs import (
     REQUIRED_SHARED_SOURCES,
     ValidatedShadowRehearsal,
+    discover_sealed_control_receipt_roots,
     validate_shadow_rehearsal,
 )
 from giclab.control.registry_validation import validate_registry_completeness
@@ -66,9 +67,9 @@ from giclab.harness.t09_provider_contracts import (
     PackageEffectRegistration,
     T09ProviderContract,
 )
-from giclab.registry import load_json
+from giclab.registry import load_json, loads_json
 
-LIVE_EFFECT_CONFORMANCE_SCHEMA_VERSION: Final = "3.0.0"
+LIVE_EFFECT_CONFORMANCE_SCHEMA_VERSION: Final = "4.0.0"
 TEMPORARY_EFFECT_PATH: Final = (
     "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py"
 )
@@ -748,17 +749,31 @@ def _review_failure_subreceipts(
     ):
         raise ValueError("residual cost or essential-envelope probes did not fail closed")
 
-    with tempfile.TemporaryDirectory(prefix="giclab-public-topology-negative-") as directory:
-        probe_root = Path(directory)
-        receipt_root = probe_root / "control/receipts/packages/v16"
-        receipt_root.mkdir(parents=True)
-        (receipt_root / "injected.json").write_bytes(
-            _canonical_bytes({"held_transaction_root": {"path": "/tmp/private-root", "inode": 7}})
-        )
-        topology_codes = sorted(
-            {finding.code for finding in public_receipt_topology_findings(probe_root)}
-        )
-    if topology_codes != ["T09S023", "T09S024"]:
+    target = resolve_selected_runtime_target(repository)
+    sealed_roots = discover_sealed_control_receipt_roots(repository)
+    probe_path = next(
+        (
+            root / "state-capsule.json"
+            for root in reversed(sealed_roots)
+            if (root / "state-capsule.json").is_file()
+        ),
+        None,
+    )
+    if probe_path is None:
+        raise ValueError("public topology probe lacks a retained sealed receipt root")
+    original_probe = probe_path.read_bytes()
+    probe_document = loads_json(original_probe)
+    if not isinstance(probe_document, dict):
+        raise ValueError("public topology probe receipt is malformed")
+    probe_document["held_transaction_root"] = {"path": "/tmp/private-root", "inode": 7}
+    try:
+        probe_path.write_bytes(_canonical_bytes(probe_document))
+        topology_codes = {
+            finding.code for finding in public_receipt_topology_findings(repository, target=target)
+        }
+    finally:
+        probe_path.write_bytes(original_probe)
+    if not {"T09S023", "T09S024", "T09S026"} <= topology_codes:
         raise ValueError("public runtime-topology injection was not rejected")
 
     return {
@@ -805,10 +820,60 @@ def _review_failure_subreceipts(
             "forbidden_path_rejected": True,
             "forbidden_inode_rejected": True,
         },
+        "essential-envelope-growth-after-enumeration": {
+            "candidate_path_sizes_authoritative": False,
+            "held_fstat_sizes_authoritative": True,
+            "clean_failure_record_retained": False,
+            "regression_node": (
+                "tests/control/test_essential_failure_evidence.py::"
+                "test_complete_envelope_mutation_after_enumeration_fails_closed"
+            ),
+        },
+        "oversized-held-json-member": {
+            "maximum_bytes": 1_048_576,
+            "one_byte_over_rejected_before_read": True,
+            "regression_node": (
+                "tests/control/test_essential_failure_evidence.py::"
+                "test_held_json_member_cap_is_applied_before_read"
+            ),
+        },
+        "oversized-held-complete-envelope": {
+            "maximum_files": 4096,
+            "maximum_bytes": 67_108_864,
+            "one_byte_over_rejected": True,
+            "regression_node": (
+                "tests/control/test_essential_failure_evidence.py::"
+                "test_non_json_member_growth_after_enumeration_uses_held_aggregate"
+            ),
+        },
+        "selected-v17-topology-injection": {
+            "selected_root_derived_from_target": True,
+            "json_path_and_filesystem_fields_rejected": True,
+            "regression_node": (
+                "tests/control/test_historical_receipts.py::"
+                "test_selected_v17_receipt_runtime_topology_is_rejected"
+            ),
+        },
+        "selected-v17-bound-goal-topology-injection": {
+            "bound_goal_yaml_scanned": True,
+            "runtime_path_rejected": True,
+            "regression_node": (
+                "tests/control/test_historical_receipts.py::"
+                "test_selected_v17_bound_goal_record_is_topology_scanned"
+            ),
+        },
+        "selected-v17-scan-omission": {
+            "bound_omission_rejected": True,
+            "unbound_extra_rejected": True,
+            "regression_node": (
+                "tests/control/test_historical_receipts.py::"
+                "test_selected_v17_scan_rejects_bound_omission_and_unbound_extra"
+            ),
+        },
     }
 
 
-def _successor_artifacts(repository: Path) -> frozenset[str]:
+def _successor_artifacts(repository: Path, *, successor_version: str) -> frozenset[str]:
     prohibited = (
         "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/"
         "T09_PILOT_RUNTIME_PROFILE_V17.yaml",
@@ -816,7 +881,7 @@ def _successor_artifacts(repository: Path) -> frozenset[str]:
         "T09_PILOT_EXECUTION_CONTRACT_V17.json",
         "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/"
         "T09_PILOT_COMMAND_MANIFESTS_V17.json",
-        "control/receipts/packages/v17",
+        f"control/receipts/packages/{successor_version.lower()}",
     )
     observed = {relative for relative in prohibited if (repository / relative).exists()}
     observed.update(
@@ -851,10 +916,12 @@ def _run_temporary_package(
     with _temporary_contract_registry(contract):
         target = resolve_selected_runtime_target(temporary_repository)
         lint = validate_active_version_dispatch(temporary_repository)
-        anti_shadow = validate_anti_shadow_lint(temporary_repository)
+        anti_shadow = validate_anti_shadow_lint(temporary_repository, target=target)
         anti_findings = anti_shadow.get("findings")
         anti_source_complete = isinstance(anti_findings, list) and all(
-            isinstance(finding, dict) and finding.get("code") in {"T09S023", "T09S024"}
+            isinstance(finding, dict)
+            and finding.get("code")
+            in {"T09S023", "T09S024", "T09S025", "T09S026", "T09S027", "T09S028"}
             for finding in anti_findings
         )
         registry = validate_registry_completeness(temporary_repository)
@@ -1389,7 +1456,10 @@ def run_live_effect_conformance(repository: Path) -> dict[str, object]:
     control_commit, control_tree = repository_identity(root)
     selected = resolve_selected_runtime_target(root)
     before = _shared_byte_map(root)
-    successor_before = _successor_artifacts(root)
+    successor_before = _successor_artifacts(
+        root,
+        successor_version=selected.successor_contract_version,
+    )
     with tempfile.TemporaryDirectory(prefix="giclab-t09-live-conformance-") as directory:
         temporary_repository = Path(directory) / "repository"
         _copy_working_repository(root, temporary_repository)
@@ -1399,7 +1469,10 @@ def run_live_effect_conformance(repository: Path) -> dict[str, object]:
             selected.selected_contract,
         )
     after = _shared_byte_map(root)
-    successor_after = _successor_artifacts(root)
+    successor_after = _successor_artifacts(
+        root,
+        successor_version=selected.successor_contract_version,
+    )
     shared_unchanged = before == after
     no_successor_created = successor_after == successor_before
     no_unexpected_successor = (

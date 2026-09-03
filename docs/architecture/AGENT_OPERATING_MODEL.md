@@ -280,3 +280,31 @@ This projection does not weaken the exact private identity used by live authoriz
 The real-time typed event observer remains the only condition accountant. All EXP-0001
 science, ordering, retry, and cost contracts remain unchanged; this repair performed no
 live or scientific execution and creates no V17 artifact or authority.
+
+## Third exact-head rereview repair
+
+Review 5101177903 found two residual P1 boundaries at reviewed commit
+`b73acefd41bf129a7e0264b93995b36249bc0270`. First, the complete essential-failure
+envelope was enumerated and size-checked through pathnames before its members were
+held. Second, the public topology scanner named the V16 receipt root literally and
+therefore could certify V16 again after a successor goal selected V17.
+
+Essential-failure admission is now held-first. Candidate names are enumerated beneath
+the held transaction-root descriptor; every member is opened no-follow, nonblocking,
+and close-on-exec; owner, regular-file type, link count, mode, and size are read from
+the held descriptor. JSON/JSONL members are rejected above 1,048,576 bytes before any
+read, other members are finitely bounded, and the 4,096-file / 67,108,864-byte complete
+envelope limits are computed only from the retained `HeldArtifact` identities. The
+same held-derived count and total bind the effect outcome, acknowledgement, controller
+record, public evidence, and evidence hash. A pathname stat is never a final size
+admission decision.
+
+Public topology validation is selected-target driven. The selected contract derives
+`control/receipts/packages/<selected-version-lower>`; that root must bind the exact
+selected target, while every retained sealed root is independently validated under
+its own immutable goal, contract, control revision, and binding. The scanner compares
+the bound inventory with the complete root inventory, parses bound JSON and YAML,
+scans every textual bound member for runtime paths, and rejects omissions or unbound
+extras. A temporary selected V17 package generates a V17 topology receipt and rejects
+V17-only JSON, filesystem-field, bound-goal, omission, and extra-member mutations
+without changing shared source. No temporary V17 artifact survives the proof.

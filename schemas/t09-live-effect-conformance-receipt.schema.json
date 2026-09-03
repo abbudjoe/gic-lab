@@ -22,7 +22,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["1.0.0", "2.0.0", "3.0.0"]},
+    "schema_version": {"enum": ["1.0.0", "2.0.0", "3.0.0", "4.0.0"]},
     "control_implementation_commit": {"$ref": "#/$defs/git"},
     "control_implementation_tree": {"$ref": "#/$defs/git"},
     "effect_protocol_version": {"const": "1.0.0"},
@@ -58,7 +58,7 @@
     },
     {
       "if": {
-        "properties": {"schema_version": {"enum": ["2.0.0", "3.0.0"]}},
+        "properties": {"schema_version": {"enum": ["2.0.0", "3.0.0", "4.0.0"]}},
         "required": ["schema_version"]
       },
       "then": {
@@ -75,6 +75,30 @@
               "review_failure_subreceipts",
               "public_runtime_topology"
             ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "4.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "temporary_package": {
+            "properties": {
+              "review_failure_subreceipts": {
+                "required": [
+                  "essential-envelope-growth-after-enumeration",
+                  "oversized-held-json-member",
+                  "oversized-held-complete-envelope",
+                  "selected-v17-topology-injection",
+                  "selected-v17-bound-goal-topology-injection",
+                  "selected-v17-scan-omission"
+                ]
+              }
+            }
           }
         }
       }
@@ -611,6 +635,50 @@
           "const": {
             "forbidden_path_rejected": true,
             "forbidden_inode_rejected": true
+          }
+        },
+        "essential-envelope-growth-after-enumeration": {
+          "const": {
+            "candidate_path_sizes_authoritative": false,
+            "held_fstat_sizes_authoritative": true,
+            "clean_failure_record_retained": false,
+            "regression_node": "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed"
+          }
+        },
+        "oversized-held-json-member": {
+          "const": {
+            "maximum_bytes": 1048576,
+            "one_byte_over_rejected_before_read": true,
+            "regression_node": "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read"
+          }
+        },
+        "oversized-held-complete-envelope": {
+          "const": {
+            "maximum_files": 4096,
+            "maximum_bytes": 67108864,
+            "one_byte_over_rejected": true,
+            "regression_node": "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate"
+          }
+        },
+        "selected-v17-topology-injection": {
+          "const": {
+            "selected_root_derived_from_target": true,
+            "json_path_and_filesystem_fields_rejected": true,
+            "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected"
+          }
+        },
+        "selected-v17-bound-goal-topology-injection": {
+          "const": {
+            "bound_goal_yaml_scanned": true,
+            "runtime_path_rejected": true,
+            "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned"
+          }
+        },
+        "selected-v17-scan-omission": {
+          "const": {
+            "bound_omission_rejected": true,
+            "unbound_extra_rejected": true,
+            "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra"
           }
         }
       }

@@ -71,6 +71,8 @@ class EssentialFailureRecord:
     manifest_sha256: str
     receipt_sha256: str
     export_receipt_sha256: str
+    essential_file_count: int
+    essential_total_bytes: int
     evidence_binding_sha256: str
 
 

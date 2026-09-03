@@ -141,3 +141,14 @@ add only the listed package declaration/data/effect/policy/root/doc/test surface
 it needs any shared file above—or another shared controller, loader, authority,
 cost-proof, failure-envelope, held-identity, conformance, proof, target, or capsule
 change—it must stop and open a separate Category 1 repair.
+
+PR #14 review 5101177903 additionally freezes held-first complete-envelope admission
+and selected-target-driven public topology validation. A later package-only V17 change
+must generate `control/receipts/packages/v17` through the unchanged shared generator;
+that receipt must name V17 and its exact root while the retained V16 roots continue to
+validate independently. Every bound JSON, YAML, and textual member—including
+`bound-goal-record.yaml`—must remain in the exact scanned inventory. A V17-only runtime
+path, device/inode/UID field, omitted member, or unbound extra must fail without a
+shared scanner edit. If package generation needs to alter held-size admission,
+anti-shadow/topology scanning, agent-check, receipt generation, schemas shared by the
+control plane, or any no-touch file above, it must stop for a new Category 1 repair.

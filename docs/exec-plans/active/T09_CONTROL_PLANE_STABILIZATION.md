@@ -559,3 +559,61 @@ The immutable source/state binding ancestor is commit
 has file SHA-256 `79cb3ba35245c3a285b6ca96445d79c096764f0f0bd3cbd24e892f31e9c627c3`
 and semantic SHA-256
 `df0c51b68e430f60a4c4c12dff8cdc7dcd0311fb24f4c36379df2a59dc011b65`.
+
+## PR #14 third exact-head rereview repair
+
+Assembly status: **in-progress**
+
+Review `5101177903` examined exact head
+`b73acefd41bf129a7e0264b93995b36249bc0270`, tree
+`0038a556c54e2fc95362a78c71914281f8dad28c`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`. The exact identity, draft/unmerged
+PR state, disabled auto-merge, successful exact-head CI, absent V17 package, and false
+authority/science state were reverified before mutation.
+
+The source contract is limited to two P1 repairs: hold every essential-failure
+envelope member before size admission, and make public receipt topology validation
+derive from the selected target while independently scanning every retained sealed
+root and every bound JSON/YAML/text member. No provider, secret, cloud, browser,
+Docker, SiRA, evaluator, condition, paid-compute, or scientific effect is permitted.
+
+| ID | Third-rereview outcome | Status |
+| --- | --- | --- |
+| TR-01 | Exact base/head/PR identity verified | met |
+| TR-02 | Prior accepted repairs preserved | met |
+| TR-03 | Complete envelope held before size admission | met |
+| TR-04 | Per-member caps use held `fstat` | met |
+| TR-05 | Aggregate count/bytes derive only from held artifacts | met |
+| TR-06 | Size-changing race tests fail closed | met |
+| TR-07 | Exact-cap and one-byte-over held tests pass | met |
+| TR-08 | Retained totals agree across every receipt/projection | met |
+| TR-09 | Topology validation has no active V16 literal | met |
+| TR-10 | Selected root/version are exact receipt fields | met |
+| TR-11 | All sealed historical roots validate independently | met |
+| TR-12 | Every bound JSON/YAML/text member is scanned | met |
+| TR-13 | Selected V17 topology injection fails in temporary proof | met |
+| TR-14 | V17 anti-shadow receipt names the V17 root | met |
+| TR-15 | Synthetic successor leaves shared source unchanged | met |
+| TR-16 | No actual V17 survives | met |
+| TR-17 | Incident and state capsule are truthful | met |
+| TR-18 | V16 receipts are non-circularly rebound | not-started |
+| TR-19 | Full/parity/static/privacy/site gates pass | not-started |
+| TR-20 | PR body reflects exact final identities | not-started |
+| TR-21 | PR remains open, draft, unmerged, auto-merge disabled | not-started |
+| TR-22 | Authority/science/live-effect flags remain false | met |
+
+Implementation mapping: held descriptor admission and race tests map to TR-03 through
+TR-08; selected-target and sealed-root topology validation maps to TR-09 through
+TR-15; incident/capsule truth, receipt regeneration, complete gates, and the existing
+draft PR handoff map to TR-16 through TR-22. The expected source contract is that no
+pathname metadata participates in final envelope admission and no shared literal can
+select a versioned public receipt root.
+
+Focused implementation evidence: all post-enumeration acknowledgement, payload JSON,
+non-JSON, and replacement races fail before a clean essential record; exact JSON and
+complete-envelope limits pass at the cap and reject one byte above it; the held-derived
+count/total cross-bind every retained projection. The 19-node historical/successor
+module passed with a normally generated selected V17 receipt, rejected selected-root
+JSON/field/goal/omission/extra mutations, revalidated V16 independently, and destroyed
+the temporary successor. Receipt regeneration, full/parity/site gates, and exact-head
+PR/CI handoff remain pending TR-18 through TR-21.

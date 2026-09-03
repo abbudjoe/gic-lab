@@ -15,6 +15,7 @@ import sys
 import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path, PurePosixPath
+from typing import cast
 
 import yaml
 
@@ -181,7 +182,7 @@ def _verified_capsule(
         composition_receipt=composition,
     )
     shadow_valid = all(receipt.get("scenario_valid") is True for receipt in shadows.values())
-    anti_shadow = validate_anti_shadow_lint(repository)
+    anti_shadow = validate_anti_shadow_lint(repository, target=target)
     live_conformance = run_live_effect_conformance(repository)
     return generate_state_capsule(
         repository,
@@ -380,7 +381,7 @@ def _generate_receipt_tree(
         composition_receipt=composition,
     )
     shadow_complete = all(receipt.get("scenario_valid") is True for receipt in shadows.values())
-    anti_shadow = validate_anti_shadow_lint(repository)
+    anti_shadow = validate_anti_shadow_lint(repository, target=target)
     live_conformance = run_live_effect_conformance(repository)
     capsule = generate_state_capsule(
         repository,
@@ -467,6 +468,82 @@ def _generate_receipt_tree(
         output / "t09-control-receipt-bindings.json",
         binding,
     )
+    # The topology receipt cannot bind itself circularly. Build one complete
+    # candidate tree, derive the selected-root inventory from that candidate,
+    # then rewrite only the documents whose semantics depend on that scan.
+    anti_shadow = validate_anti_shadow_lint(
+        repository,
+        target=target,
+        selected_receipt_root=output,
+        validate_selected_seal=False,
+    )
+    if anti_shadow.get("complete") is not True:
+        raise ValueError("candidate receipt tree fails selected-root topology validation")
+    capsule = generate_state_capsule(
+        repository,
+        registry_complete=registry.get("complete") is True,
+        composition_valid=composition.get("static_composition_valid") is True,
+        version_lint_valid=lint.get("complete") is True,
+        shadow_happy_path=(
+            shadows[HAPPY_PATH].get("terminal_state") == "category3-shadow-complete-clean"
+        ),
+        failure_matrix_valid=shadow_complete,
+        anti_shadow_lint_valid=True,
+        live_effect_conformance_valid=live_conformance.get("complete") is True,
+        target=target,
+        deterministic=True,
+    )
+    agent_check = run_agent_check(
+        repository,
+        target=target,
+        execute_incident_regressions=True,
+        anti_shadow_lint_receipt=anti_shadow,
+        live_effect_conformance_receipt=live_conformance,
+    )
+    replacements = {
+        "anti-shadow-lint.json": _write_json(
+            output,
+            output / "anti-shadow-lint.json",
+            anti_shadow,
+        ),
+        "state-capsule.json": _write_json(
+            output,
+            output / "state-capsule.json",
+            capsule,
+        ),
+        "agent-check.json": _write_json(
+            output,
+            output / "agent-check.json",
+            agent_check,
+        ),
+    }
+    written = [replacements.get(cast(str, item["path"]), item) for item in written]
+    binding = generate_control_binding_document(
+        repository,
+        output,
+        control_commit=commit,
+        control_tree=tree,
+        target=target,
+        goal_record_snapshot=output / BOUND_GOAL_RECORD,
+        registry_receipt=output / "registry-completeness.json",
+        active_version_lint_receipt=output / "active-version-lint.json",
+        composition_receipt=output / composition_name,
+        state_capsule=output / "state-capsule.json",
+        shadow_happy_path=shadow_root / f"{HAPPY_PATH}.json",
+        shadow_failures={
+            scenario: shadow_root / f"{scenario}.json" for scenario in REQUIRED_FAILURE_SCENARIOS
+        },
+        agent_check_receipt=output / "agent-check.json",
+        source_binding_receipt=output / "t09-control-plane-source-binding.json",
+        incident_receipt=output / "incidents.json",
+        anti_shadow_lint_receipt=output / "anti-shadow-lint.json",
+        live_effect_conformance_receipt=output / "live-effect-conformance.json",
+    )
+    binding_identity = _write_json(
+        output,
+        output / "t09-control-receipt-bindings.json",
+        binding,
+    )
     binding_sha = binding_identity["file_sha256"]
     assert isinstance(binding_sha, str)
     validate_current_control_receipt_set(
@@ -480,6 +557,14 @@ def _generate_receipt_tree(
             tree=tree,
         ),
     )
+    sealed_anti_shadow = validate_anti_shadow_lint(
+        repository,
+        target=target,
+        selected_receipt_root=output,
+        validate_selected_seal=True,
+    )
+    if sealed_anti_shadow != anti_shadow:
+        raise ValueError("sealed selected-root topology scan changed after final binding")
     written.append(binding_identity)
     complete = all(
         (

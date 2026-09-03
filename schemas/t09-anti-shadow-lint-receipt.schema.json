@@ -21,7 +21,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"const": "2.0.0"},
+    "schema_version": {"enum": ["2.0.0", "3.0.0"]},
     "repository_commit": {"$ref": "#/$defs/git"},
     "repository_tree": {"$ref": "#/$defs/git"},
     "audited_base": {
@@ -77,26 +77,91 @@
       }
     },
     "public_receipt_topology_scan": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "root", "files_scanned", "forbidden_path_markers",
-        "forbidden_filesystem_fields", "findings", "complete"
-      ],
-      "properties": {
-        "root": {"const": "control/receipts/packages/v16"},
-        "files_scanned": {"type": "integer", "minimum": 1},
-        "forbidden_path_markers": {
-          "const": ["/private/", "/var/folders/", "/tmp/", "/Users/"]
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "root", "files_scanned", "forbidden_path_markers",
+            "forbidden_filesystem_fields", "findings", "complete"
+          ],
+          "properties": {
+            "root": {"type": "string", "pattern": "^control/receipts/packages/v[1-9][0-9]*$"},
+            "files_scanned": {"type": "integer", "minimum": 1},
+            "forbidden_path_markers": {
+              "const": ["/private/", "/var/folders/", "/tmp/", "/Users/"]
+            },
+            "forbidden_filesystem_fields": {"const": ["device", "inode", "uid"]},
+            "findings": {"type": "integer", "minimum": 0},
+            "complete": {"const": true}
+          }
         },
-        "forbidden_filesystem_fields": {"const": ["device", "inode", "uid"]},
-        "findings": {"type": "integer", "minimum": 0},
-        "complete": {"const": true}
-      }
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "selected_provider_contract_version", "selected_receipt_root",
+            "selected_root_matches_version", "sealed_roots_scanned",
+            "member_count_by_root", "forbidden_path_markers",
+            "forbidden_filesystem_fields", "findings", "complete"
+          ],
+          "properties": {
+            "selected_provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+            "selected_receipt_root": {"type": "string", "pattern": "^control/receipts/packages/v[1-9][0-9]*$"},
+            "selected_root_matches_version": {"const": true},
+            "sealed_roots_scanned": {
+              "type": "array", "minItems": 1, "uniqueItems": true,
+              "items": {"type": "string", "pattern": "^control/receipts(?:/packages/v[1-9][0-9]*)?$"}
+            },
+            "member_count_by_root": {
+              "type": "object", "minProperties": 1,
+              "propertyNames": {"pattern": "^control/receipts(?:/packages/v[1-9][0-9]*)?$"},
+              "additionalProperties": {"type": "integer", "minimum": 1}
+            },
+            "forbidden_path_markers": {
+              "const": ["/private/", "/var/folders/", "/tmp/", "/Users/"]
+            },
+            "forbidden_filesystem_fields": {"const": ["device", "inode", "uid"]},
+            "findings": {"const": 0},
+            "complete": {"const": true}
+          }
+        }
+      ]
     },
     "complete": {"const": true},
     "semantic_sha256": {"$ref": "#/$defs/sha256"}
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "2.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "public_receipt_topology_scan": {"required": ["root", "files_scanned"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "3.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "public_receipt_topology_scan": {
+            "required": [
+              "selected_provider_contract_version",
+              "selected_receipt_root",
+              "sealed_roots_scanned",
+              "member_count_by_root"
+            ]
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
@@ -109,7 +174,7 @@
       "additionalProperties": false,
       "required": ["path", "line", "column", "code", "message"],
       "properties": {
-        "path": {"$ref": "#/$defs/inventoryPath"},
+        "path": {"$ref": "#/$defs/findingPath"},
         "line": {"type": "integer", "minimum": 1},
         "column": {"type": "integer", "minimum": 1},
         "code": {"type": "string", "pattern": "^T09S[0-9]{3}$"},
@@ -157,6 +222,15 @@
     "inventoryPath": {
       "type": "string",
       "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.(?:json|md|py|ya?ml)$"
+    },
+    "findingPath": {
+      "oneOf": [
+        {"$ref": "#/$defs/inventoryPath"},
+        {
+          "type": "string",
+          "pattern": "^control/receipts(?:/packages/v[1-9][0-9]*)?$"
+        }
+      ]
     }
   }
 }
