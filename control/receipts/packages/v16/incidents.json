@@ -1,6 +1,6 @@
 {
   "complete": true,
-  "incident_count": 5,
+  "incident_count": 6,
   "incidents": [
     {
       "complete": true,
@@ -94,6 +94,29 @@
     {
       "complete": true,
       "errors": [],
+      "incident_id": "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY",
+      "path": "control/incidents/INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
+      "regression_nodes": [
+        "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed",
+        "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate",
+        "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_one_byte_over_cap_fails_closed",
+        "tests/control/test_essential_failure_evidence.py::test_complete_envelope_totals_cross_bind_every_retained_projection",
+        "tests/control/test_historical_receipts.py::test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_roots",
+        "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected",
+        "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned",
+        "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra",
+        "tests/control/test_historical_receipts.py::test_restored_selected_v17_and_retained_v16_topology_both_validate",
+        "tests/control/test_version_lint.py::test_literal_package_receipt_root_fails"
+      ],
+      "regression_output": ".................                                                        [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
       "incident_id": "INC-T09-V16-LIFECYCLE-REGISTRY",
       "path": "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
       "regression_nodes": [
@@ -106,8 +129,8 @@
       "status": "resolved"
     }
   ],
-  "repository_commit": "bdeff53182b4ba648f691333bdbedb737853e757",
-  "repository_tree": "dc78cf2bdfb46e2e3426fd091de9c55fd13aa105",
+  "repository_commit": "75b62c2f51c9ba126ca48a8d802f88115eb5ce82",
+  "repository_tree": "727fb4c58eec5bddcb17459575b980de5064fca4",
   "schema_version": "1.0.0",
-  "semantic_sha256": "087ff2877fa723b7178d5c9feffeeb6abde8585d23555ed3d9457191fabed809"
+  "semantic_sha256": "b81c644e18c5c8c81a8e4d559e865477a0ca3dada61d9966ed424c6cdefc06cf"
 }

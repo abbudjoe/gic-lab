@@ -17,29 +17,29 @@
       "sha256": "b3250bf7d8c6e894cdb53903359885eeb25dd02e115a9064e614ba23a712f2b7"
     },
     {
-      "bytes": 8350,
+      "bytes": 8411,
       "path": "src/giclab/control/adapters.py",
-      "sha256": "bc6c7c7924150341ab3155fd9d7fda769665ca6f7fde4da3cba4798afb4a4b2f"
+      "sha256": "4e2c377f04b66cc227c0ebd8e3dd149a5e2b92f40e80f77c37c9e54bebcedc0d"
     },
     {
-      "bytes": 11485,
+      "bytes": 12334,
       "path": "src/giclab/control/agent_check.py",
-      "sha256": "71a4cda7b39f0799c6bb98f06be196e1548ab24110484b4f60e298c3e41923c7"
+      "sha256": "92f641b4066c5f24bf8fe1b265c119ece203971e3cc37318d161f633f28e38c4"
     },
     {
-      "bytes": 25318,
+      "bytes": 39180,
       "path": "src/giclab/control/anti_shadow_lint.py",
-      "sha256": "080c3f7646987c3c853c69b5dadf14284167960cfeed236085c0ccf98a4922a9"
+      "sha256": "5b91afe42c3074136b0fc69d8d50498fcf72fb0ac8cf0e0bd4e335a869f42e64"
     },
     {
-      "bytes": 43350,
+      "bytes": 43498,
       "path": "src/giclab/control/category3.py",
-      "sha256": "9009b8e369cc0fffbec573f0bca78a842d5194a47558922613f01eb0c95c3c87"
+      "sha256": "5cf3a071e7b9263c28d30b51b834119f18a2f36ef783188383a24f5287688042"
     },
     {
-      "bytes": 31696,
+      "bytes": 35106,
       "path": "src/giclab/control/cli.py",
-      "sha256": "ca9c36aa9c88e59e2b1c20d440aee555338740784bbf529b3b92bc8a098eccaa"
+      "sha256": "cbe00f14794fbbbed3261b762390806f722c2bbc7392ffb0f2385ac92c8a43f0"
     },
     {
       "bytes": 14162,
@@ -57,29 +57,29 @@
       "sha256": "11091738583b1df60a4949e4aba206861549aed6412a503e0a747c5157fec7bf"
     },
     {
-      "bytes": 86803,
+      "bytes": 88000,
       "path": "src/giclab/control/effects.py",
-      "sha256": "17cdb8885b413988094e084c1e0a081d32b66fac9b760be3d37326642c7bb2ba"
+      "sha256": "bb4b458a25840b6bc27f143dbfc849eeed4c9476b3b27af8863664d9cb8b0283"
     },
     {
       "bytes": 5661,
       "path": "src/giclab/control/incidents.py",
-      "sha256": "3bf68280376d4d285d605bceebe0e6ed392b8758ebd679c35273643480948a74"
+      "sha256": "31fe3f0845a232d0790cc48ca4009b0a2cc007488e0c1248f25a8575c4ab2a10"
     },
     {
-      "bytes": 63737,
+      "bytes": 67287,
       "path": "src/giclab/control/live_conformance.py",
-      "sha256": "d895534ba79315ad0c61d909e37a2dcee1075504e0650a63f92f53deaa28da48"
+      "sha256": "8c29753b24d2c0732aa07575c46db202a19f0fdaf6d0a85c98def4c9dd420c15"
     },
     {
-      "bytes": 250866,
+      "bytes": 255404,
       "path": "src/giclab/control/production.py",
-      "sha256": "2cad2756e2517327a670335b2010f3aa21d5f9d20515b5fd8008cd79f4a13992"
+      "sha256": "7a416c44193636fcdf0dd19fc33022ec33f4e70b6a31f6c3fcfee8b35b8dff0f"
     },
     {
-      "bytes": 67891,
+      "bytes": 68903,
       "path": "src/giclab/control/proofs.py",
-      "sha256": "1d75544ae4dd475dbf7ea158535bf664302a29cbb26394798bac85735219f329"
+      "sha256": "7d77a7d59c39ecde52a6d83a587b7bb15a6ae8128b8887f492342b258308aa98"
     },
     {
       "bytes": 17629,
@@ -97,9 +97,9 @@
       "sha256": "5a91f31eda21ed6784a1a1aecc876b943e19d48ff47ae6e1e8990c62ef5e11f8"
     },
     {
-      "bytes": 99523,
+      "bytes": 100560,
       "path": "src/giclab/control/shadow_effects.py",
-      "sha256": "7093d5eba5336377954bc2aaaa2be6c7b6caefa9cb55e33d9a34132edfdf65f7"
+      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
     },
     {
       "bytes": 7917,
@@ -112,9 +112,9 @@
       "sha256": "e354aa938c3f37ac56c6cd45ca672c497014ac3c09200771c23431b057e70ca7"
     },
     {
-      "bytes": 12285,
+      "bytes": 13530,
       "path": "src/giclab/control/version_lint.py",
-      "sha256": "2e1417b3936485bdfb201c75c32d48811f190c46469a38661f5b5db1b3f5ed26"
+      "sha256": "e148b51125d085e7c2f0f6b558d24b34af07eddfb4f6c866341c2ea54fe37b49"
     },
     {
       "bytes": 13269,
@@ -187,7 +187,7 @@
   "schema_version": "2.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "4c645b624777950dd8ce95f73938892c9aa4a25f512a50c1f2f1db4c780088ae",
-  "source_commit": "bdeff53182b4ba648f691333bdbedb737853e757",
-  "source_tree": "dc78cf2bdfb46e2e3426fd091de9c55fd13aa105"
+  "semantic_sha256": "1c8af34a228ffb4f6f293900d9791ee56afe26f2828834c4ea771a0246a97d42",
+  "source_commit": "75b62c2f51c9ba126ca48a8d802f88115eb5ce82",
+  "source_tree": "727fb4c58eec5bddcb17459575b980de5064fca4"
 }

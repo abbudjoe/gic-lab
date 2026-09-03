@@ -2,25 +2,25 @@
   "actual_v17_artifacts_created": false,
   "actual_v17_artifacts_present": false,
   "complete": true,
-  "control_implementation_commit": "bdeff53182b4ba648f691333bdbedb737853e757",
-  "control_implementation_tree": "dc78cf2bdfb46e2e3426fd091de9c55fd13aa105",
+  "control_implementation_commit": "75b62c2f51c9ba126ca48a8d802f88115eb5ce82",
+  "control_implementation_tree": "727fb4c58eec5bddcb17459575b980de5064fca4",
   "effect_protocol_version": "1.0.0",
   "live_authority_created": false,
   "network_provider_cloud_browser_science_effects": 0,
   "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
-  "schema_version": "3.0.0",
+  "schema_version": "4.0.0",
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "f5c7c751796fb49bfac1db02ad599e3540ae58eac801e1b245830662cac8c362",
+  "semantic_sha256": "286072cbfc8b24370fa03830edd182ae00c6216c9fb5370230a68a550bf58029",
   "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
   "shared_source_byte_map_unchanged": true,
   "temporary_package": {
     "authorization": {
       "private_overlay_contents_retained": false,
-      "reference": "AUTH-T09-V16-CONFORMANCE-9f3d53c0cc5f7a62552cff3a",
+      "reference": "AUTH-T09-V16-CONFORMANCE-2562cb28cceeebb2a47c1ee5",
       "replay_rejected": true,
       "same_reference_and_source_across_effect_metadata_launch_cleanup": true,
       "single_use_state": {
-        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-9f3d53c0cc5f7a62552cff3a",
+        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-2562cb28cceeebb2a47c1ee5",
         "contains_private_overlay_contents": false,
         "exact_private_source_context_root_and_receipt_validated": true,
         "private_runtime_identity_values_retained": false,
@@ -37,17 +37,17 @@
     "authorization_context_binding": {
       "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
       "control_binding_semantic_sha256": "f835cbba42179ab7f8dd6fcd6e0567f6ce60427f3298e531435ed7825aa78660",
-      "control_commit": "0a97c103234912b181db41f671abe34c363a39d6",
-      "control_tree": "37f83df863c2fcd302e0ed2d46ae5c1f05d42a5c",
+      "control_commit": "7d3a93164f6e75eb63c36f72feba797107efc521",
+      "control_tree": "c7d020849d3a62500680acd51775d0d48d045bd8",
       "current_turn_scope": "T09-PR14-EXACT-HEAD-CONFORMANCE",
       "effect_implementation_sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4",
       "exact_private_source_sha256_validated": true,
-      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-9f3d53c0cc5f7a62552cff3a",
+      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-2562cb28cceeebb2a47c1ee5",
       "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
       "private_runtime_identity_values_retained": false,
       "provider_contract_version": "V16",
-      "public_binding_semantic_sha256": "d72915b18167b771698f7ecfa972f8a9d33612e31a6b1f838f9da19b907f1e56",
+      "public_binding_semantic_sha256": "d10297f2391a73ca630b3fb9d928c9b2ec79317ef977084873a901e90877eccc",
       "shared_held_transaction_root_identity_validated": true
     },
     "browser_accounting": {
@@ -340,6 +340,12 @@
         "path_revalidated_after_factory": true,
         "same_size_replacement_rejected": true
       },
+      "essential-envelope-growth-after-enumeration": {
+        "candidate_path_sizes_authoritative": false,
+        "clean_failure_record_retained": false,
+        "held_fstat_sizes_authoritative": true,
+        "regression_node": "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed"
+      },
       "nonzero-process-exit-essential-failure": {
         "cleanup_complete": true,
         "complete_envelope_file_count": 7,
@@ -358,6 +364,17 @@
       "oversized-essential-manifest-rejection": {
         "complete_envelope_cap_enforced": true,
         "essential_failure_accepted": false
+      },
+      "oversized-held-complete-envelope": {
+        "maximum_bytes": 67108864,
+        "maximum_files": 4096,
+        "one_byte_over_rejected": true,
+        "regression_node": "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate"
+      },
+      "oversized-held-json-member": {
+        "maximum_bytes": 1048576,
+        "one_byte_over_rejected_before_read": true,
+        "regression_node": "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read"
       },
       "public-runtime-topology-injection-rejection": {
         "forbidden_inode_rejected": true,
@@ -378,6 +395,21 @@
         "replacement_directory_unchanged": true,
         "scientific_interpretation_allowed": false,
         "terminal_result_returned": true
+      },
+      "selected-v17-bound-goal-topology-injection": {
+        "bound_goal_yaml_scanned": true,
+        "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned",
+        "runtime_path_rejected": true
+      },
+      "selected-v17-scan-omission": {
+        "bound_omission_rejected": true,
+        "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra",
+        "unbound_extra_rejected": true
+      },
+      "selected-v17-topology-injection": {
+        "json_path_and_filesystem_fields_rejected": true,
+        "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected",
+        "selected_root_derived_from_target": true
       },
       "sensitive-essential-receipt-rejection": {
         "exact_schema_enforced": true,
@@ -413,8 +445,8 @@
     },
     "scientific_interpretation_allowed": false,
     "temporary_conformance_grant_only": true,
-    "temporary_repository_commit": "0a97c103234912b181db41f671abe34c363a39d6",
-    "temporary_repository_tree": "37f83df863c2fcd302e0ed2d46ae5c1f05d42a5c",
+    "temporary_repository_commit": "7d3a93164f6e75eb63c36f72feba797107efc521",
+    "temporary_repository_tree": "c7d020849d3a62500680acd51775d0d48d045bd8",
     "typed_failure_accounting": {
       "ambiguous-task-model-send": {
         "model_call_attempts": 1,
