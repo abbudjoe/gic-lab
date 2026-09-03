@@ -160,6 +160,7 @@ class ShadowFaultPlan:
     root_replacement_before_cleanup: bool = False
     provider_cost_receipt_fault: str | None = None
     provider_lifecycle_source_fault: str | None = None
+    cleanup_receipt_fault: str | None = None
 
 
 class DeterministicRuntimeClock(RuntimeClock):
@@ -2008,7 +2009,7 @@ class DeterministicLowLevelEffects:
             "started_monotonic": request.started_monotonic,
             "completed_monotonic": completed_monotonic,
         }
-        return CleanupExecutionReceipt(
+        receipt = CleanupExecutionReceipt(
             immutable_handoff_sha256=request.immutable_handoff_sha256,
             owned_containers_absent=True,
             exact_secret_matches=0,
@@ -2022,6 +2023,14 @@ class DeterministicLowLevelEffects:
             completed_monotonic=completed_monotonic,
             receipt_sha256=_identity(values),
         )
+        if self.fault_plan.cleanup_receipt_fault == "wrong-handoff":
+            return CleanupExecutionReceipt(
+                **{
+                    **asdict(receipt),
+                    "immutable_handoff_sha256": "0" * 64,
+                }
+            )
+        return receipt
 
 
 class LiveShapedNoNetworkEffects:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import sys
@@ -9,6 +10,7 @@ import pytest
 from _category3_test_support import execute_shadow_plan, validated_rehearsal
 from _live_effect_fixture import RuntimePackage, materialize_runtime_package
 
+from giclab.control.adapters import AdapterFailure
 from giclab.control.category3 import (
     Category3Request,
     execute_category3_transaction,
@@ -108,6 +110,50 @@ def build_package_effects(
         fault_plan=ShadowFaultPlan(
             "live-root-replacement-terminalization",
             root_replacement_before_cleanup=True,
+        ),
+    )
+'''
+
+PRIVACY_FAILURE_SOURCE = b'''"""Exercise guaranteed terminalization after privacy failure."""
+
+from giclab.control.shadow_effects import ShadowFaultPlan, build_live_shaped_no_network_effects
+
+
+def build_package_effects(
+    *, repository, contract, authorization_context, authority, held_transaction_root
+):
+    return build_live_shaped_no_network_effects(
+        repository=repository,
+        contract=contract,
+        implementation_identity=authorization_context.effect_implementation,
+        authorization_context=authorization_context,
+        authority=authority,
+        held_transaction_root=held_transaction_root,
+        fault_plan=ShadowFaultPlan(
+            "live-terminal-privacy-failure",
+            fail_operation="evidence.scan_privacy",
+        ),
+    )
+'''
+
+CLEANUP_RECEIPT_FAILURE_SOURCE = b'''"""Exercise terminalization after bad cleanup evidence."""
+
+from giclab.control.shadow_effects import ShadowFaultPlan, build_live_shaped_no_network_effects
+
+
+def build_package_effects(
+    *, repository, contract, authorization_context, authority, held_transaction_root
+):
+    return build_live_shaped_no_network_effects(
+        repository=repository,
+        contract=contract,
+        implementation_identity=authorization_context.effect_implementation,
+        authorization_context=authorization_context,
+        authority=authority,
+        held_transaction_root=held_transaction_root,
+        fault_plan=ShadowFaultPlan(
+            "live-terminal-cleanup-receipt-failure",
+            cleanup_receipt_fault="wrong-handoff",
         ),
     )
 '''
@@ -439,3 +485,172 @@ def test_full_live_shaped_controller_terminalizes_after_root_path_replacement(
         package.held_root.revalidate_descriptor()
     with pytest.raises(ValueError, match="closed"):
         package.held_source.revalidate(package.repository)
+
+
+def _assert_live_package_terminally_released(package: RuntimePackage) -> None:
+    state = json.loads((package.held_root.path / ".live-authority-state.json").read_bytes())
+    assert state["state"] == "terminal-failed-nonreplayable"
+    assert state["replay_permitted"] is False
+    with pytest.raises(ValueError, match="closed"):
+        package.held_root.revalidate_descriptor()
+    with pytest.raises(ValueError, match="closed"):
+        package.held_source.revalidate(package.repository)
+    with pytest.raises(ValueError, match="closed"):
+        _ = package.authority.state
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_cleanup_state"),
+    [
+        (PRIVACY_FAILURE_SOURCE, "complete"),
+        (CLEANUP_RECEIPT_FAILURE_SOURCE, "unresolved"),
+    ],
+)
+def test_full_controller_terminalizes_and_releases_after_terminal_validation_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: bytes,
+    expected_cleanup_state: str,
+) -> None:
+    package = materialize_runtime_package(
+        ROOT,
+        tmp_path,
+        effect_source=source,
+        prepare_execution=True,
+        registry_monkeypatch=monkeypatch,
+    )
+    assert package.rehearsal is not None
+    loaded = package.load()
+    world = build_production_adapter_assembly(
+        package.repository,
+        package.contract,
+        low_level_effects=loaded.effects,
+        authorization_context=package.context,
+        authority=package.authority,
+        held_transaction_root=package.held_root,
+        held_effect_source=loaded.held_source,
+    )
+    commit, tree = repository_identity(package.repository)
+    receipt = execute_category3_transaction(
+        Category3Request(
+            repository=package.repository,
+            contract=package.contract,
+            scenario="live-terminal-validation-failure",
+            expected_repository_commit=commit,
+            expected_repository_tree=tree,
+            control_proof=package.rehearsal,
+        ),
+        adapters=world.adapters(),
+    )
+    assert receipt["cleanup"]["state"] == expected_cleanup_state  # type: ignore[index]
+    assert receipt["cleanup"]["privacy_clean"] is False  # type: ignore[index]
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    authority = evidence["authority_consumption"]
+    assert isinstance(authority, dict)
+    assert authority["terminal_state"] == "terminal-failed-nonreplayable"
+    _assert_live_package_terminally_released(package)
+
+
+def test_preparation_failure_after_live_authority_validation_is_nonreplayable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = materialize_runtime_package(
+        ROOT,
+        tmp_path,
+        effect_source=BASE_EFFECT_SOURCE,
+        prepare_execution=True,
+        registry_monkeypatch=monkeypatch,
+    )
+    assert package.rehearsal is not None
+    loaded = package.load()
+    world = build_production_adapter_assembly(
+        package.repository,
+        package.contract,
+        low_level_effects=loaded.effects,
+        authorization_context=package.context,
+        authority=package.authority,
+        held_transaction_root=package.held_root,
+        held_effect_source=loaded.held_source,
+    )
+    commit, tree = repository_identity(package.repository)
+
+    def fail_composition(_repository: Path, _contract: object) -> dict[str, object]:
+        raise RuntimeError("deterministic preparation failure")
+
+    receipt = execute_category3_transaction(
+        Category3Request(
+            repository=package.repository,
+            contract=package.contract,
+            scenario="live-preparation-failure",
+            expected_repository_commit=commit,
+            expected_repository_tree=tree,
+            control_proof=package.rehearsal,
+        ),
+        adapters=world.adapters(),
+        composition_builder=fail_composition,  # type: ignore[arg-type]
+    )
+    assert receipt["earliest_stopping_phase"] == "offline-composition"
+    assert receipt["call_counts"] == {
+        "secret_reads": 0,
+        "metadata_requests": 0,
+        "provider_gets": 0,
+        "provider_posts": 0,
+        "launch_calls": 0,
+        "termination_calls": 0,
+        "condition_reservations": 0,
+        "condition_entries": 0,
+        "model_call_attempts": 0,
+        "browser_actions": 0,
+        "unknown_model_outcomes": 0,
+    }
+    _assert_live_package_terminally_released(package)
+
+
+def test_terminal_result_construction_failure_still_closes_every_held_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = materialize_runtime_package(
+        ROOT,
+        tmp_path,
+        effect_source=BASE_EFFECT_SOURCE,
+        prepare_execution=True,
+        registry_monkeypatch=monkeypatch,
+    )
+    assert package.rehearsal is not None
+    loaded = package.load()
+    world = build_production_adapter_assembly(
+        package.repository,
+        package.contract,
+        low_level_effects=loaded.effects,
+        authorization_context=package.context,
+        authority=package.authority,
+        held_transaction_root=package.held_root,
+        held_effect_source=loaded.held_source,
+    )
+    commit, tree = repository_identity(package.repository)
+
+    def fail_control_evidence() -> dict[str, object]:
+        raise AdapterFailure("terminal result construction failure")
+
+    monkeypatch.setattr(world, "control_evidence", fail_control_evidence)
+
+    def fail_composition(_repository: Path, _contract: object) -> dict[str, object]:
+        raise RuntimeError("deterministic preparation failure")
+
+    with pytest.raises(AdapterFailure, match="terminal result construction failure"):
+        execute_category3_transaction(
+            Category3Request(
+                repository=package.repository,
+                contract=package.contract,
+                scenario="live-terminal-result-failure",
+                expected_repository_commit=commit,
+                expected_repository_tree=tree,
+                control_proof=package.rehearsal,
+            ),
+            adapters=world.adapters(),
+            composition_builder=fail_composition,  # type: ignore[arg-type]
+        )
+    _assert_live_package_terminally_released(package)

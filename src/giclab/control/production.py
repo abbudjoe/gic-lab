@@ -5158,6 +5158,7 @@ class ProductionCategory3World:
 
         if self._resources_released:
             return
+        failures: list[BaseException] = []
         artifact_groups = (
             self._raw_artifacts,
             self._finalized_artifacts,
@@ -5166,13 +5167,29 @@ class ProductionCategory3World:
         for groups in artifact_groups:
             for artifacts in groups.values():
                 for artifact in artifacts:
-                    artifact.close()
+                    try:
+                        artifact.close()
+                    except BaseException as exc:  # finish releasing every independent hold
+                        failures.append(exc)
         if isinstance(self.authority, ValidatedLiveEffectAuthority):
-            self.authority.close()
+            try:
+                self.authority.close()
+            except BaseException as exc:
+                failures.append(exc)
         if self.held_effect_source is not None:
-            self.held_effect_source.close()
-        self.held_transaction_root.close()
+            try:
+                self.held_effect_source.close()
+            except BaseException as exc:
+                failures.append(exc)
+        try:
+            self.held_transaction_root.close()
+        except BaseException as exc:
+            failures.append(exc)
         self._resources_released = True
+        if failures:
+            raise AdapterFailure(
+                "one or more held descriptors could not be released"
+            ) from failures[0]
 
 
 def build_production_adapter_assembly(

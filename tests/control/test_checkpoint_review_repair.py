@@ -452,6 +452,31 @@ def test_retained_provider_source_mutation_stops_before_task_b(
     assert _counts(receipt)["condition_entries"] == 2
 
 
+def test_checkpoint_receives_only_the_exact_shared_derived_provider_cost(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    retained = production.pilot.first_pair_decision
+    captured: list[pilot.PairCheckpointInput] = []
+
+    def capture(value: pilot.PairCheckpointInput) -> dict[str, object]:
+        captured.append(value)
+        return retained(value)
+
+    monkeypatch.setattr(production.pilot, "first_pair_decision", capture)
+    receipt = execute_shadow_plan(
+        ROOT,
+        V16_PROVIDER_CONTRACT,
+        ShadowFaultPlan("checkpoint-provider-cost-coupling"),
+    )
+    assert len(captured) == 1
+    evidence = receipt["production_control_evidence"]
+    assert isinstance(evidence, dict)
+    proof = evidence["provider_lifecycle_cost_proof"]
+    assert isinstance(proof, dict)
+    assert captured[0].actual_lambda_cost_usd == float(proof["cumulative_provider_cost_usd"])
+    assert _counts(receipt)["condition_entries"] == 4
+
+
 def test_omitted_closed_replacement_slot_stops_before_task_b() -> None:
     receipt = execute_shadow_plan(
         ROOT,
