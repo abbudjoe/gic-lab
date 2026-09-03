@@ -27,9 +27,9 @@
       "sha256": "92f641b4066c5f24bf8fe1b265c119ece203971e3cc37318d161f633f28e38c4"
     },
     {
-      "bytes": 39180,
+      "bytes": 39605,
       "path": "src/giclab/control/anti_shadow_lint.py",
-      "sha256": "5b91afe42c3074136b0fc69d8d50498fcf72fb0ac8cf0e0bd4e335a869f42e64"
+      "sha256": "fe74d9b4e7bdb95c2f0bc79c6680190d3694f098f4cb642f7b6bc0ca9f20a929"
     },
     {
       "bytes": 43498,
@@ -187,7 +187,7 @@
   "schema_version": "2.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "1c8af34a228ffb4f6f293900d9791ee56afe26f2828834c4ea771a0246a97d42",
-  "source_commit": "75b62c2f51c9ba126ca48a8d802f88115eb5ce82",
-  "source_tree": "727fb4c58eec5bddcb17459575b980de5064fca4"
+  "semantic_sha256": "17efbb0143b1c265ae4516ac1c8f4d33486d3cb16d903cdc4e3461e6d1f4fc26",
+  "source_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "source_tree": "52aba08c58342ab714ccb548b1049cb3685c5574"
 }

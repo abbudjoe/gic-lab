@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "fd942bb8c40cfdcf9e09563bd85874d1ab9179731e02c1c4353f7740e2d48e7a"
+      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
     },
     {
       "adapter": "provider",
@@ -67,7 +67,7 @@
       "adapter": "evidence",
       "index": 10,
       "operation": "evidence.record",
-      "outcome": "retained:f9796ab1c022",
+      "outcome": "retained:1fa79da2ce3d",
       "subject": "qualification"
     },
     {
@@ -81,7 +81,7 @@
       "adapter": "evidence",
       "index": 12,
       "operation": "evidence.record",
-      "outcome": "retained:74e4dfa65b7d",
+      "outcome": "retained:534c48dd71fa",
       "subject": "scientific-freeze"
     },
     {
@@ -116,7 +116,7 @@
       "adapter": "evidence",
       "index": 17,
       "operation": "evidence.record",
-      "outcome": "retained:a7872b61f080",
+      "outcome": "retained:62934e099cb4",
       "subject": "raw"
     },
     {
@@ -189,7 +189,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "69f97d7395ec3eef8d7812a34461f762465e76526efe69af317c5582cc6b907d",
+  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -198,19 +198,19 @@
   ],
   "earliest_stopping_phase": "finalization",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "14a529ebcbb79f76a7d9a9e3cbc898087ed4687633048a29fa4e82f1fd42e431",
+  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [
       {
         "essential_file_count": 7,
         "essential_total_bytes": 7450,
-        "evidence_binding_sha256": "bb74c74e7affc76fa758b9b17339af3c7ab76939778ee5cf9b8ecbaf67ecb0ac",
-        "export_receipt_sha256": "53137a3ec2808a158248d9eb25c6792ac52e72fee9970ceef43b9f60aab2f259",
+        "evidence_binding_sha256": "42baacb376e77e1035695b5fd3acd55ba3c510eca568ac5c63cb1e82511fb2f6",
+        "export_receipt_sha256": "436008fd42e051ea70f82acb6a619ad96357a9058210b769fd48a2436cbc819e",
         "failure_class": "finalizer-failure",
         "infrastructure_invalid": true,
-        "manifest_sha256": "6f0aa77d581d6277921c0424b50978f6a0cd47892582bfd387f3af38f618dd9d",
-        "receipt_sha256": "74800322f22b8e96cde7a21ae767d200d0b0bf1e0b1235f7762988fee2c8cfe5",
+        "manifest_sha256": "1f14aea99a6c5f7db93b192110d4065ce0b4721bbb61697cb79052b9acb6144e",
+        "receipt_sha256": "ca31703f28eaec1003ad5499b3f14497dfa23548248ed1c14157b89d617c7dfd",
         "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "stopping_phase": "finalization",
         "unscored": true
@@ -229,13 +229,13 @@
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "a7872b61f0802b3a23d4a9b6cb0f8146224c718b3b0ad2f0202dd5ecc72123e1",
+      "sha256": "62934e099cb4fb672e5fad16ea2b870efaaaf15a691f565913d05ade6185948d",
       "shadow_only": true
     },
     {
       "kind": "essential-infrastructure-failure",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "bb74c74e7affc76fa758b9b17339af3c7ab76939778ee5cf9b8ecbaf67ecb0ac",
+      "sha256": "42baacb376e77e1035695b5fd3acd55ba3c510eca568ac5c63cb1e82511fb2f6",
       "shadow_only": true
     }
   ],
@@ -567,7 +567,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "14a529ebcbb79f76a7d9a9e3cbc898087ed4687633048a29fa4e82f1fd42e431",
+    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
     "cleanup_handoff_sha256": "3c35a568475be9862dfbe3c9b1980f51eb416c14222942925f4f23841c3ef6c3",
     "cleanup_receipt_sha256": "a69edd2f7c028b9296f215466190083ce0eea8e878967c52f8e8202753658700",
     "cleanup_resume_byte_identical": true,
@@ -584,14 +584,14 @@
     "essential_failures": {
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
         "completed": true,
-        "export_receipt_sha256": "53137a3ec2808a158248d9eb25c6792ac52e72fee9970ceef43b9f60aab2f259",
+        "export_receipt_sha256": "436008fd42e051ea70f82acb6a619ad96357a9058210b769fd48a2436cbc819e",
         "export_resumed": false,
         "failure_class": "finalizer-failure",
         "file_count": 7,
-        "held_artifact_binding_sha256": "98414a59627d43bcf0ac6ae94bae8861e6a57fdeee0c091bb3e0b4babe4a4feb",
-        "manifest_sha256": "6f0aa77d581d6277921c0424b50978f6a0cd47892582bfd387f3af38f618dd9d",
+        "held_artifact_binding_sha256": "bc7ae7b01677d9054b2bb273c848243ed2ade4f65a9b61f3dfe10cbbacd54aff",
+        "manifest_sha256": "1f14aea99a6c5f7db93b192110d4065ce0b4721bbb61697cb79052b9acb6144e",
         "process_exit_code": 0,
-        "receipt_sha256": "74800322f22b8e96cde7a21ae767d200d0b0bf1e0b1235f7762988fee2c8cfe5",
+        "receipt_sha256": "ca31703f28eaec1003ad5499b3f14497dfa23548248ed1c14157b89d617c7dfd",
         "retry_count": 0,
         "total_bytes": 7450,
         "unknown_call_ids": [],
@@ -602,11 +602,11 @@
     "first_pair_checkpoint": null,
     "held_evidence": {
       "essential_failure": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "98414a59627d43bcf0ac6ae94bae8861e6a57fdeee0c091bb3e0b4babe4a4feb"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "bc7ae7b01677d9054b2bb273c848243ed2ade4f65a9b61f3dfe10cbbacd54aff"
       },
       "finalized": {},
       "raw": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "a6691d94c21fb3ebb8d1e38d2f99dd9619bae4077e4d7200b7927ad4c2f7003b"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "cc7d8f3c94eaaf57d9f278172abc6c2cef7a698ddcb3c3498fe1d71346b9b7ed"
       },
       "revalidated_across_consumers": true
     },
@@ -621,9 +621,9 @@
       "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "d2f7d53211ffc9a9f0a5be624b770dd42e1947753f02a2fcdf67fdb721a0c6c0",
-      "postfreeze_validation": "7a00ae16dec5e370cab3c636685cead016002e46be4b13c36e503f5891dd2389",
-      "qualification": "f9796ab1c0225f8fe19f38eb7882a29c4ecdfd00bcba06185e3c36d745ff2c15"
+      "frozen_manifest": "4fd322f992a410f39cb0395a10518498088b788f6f89f44af0cd947f60196306",
+      "postfreeze_validation": "a452149d74ddef7d0a49b44564a8be56eb3e80ef3f676c3d24da66e1fb796956",
+      "qualification": "1fa79da2ce3dea6217e7a4b8453d441fd7c182c661645c9c7dc49d164fd4eb6c"
     },
     "implementation_flavor": "production-wrapper",
     "package_budget": {
@@ -756,7 +756,7 @@
     "provider_cost_receipt": null,
     "provider_lifecycle_cost_proof": null,
     "raw_export_acknowledgements": {
-      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "3d42a344c20cf9a713735af9abf6d869aec2fcf4cc2afc3f7e8e83c06b1af09b"
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "6dfe2b6280049ca095c55e857c89891ef29dc818d6ea55d820ec9a6346c95be0"
     },
     "replacement_history": {
       "closed_launch_slots": [
@@ -901,8 +901,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "75b62c2f51c9ba126ca48a8d802f88115eb5ce82",
-  "repository_tree": "727fb4c58eec5bddcb17459575b980de5064fca4",
+  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
   "scenario": "finalizer-failure",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -913,7 +913,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "40172539756bc92cf80b391d3cc451179a516a97a5c5e35ece53c6744251c45f",
+  "semantic_sha256": "22699b5d17ee8ec027844c23184a2aeb7ff981bf9dd99a87be36f472c2f30c55",
   "shadow_only": true,
   "stop_reason": "finalizer stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
