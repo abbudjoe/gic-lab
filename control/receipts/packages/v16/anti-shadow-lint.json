@@ -191,10 +191,10 @@
     ],
     "root": "control/receipts/packages/v16"
   },
-  "repository_commit": "db32bba7b87cae7e08083d6f6b332b126f8ff57a",
-  "repository_tree": "3dc148643ddf610d2b3698898296de98381f827a",
+  "repository_commit": "bdeff53182b4ba648f691333bdbedb737853e757",
+  "repository_tree": "dc78cf2bdfb46e2e3426fd091de9c55fd13aa105",
   "schema_version": "2.0.0",
-  "semantic_sha256": "cf2f6c3b76d81a9f332286e641871dbbe750727449bbd2dbfb47ae9667b56bd2",
+  "semantic_sha256": "8e8bd30138013677eaa3d14f529dd0a3030b0729ede50f0cd12ca19533b607c5",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",
