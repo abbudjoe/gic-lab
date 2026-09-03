@@ -2705,7 +2705,8 @@ class ProductionCategory3World:
                     "failure_class",
                     "exit_code",
                     "retry_count",
-                    "command_argv",
+                    "command_argv_count",
+                    "command_argv_sha256",
                     "command_sha256",
                     "condition_plan_path",
                     "condition_plan_sha256",
@@ -2716,7 +2717,8 @@ class ProductionCategory3World:
                 or process_document.get("failure_class") != failure_class.value
                 or process_document.get("exit_code") != process_exit_code
                 or process_document.get("retry_count") != 0
-                or process_document.get("command_argv") != list(request.command_argv)
+                or process_document.get("command_argv_count") != len(request.command_argv)
+                or process_document.get("command_argv_sha256") != request.command_sha256
                 or process_document.get("command_sha256") != request.command_sha256
                 or process_document.get("condition_plan_path") != request.condition_plan_path
                 or process_document.get("condition_plan_sha256") != request.condition_plan_sha256
