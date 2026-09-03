@@ -32,7 +32,8 @@
         "INC-T09-V16-LIFECYCLE-REGISTRY",
         "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
         "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
-        "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW"
+        "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
+        "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY"
       ]
     },
     "observed_package": {
@@ -241,6 +242,57 @@
           },
           "repair": {
             "const": "authoritative-checkpoint-failure-authority-and-held-identity-repair"
+          },
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f"
+              }
+            }
+          },
+          "stage": {"const": "second exact-head live-boundary rereview"},
+          "failed_invariant": {
+            "const": "provider cost, essential-failure envelopes, held-root terminalization, and public evidence must be source-bound, bounded, terminal, and topology-free"
+          },
+          "root_cause": {
+            "const": "provider cost trusted self-consistent effect arithmetic; essential envelope siblings escaped aggregate validation; root pathname replacement could interrupt terminalization; public receipts retained unstable runtime topology"
+          },
+          "earliest_detectable_stage": {
+            "const": "second exact-head live-boundary rereview"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/provider-lifecycle-cost-proof",
+              "shared-control/essential-failure-envelope",
+              "shared-control/held-root-terminalization",
+              "shared-control/public-evidence-projection"
+            ]
+          },
+          "repair": {
+            "const": "source-bound-cost-complete-envelope-guaranteed-terminal-public-projection"
           },
           "coverage": {
             "const": [
