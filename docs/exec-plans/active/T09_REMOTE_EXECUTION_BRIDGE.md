@@ -48,26 +48,26 @@ The immutable base is commit
 | ID | Required outcome | Planned evidence | Status |
 |---|---|---|---|
 | RB-01 | Exact base/history verified | Git/GitHub identity, clean checkout, baseline capsule and agent-check | met |
-| RB-02 | Complete method-to-primitive map has zero gaps | Schema-valid source map and generated viability receipt | in-progress |
-| RB-03 | Local assembly is distinct from host transfer | Typed requests/receipts and ordering regressions | not-started |
-| RB-04 | Host transfer is post-entry and remotely rehashed | Controller/production tests and bridge conformance | not-started |
-| RB-05 | Preflight, qualification, and freeze are phase-specific | Retained runner entrypoints and phase-chain tests | not-started |
-| RB-06 | Full retained dynamic manifest is authoritative | Versioned validator, projection, and mutation regressions | not-started |
-| RB-07 | Historical compound preflight remains compatible | Compatibility-wrapper regression | not-started |
-| RB-08 | Duplex protocol is bounded, sequenced, and hash-chained | Codec/session/property regressions | not-started |
-| RB-09 | Remote sends/actions block on shared admission | Coupling and failure-order tests | not-started |
-| RB-10 | Shared observer is the sole authoritative accountant | Source lint, runtime proof, and accounting equality | not-started |
-| RB-11 | Channel-loss semantics preserve exact unknown states | Before/after-send disconnect regressions | not-started |
-| RB-12 | Transcript is bound into raw/essential evidence | Held transcript manifests and mutation tests | not-started |
-| RB-13 | Provider launch has exactly one mutation seam | Protocol removal, static scan, and transport tests | not-started |
-| RB-14 | Shared transaction order matches live lifecycle | Exact state-transition regression | not-started |
-| RB-15 | Full no-network remote-bridge conformance passes | Local subprocess/private IPC receipt | not-started |
-| RB-16 | Viability receipt reports every live method complete | Generated V16 receipt and schema validation | not-started |
-| RB-17 | Synthetic successor requires no shared edits | Temporary successor conformance and byte-map proof | not-started |
+| RB-02 | Complete method-to-primitive map has zero gaps | Schema-valid source map and generated viability receipt | met |
+| RB-03 | Local assembly is distinct from host transfer | Typed requests/receipts and ordering regressions | met |
+| RB-04 | Host transfer is post-entry and remotely rehashed | Controller/production tests and bridge conformance | met |
+| RB-05 | Preflight, qualification, and freeze are phase-specific | Retained runner entrypoints and phase-chain tests | met |
+| RB-06 | Full retained dynamic manifest is authoritative | Versioned validator, projection, and mutation regressions | met |
+| RB-07 | Historical compound preflight remains compatible | Compatibility-wrapper regression | met |
+| RB-08 | Duplex protocol is bounded, sequenced, and hash-chained | Codec/session/property regressions | met |
+| RB-09 | Remote sends/actions block on shared admission | Coupling and failure-order tests | met |
+| RB-10 | Shared observer is the sole authoritative accountant | Source lint, runtime proof, and accounting equality | met |
+| RB-11 | Channel-loss semantics preserve exact unknown states | Before/after-send disconnect regressions | met |
+| RB-12 | Transcript is bound into raw/essential evidence | Held transcript manifests and mutation tests | met |
+| RB-13 | Provider launch has exactly one mutation seam | Protocol removal, static scan, and transport tests | met |
+| RB-14 | Shared transaction order matches live lifecycle | Exact state-transition regression | met |
+| RB-15 | Full no-network remote-bridge conformance passes | Local subprocess/private IPC receipt | met |
+| RB-16 | Viability receipt reports every live method complete | Generated V16 receipt and schema validation | met |
+| RB-17 | Synthetic successor requires no shared edits | Temporary successor conformance and byte-map proof | met |
 | RB-18 | Historical V16 proof remains valid | Rebound/current and historical-root validation | not-started |
-| RB-19 | No actual V17 artifact exists | Tracked/worktree boundary scan | not-started |
-| RB-20 | Science and authority remain unchanged/false | Science hash diff, capsule, and receipt assertions | not-started |
-| RB-21 | Full/parity/static/privacy/site gates pass | Required local validation contract | not-started |
+| RB-19 | No actual V17 artifact exists | Tracked/worktree boundary scan | met |
+| RB-20 | Science and authority remain unchanged/false | Science hash diff, capsule, and receipt assertions | met |
+| RB-21 | Full/parity/static/privacy/site gates pass | Required local validation contract | in-progress |
 | RB-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/check metadata | not-started |
 
 No item may be marked `met` without concrete source or regression evidence. The
@@ -106,6 +106,25 @@ started.
 - 2026-09-04: exact-base deterministic state capsule and aggregate agent-check pass;
   registry completeness is 14/14 and all 16 production-wrapper shadow scenarios
   pass with zero real effects.
+- 2026-09-04: immutable implementation commit
+  `fe756d5debd89ae8613ca99b85e6d86df476cd9a`, tree
+  `adc3ba68a9125955d36e7a096e902f3df4c29fd5`, added protocol v2 local
+  assembly/host transfer, phase-specific retained host entrypoints, the canonical
+  duplex supervisor/runtime client, one campaign-transport launch seam, the
+  source-grounded 31-method/24-phase viability map, and integrated no-network
+  conformance. Descendant commits only tightened regressions and the explicit null
+  evidence binding for a failure before bridge construction.
+- 2026-09-04: the 318-node focused controller, checkpoint, phase, duplex,
+  conformance, viability, coupling, evidence, held-identity, authority, loader, and
+  registry matrix passed. The live-shaped conformance used the shared controller
+  and production assembly, local subprocess remote-runner entrypoints, a private
+  Unix socket relay, runtime admission client, full retained manifest, four ordered
+  condition sessions, raw/finalizer/evaluator fixtures, and cleanup with zero real
+  external effects.
+- 2026-09-04: marked incident
+  `INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE` resolved only after the complete
+  no-network remote bridge, coupling denial, channel-loss, replay, manifest-mutation,
+  evidence-mutation, first-pair stop, and resumable-cleanup regressions passed.
 
 ## Decisions and blockers
 
