@@ -45,7 +45,7 @@ available_actions:
   - review-remote-execution-bridge-pr
 recommended_action: complete independent exact-head review and explicit merge authorization; only after the reviewed merge generate the package-only V17 successor
 provenance:
-  - docs/exec-plans/active/T09_REMOTE_EXECUTION_BRIDGE.md
+  - docs/harness/T09_REMOTE_EXECUTION_BRIDGE_IMPLEMENTATION_LEDGER.md
   - docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md
   - control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json
   - control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json

@@ -30,7 +30,7 @@ from giclab.control.target import (
 )
 from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness import t09_provider_contracts as provider_contracts
-from giclab.registry import load_json
+from giclab.registry import load_json, local_schema_registry
 
 AGENT_CHECK_SCHEMA_VERSION: Final = "4.0.0"
 
@@ -42,7 +42,12 @@ def _canonical_sha256(value: object) -> str:
 
 def _schema_valid(repository: Path, schema_path: str, document: object) -> bool:
     schema = load_json(repository / schema_path)
-    return not list(Draft202012Validator(schema).iter_errors(document))
+    return not list(
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).iter_errors(document)
+    )
 
 
 def _semantic_valid(document: dict[str, object]) -> bool:

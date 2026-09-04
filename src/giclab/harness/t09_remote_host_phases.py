@@ -21,7 +21,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
 from typing import Final, cast
 
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator
 
 from giclab.control.adapters import AdapterFailure
 from giclab.control.remote_bridge import (
@@ -31,7 +31,7 @@ from giclab.control.remote_bridge import (
     validate_postfreeze_receipt,
 )
 from giclab.harness.t09_provider_contracts import T09ProviderContract
-from giclab.registry import load_json
+from giclab.registry import load_json, local_schema_registry
 
 HOST_PHASE_PROTOCOL_VERSION: Final = "1.0.0"
 HOST_PHASE_REQUEST_SCHEMA: Final = "schemas/t09-host-phase-request.schema.json"
@@ -229,7 +229,10 @@ def load_host_phase_request(
     try:
         document = strict_json_object(encoded, label="host phase request")
         schema = load_json(repository / HOST_PHASE_REQUEST_SCHEMA)
-        Draft202012Validator(schema).validate(document)
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).validate(document)
     except Exception as exc:
         raise HostPhaseError("host phase request failed its exact schema") from exc
     if document.get("phase") != expected_phase:
@@ -419,15 +422,11 @@ def validate_host_phase_predecessor(
 
 
 def _validate_receipt_schema(repository: Path, document: object) -> None:
-    schema_path = repository / HOST_PHASE_RECEIPT_SCHEMA
-    request_schema = load_json(repository / HOST_PHASE_REQUEST_SCHEMA)
-    schema = load_json(schema_path)
-    resolver = RefResolver(
-        base_uri=schema_path.resolve().as_uri(),
-        referrer=schema,
-        store={cast(str, request_schema["$id"]): request_schema},
-    )
-    Draft202012Validator(schema, resolver=resolver).validate(document)
+    schema = load_json(repository / HOST_PHASE_RECEIPT_SCHEMA)
+    Draft202012Validator(
+        schema,
+        registry=local_schema_registry(repository / "schemas"),
+    ).validate(document)
 
 
 def _phase_receipt(

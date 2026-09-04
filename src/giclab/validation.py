@@ -48,6 +48,7 @@ from giclab.registry import (
     discover_repo_root,
     load_json,
     load_yaml,
+    local_schema_registry,
     resolve_repo_path,
 )
 from giclab.sitegen import build_site_data
@@ -286,7 +287,11 @@ def validate_instance(
     """Validate a mapping with a repository JSON Schema."""
 
     schema = load_json(schema_path)
-    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    validator = Draft202012Validator(
+        schema,
+        format_checker=FormatChecker(),
+        registry=local_schema_registry(schema_path.parent),
+    )
     errors = _format_validation_errors(validator, instance)
     if schema_path.name == "container-attempt.schema.json":
         errors.extend(_validate_container_attempt_semantics(instance))

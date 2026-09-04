@@ -145,7 +145,7 @@ from giclab.harness.t09_provider_contracts import (
     T09ProviderContractError,
     load_provider_profile,
 )
-from giclab.registry import load_json
+from giclab.registry import load_json, local_schema_registry
 
 _RUNTIME_CONSUMERS: Final = {
     name: consumer
@@ -2588,7 +2588,10 @@ class ProductionCategory3World:
     ) -> None:
         schema = load_json(self.repository / relative_schema)
         errors = sorted(
-            Draft202012Validator(schema).iter_errors(document),
+            Draft202012Validator(
+                schema,
+                registry=local_schema_registry(self.repository / "schemas"),
+            ).iter_errors(document),
             key=lambda error: tuple(str(item) for item in error.absolute_path),
         )
         if errors:

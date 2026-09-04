@@ -44,6 +44,7 @@ from giclab.harness.sira_gate_a import (
     ProviderResponseUsage,
 )
 from giclab.harness.t09_provider_contracts import T09ProviderContract
+from giclab.registry import local_schema_registry
 
 BRIDGE_PROTOCOL_VERSION: Final = "1.0.0"
 RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION: Final = "0.1.0"
@@ -1636,21 +1637,11 @@ def _validate_schema(
     label: str,
 ) -> None:
     schema = _load_bridge_schema(repository, name)
-    if name == "t09-condition-duplex-transcript.schema.json":
-        # Resolve the one repository-local frame reference explicitly.  Network
-        # schema resolution is never allowed at this evidence boundary.
-        frame_schema = _load_bridge_schema(
-            repository,
-            "t09-condition-duplex-frame.schema.json",
-        )
-        schema = cast(dict[str, object], json.loads(json.dumps(schema)))
-        properties = cast(dict[str, object], schema["properties"])
-        frames = cast(dict[str, object], properties["frames"])
-        items = cast(dict[str, object], frames["items"])
-        item_properties = cast(dict[str, object], items["properties"])
-        item_properties["frame"] = frame_schema
     errors = sorted(
-        Draft202012Validator(schema).iter_errors(document),
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).iter_errors(document),
         key=lambda error: tuple(str(item) for item in error.absolute_path),
     )
     if errors:
@@ -2298,7 +2289,10 @@ def validate_full_dynamic_frozen_manifest(
     schema_path = repository / "schemas/t09-full-dynamic-frozen-manifest.schema.json"
     try:
         schema = strict_json_object(schema_path.read_bytes(), label="frozen manifest schema")
-        Draft202012Validator(schema).validate(document)
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).validate(document)
     except Exception as exc:
         raise AdapterFailure("full frozen manifest failed its exact schema") from exc
     projection = handler(document, contract=contract, expected_projection=expected_projection)

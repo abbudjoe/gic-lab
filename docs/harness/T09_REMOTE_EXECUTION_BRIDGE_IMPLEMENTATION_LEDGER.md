@@ -1,4 +1,4 @@
-# T09 remote-execution bridge and phase-conformant live path
+# T09 remote-execution bridge implementation ledger
 
 Status: **in-progress**
 
@@ -125,6 +125,14 @@ started.
   `INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE` resolved only after the complete
   no-network remote bridge, coupling denial, channel-loss, replay, manifest-mutation,
   evidence-mutation, first-pair stop, and resumable-cleanup regressions passed.
+- 2026-09-04: the first sealed-root generation attempts failed closed before
+  publication because proof validation and aggregate agent-check did not resolve the
+  viability receipt's repository-local method-schema reference. One offline local
+  schema registry now serves every shared cross-file schema consumer. It registers
+  only unique `$id` aliases, keeps historically reused execution-schema IDs
+  unselectable as aliases, and requires exact-file selection for those historical
+  schemas. Strict Ruff/mypy and the viability, duplex, host-phase, failure-envelope,
+  and repository-validation regressions pass; no partial V16 root was published.
 
 ## Decisions and blockers
 

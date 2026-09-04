@@ -14,11 +14,11 @@ import json
 from pathlib import Path
 from typing import Final, cast
 
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator
 
 from giclab.control.category3 import repository_identity
 from giclab.control.effects import EFFECT_PROTOCOL_VERSION
-from giclab.registry import load_json
+from giclab.registry import load_json, local_schema_registry
 
 METHOD_MAP_PATH: Final = "control/live-method-map.json"
 METHOD_MAP_SCHEMA: Final = "schemas/t09-live-method-map.schema.json"
@@ -94,10 +94,13 @@ def _calls_named(tree: ast.AST, name: str) -> int:
 
 
 def _validate_map_schema(repository: Path, document: object) -> bool:
-    schema_path = repository / METHOD_MAP_SCHEMA
-    schema = load_json(schema_path)
-    resolver = RefResolver(base_uri=schema_path.resolve().as_uri(), referrer=schema)
-    return not list(Draft202012Validator(schema, resolver=resolver).iter_errors(document))
+    schema = load_json(repository / METHOD_MAP_SCHEMA)
+    return not list(
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).iter_errors(document)
+    )
 
 
 def _source(repository: Path, relative: str) -> tuple[str, ast.Module]:
@@ -307,16 +310,12 @@ def validate_live_method_viability(repository: Path) -> dict[str, object]:
         "complete": not findings and all(checks.values()) and not unresolved,
     }
     receipt["semantic_sha256"] = _canonical_sha256(receipt)
-    viability_schema_path = root / VIABILITY_SCHEMA
-    viability_schema = load_json(viability_schema_path)
-    method_map_schema = load_json(root / METHOD_MAP_SCHEMA)
-    resolver = RefResolver(
-        base_uri=viability_schema_path.resolve().as_uri(),
-        referrer=viability_schema,
-        store={cast(str, method_map_schema["$id"]): method_map_schema},
-    )
+    viability_schema = load_json(root / VIABILITY_SCHEMA)
     errors = sorted(
-        Draft202012Validator(viability_schema, resolver=resolver).iter_errors(receipt),
+        Draft202012Validator(
+            viability_schema,
+            registry=local_schema_registry(root / "schemas"),
+        ).iter_errors(receipt),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if errors:

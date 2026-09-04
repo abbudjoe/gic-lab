@@ -124,13 +124,13 @@ def test_local_assembly_and_host_transfer_are_ordered_around_provider_entry(
     assert isinstance(ledger, list)
     operations = [entry["operation"] for entry in ledger if isinstance(entry, dict)]
     assembly = operations.index("host.assemble_local")
-    secret = operations.index("secret.read")
+    secret_read = operations.index("secret.read")
     launch = operations.index("provider.launch")
     entry = operations.index("provider.enter")
     transfer = operations.index("host.transfer")
     preflight = operations.index("host.preflight")
     condition = operations.index("condition.reserve")
-    assert assembly < secret < launch < entry < transfer < preflight < condition
+    assert assembly < secret_read < launch < entry < transfer < preflight < condition
     assert operations.count("host.assemble_local") == 1
     assert operations.count("host.transfer") == 1
 

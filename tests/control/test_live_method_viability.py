@@ -8,7 +8,7 @@ from typing import cast
 
 import pytest
 from _synthetic_successor import copy_working_repository
-from jsonschema import Draft202012Validator, RefResolver
+from jsonschema import Draft202012Validator
 
 from giclab.control.effects import EFFECT_PROTOCOL_VERSION, LowLevelEffects
 from giclab.control.live_method_viability import (
@@ -16,7 +16,7 @@ from giclab.control.live_method_viability import (
     validate_live_method_viability,
 )
 from giclab.control.proofs import ControlProofError, _validate_schema
-from giclab.registry import load_json
+from giclab.registry import load_json, local_schema_registry
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -33,13 +33,10 @@ def test_live_method_viability_has_one_launch_seam_and_zero_gaps() -> None:
     receipt = validate_live_method_viability(ROOT)
     schema_path = ROOT / "schemas/t09-live-method-viability.schema.json"
     schema = load_json(schema_path)
-    method_schema = load_json(ROOT / "schemas/t09-live-method-map.schema.json")
-    resolver = RefResolver(
-        base_uri=schema_path.resolve().as_uri(),
-        referrer=schema,
-        store={str(method_schema["$id"]): method_schema},
-    )
-    Draft202012Validator(schema, resolver=resolver).validate(receipt)
+    Draft202012Validator(
+        schema,
+        registry=local_schema_registry(ROOT / "schemas"),
+    ).validate(receipt)
     assert receipt["effect_protocol_version"] == EFFECT_PROTOCOL_VERSION == "2.0.0"
     methods = receipt["methods"]
     assert isinstance(methods, list)
