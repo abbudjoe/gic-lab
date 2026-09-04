@@ -428,6 +428,11 @@ def test_complete_envelope_totals_cross_bind_every_retained_projection(
     assert isinstance(accounting, dict)
     conditions = accounting["conditions"]
     assert isinstance(conditions, dict)
+    held_evidence = production_evidence["held_evidence"]
+    assert isinstance(held_evidence, dict)
+    bridge_evidence = held_evidence["condition_bridge"]
+    assert isinstance(bridge_evidence, dict)
+    assert bridge_evidence == {}
     run_id = V16_PROVIDER_CONTRACT.run_ids[0]
     assert record["evidence_binding_sha256"] == _canonical_sha256(
         {
@@ -438,6 +443,7 @@ def test_complete_envelope_totals_cross_bind_every_retained_projection(
             "essential_total_bytes": total,
             "held_artifact_binding_sha256": essential["held_artifact_binding_sha256"],
             "accounting": conditions[run_id],
+            "condition_bridge_evidence_binding_sha256": None,
         }
     )
 
