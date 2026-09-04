@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import copy
 import inspect
 import json
 from pathlib import Path
 from typing import cast
 
+import pytest
 from _synthetic_successor import copy_working_repository
 from jsonschema import Draft202012Validator, RefResolver
 
@@ -13,6 +15,7 @@ from giclab.control.live_method_viability import (
     EXPECTED_PHASE_ORDER,
     validate_live_method_viability,
 )
+from giclab.control.proofs import ControlProofError, _validate_schema
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +50,18 @@ def test_live_method_viability_has_one_launch_seam_and_zero_gaps() -> None:
     assert receipt["findings"] == []
     assert receipt["real_effects_performed"] == 0
     assert receipt["complete"] is True
+
+
+def test_control_proof_validator_resolves_the_local_method_schema_without_network() -> None:
+    receipt = validate_live_method_viability(ROOT)
+    _validate_schema(ROOT, "schemas/t09-live-method-viability.schema.json", receipt)
+
+    invalid = copy.deepcopy(receipt)
+    methods = invalid["methods"]
+    assert isinstance(methods, list)
+    methods[0]["method_name"] = "not-a-python-method"
+    with pytest.raises(ControlProofError, match="validation failed"):
+        _validate_schema(ROOT, "schemas/t09-live-method-viability.schema.json", invalid)
 
 
 def test_viability_fails_when_one_live_method_mapping_is_removed(tmp_path: Path) -> None:

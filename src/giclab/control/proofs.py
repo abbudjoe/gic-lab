@@ -15,6 +15,8 @@ from pathlib import Path, PurePosixPath
 from typing import Final
 
 from jsonschema import Draft202012Validator
+from referencing import Resource
+from referencing.jsonschema import SchemaRegistry
 
 from giclab.control.scenarios import HAPPY_PATH, REQUIRED_FAILURE_SCENARIOS
 from giclab.control.target import (
@@ -216,8 +218,17 @@ def _semantic_sha256(document: Mapping[str, object]) -> str:
 
 def _validate_schema(repository: Path, relative: str, document: object) -> None:
     schema = load_json(repository / relative)
+    registry: SchemaRegistry = SchemaRegistry()
+    for path in sorted((repository / "schemas").glob("*.json")):
+        if path.is_symlink() or not path.is_file():
+            raise ControlProofError("schema registry contains a non-regular member")
+        candidate = load_json(path)
+        identifier = candidate.get("$id")
+        if not isinstance(identifier, str):
+            continue
+        registry = registry.with_resource(identifier, Resource.from_contents(candidate))
     errors = sorted(
-        Draft202012Validator(schema).iter_errors(document),
+        Draft202012Validator(schema, registry=registry).iter_errors(document),
         key=lambda error: tuple(str(part) for part in error.absolute_path),
     )
     if errors:
