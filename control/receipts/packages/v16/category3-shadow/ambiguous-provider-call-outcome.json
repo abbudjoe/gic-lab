@@ -1,0 +1,394 @@
+{
+  "adapter_call_ledger": [
+    {
+      "adapter": "host",
+      "index": 1,
+      "operation": "host.stage",
+      "outcome": "passed",
+      "subject": "tracked-package-archive"
+    },
+    {
+      "adapter": "secret",
+      "index": 2,
+      "operation": "secret.read",
+      "outcome": "passed",
+      "subject": "strict-mixed-dotenv"
+    },
+    {
+      "adapter": "metadata",
+      "index": 3,
+      "operation": "metadata.request",
+      "outcome": "passed",
+      "subject": "V16"
+    },
+    {
+      "adapter": "provider",
+      "index": 4,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    },
+    {
+      "adapter": "metadata",
+      "index": 5,
+      "operation": "metadata.is_fresh",
+      "outcome": "passed",
+      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
+    },
+    {
+      "adapter": "provider",
+      "index": 6,
+      "operation": "provider.launch",
+      "outcome": "ambiguous",
+      "subject": "launch-1"
+    },
+    {
+      "adapter": "host",
+      "index": 7,
+      "operation": "host.cleanup",
+      "outcome": "passed",
+      "subject": "no-known-instance"
+    },
+    {
+      "adapter": "evidence",
+      "index": 8,
+      "operation": "evidence.scan_privacy",
+      "outcome": "passed",
+      "subject": "effect-evidence"
+    },
+    {
+      "adapter": "provider",
+      "index": 9,
+      "operation": "provider.inventory",
+      "outcome": "ambiguous",
+      "subject": "owned-resources"
+    }
+  ],
+  "authority_consumed": {
+    "launch_count": 1,
+    "model_metadata": true,
+    "provider_launch": "ambiguous-consumed",
+    "replacement_count": 0
+  },
+  "call_counts": {
+    "browser_actions": 0,
+    "condition_entries": 0,
+    "condition_reservations": 0,
+    "launch_calls": 1,
+    "metadata_requests": 1,
+    "model_call_attempts": 0,
+    "provider_gets": 2,
+    "provider_posts": 1,
+    "secret_reads": 1,
+    "termination_calls": 0,
+    "unknown_model_outcomes": 0
+  },
+  "cleanup": {
+    "privacy_clean": true,
+    "provider_resources_zero": null,
+    "resumed": false,
+    "security_restored": false,
+    "state": "complete"
+  },
+  "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "condition_identities_consumed": [],
+  "condition_identities_reserved": [],
+  "earliest_stopping_phase": "launch",
+  "effect_authority": "shadow-only",
+  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+  "evidence_retained": {
+    "classification": "shadow-control-plane-output",
+    "essential_failures": [],
+    "evaluator": [],
+    "finalized": [],
+    "pair_checkpoint_decision": null,
+    "pair_checkpoint_reasons": [],
+    "pair_checkpoint_sha256": null,
+    "raw": []
+  },
+  "fake_evidence_outputs": [],
+  "implementation_flavor": "production-wrapper",
+  "ordered_state_transitions": [
+    {
+      "index": 1,
+      "outcome": "passed",
+      "phase": "verify-exact-repository-package-identity"
+    },
+    {
+      "index": 2,
+      "outcome": "passed",
+      "phase": "offline-composition"
+    },
+    {
+      "index": 3,
+      "outcome": "passed",
+      "phase": "state-capsule-snapshot"
+    },
+    {
+      "detail": "validated-static-shadow-rehearsal",
+      "index": 4,
+      "outcome": "passed",
+      "phase": "shadow-rehearsal-receipt-validation"
+    },
+    {
+      "index": 5,
+      "outcome": "passed",
+      "phase": "local-staging"
+    },
+    {
+      "index": 6,
+      "outcome": "passed",
+      "phase": "secret-channel-qualification"
+    },
+    {
+      "index": 7,
+      "outcome": "passed",
+      "phase": "metadata-receipt"
+    },
+    {
+      "index": 8,
+      "outcome": "passed",
+      "phase": "provider-read-only-preflight"
+    },
+    {
+      "index": 9,
+      "outcome": "passed",
+      "phase": "final-metadata-freshness"
+    },
+    {
+      "detail": "provider launch acknowledgement is ambiguous",
+      "index": 10,
+      "outcome": "ambiguous",
+      "phase": "launch"
+    },
+    {
+      "index": 11,
+      "outcome": "passed",
+      "phase": "cleanup"
+    },
+    {
+      "index": 12,
+      "outcome": "unresolved",
+      "phase": "terminal-provider-security-verification"
+    }
+  ],
+  "production_control_evidence": {
+    "accounting": {
+      "aggregate_charged_upper_cost_usd": 0.0,
+      "aggregate_observed_cost_usd": 0.0,
+      "authority": "ProviderBudgetBoundary-real-time-event-observer",
+      "conditions": {},
+      "fake_usage": true,
+      "projected_real_cost_usd": 0.0,
+      "unique_call_ids": 0,
+      "zero_retries": true
+    },
+    "authority_consumption": {
+      "contains_private_overlay_contents": false,
+      "single_use": false,
+      "terminal_state": "shadow-only"
+    },
+    "authority_source": "validated-deterministic-production-effects",
+    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+    "cleanup_handoff_sha256": "4240baa87d838671f53209c0715e1193793fa443458c7a4a2d1daa3fdb6ad132",
+    "cleanup_receipt_sha256": "d5f50c8e719dac4f4a3fde9d6e82c23126719e9dbacd7987875868a2d66a24a6",
+    "cleanup_resume_byte_identical": true,
+    "cleanup_used_held_root_after_path_mismatch": false,
+    "effect_authority": "shadow-only",
+    "effect_implementation": {
+      "bytes": 100560,
+      "factory_entry_point": "build_deterministic_effects",
+      "path": "src/giclab/control/shadow_effects.py",
+      "protocol_version": "1.0.0",
+      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+    },
+    "effect_protocol_version": "1.0.0",
+    "essential_failures": {},
+    "evaluations": {},
+    "first_pair_checkpoint": null,
+    "held_evidence": {
+      "essential_failure": {},
+      "finalized": {},
+      "raw": {},
+      "revalidated_across_consumers": true
+    },
+    "held_transaction_root": {
+      "current_user_owned": true,
+      "descriptor_held_through_cleanup": true,
+      "device_inode_mode_mount_revalidated": true,
+      "group_world_write_absent": true,
+      "identity_derived_by_shared_code": true,
+      "no_symlink_path_components_validated": true,
+      "public_attestation_semantic_sha256": "acaa9f688fc4409739fed1c33841d77cda264c9c73dcf347bf3f9560452e5ad6",
+      "runtime_identity_values_retained": false
+    },
+    "host_receipts": {
+      "frozen_manifest": null,
+      "postfreeze_validation": null,
+      "qualification": null
+    },
+    "implementation_flavor": "production-wrapper",
+    "package_budget": {
+      "aggregate_caps": {
+        "max_browser_actions": 120,
+        "max_cached_input_tokens": 4000000,
+        "max_cost_usd": 40.0,
+        "max_input_tokens": 4000000,
+        "max_model_call_attempts": 4620,
+        "max_output_bytes": 2147483648,
+        "max_output_tokens": 4000000,
+        "max_total_tokens": 4000000,
+        "max_wall_seconds": 14400
+      },
+      "attempt_order": [
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+      ],
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "condition_caps": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        }
+      },
+      "condition_plan_sha256s": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "8c0b447b794853e9f69fe9fc665cde632e3c4d0aa9a99a4346d46f345aaf20bf",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "30515859c919b5dd62a821b57efeb39135760c059ee9a05fbe1c6d54b269ca1c",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "6a3bc1f4775bc27dcb8aaa19770ce43a72e03da0a7466a8eba978121a2d6170d",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "081af4f0f0477f529b06df136a72042dd792508af33adb3a34bf31d7e3959378"
+      },
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "model_revision": "gpt-4o-2024-11-20",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "service_tier": "default",
+      "zero_retry": true
+    },
+    "package_staging": {
+      "archive_bytes": 194560,
+      "archive_member_count": 11,
+      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "host_acknowledgement_sha256": "331e343f966ccac051d127ab7031b02d08cca4f55a353ed983a2588a4ef5d0f0",
+      "host_rehash_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
+      "package_source": "working-tree",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "tracked_only": true
+    },
+    "production_primitives": [
+      "admit_model_metadata_receipt_at_prelaunch_boundary",
+      "bind_model_metadata_receipt_to_authorization_overlay",
+      "create_model_metadata_receipt",
+      "immutable_cleanup_export_handoff",
+      "load_execution_contract",
+      "load_openai_dotenv_assignment",
+      "privacy_violations:held-descriptor",
+      "resolve_registered_command_package",
+      "stage_verified_archive",
+      "validate_campaign_launch_projection",
+      "validate_cleanup_execution_receipt",
+      "validate_model_metadata_receipt:durable-offline",
+      "validate_tracked_package_archive"
+    ],
+    "provider_cost_receipt": null,
+    "provider_lifecycle_cost_proof": null,
+    "raw_export_acknowledgements": {},
+    "replacement_history": {
+      "closed_launch_slots": [],
+      "normalization_handler": "_normalize_provider_entry_replacement_authority",
+      "termination_failures": 0
+    },
+    "resolved_consumers": {
+      "authorization_policy_resolver": "authority:metadata-bound-single-use-v1",
+      "cleanup_handler": "cleanup:empirical-prefix-v1",
+      "command_package_loader": "command-package:registered-autonomous-v1",
+      "control_root_resolver": "control-root:versioned",
+      "lifecycle_resolver": "campaign-lifecycle:autonomous-campaign",
+      "metadata_controller": "model-metadata-receipt:strict-local-prelaunch-v1",
+      "package_effect_loader": "not-applicable",
+      "package_transition_resolver": "not-applicable",
+      "provider_selector_resolver": "provider-selector:explicit-contract-argument-v1",
+      "replacement_authority_handler": "provider-entry-authority:normalized-history-v1",
+      "stage_identity_resolver": "stage-identity:typed-provider-v1"
+    },
+    "runtime_clock": {
+      "domains_separate": true,
+      "monotonic_samples": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0
+      ],
+      "sleep_calls": [],
+      "wall_samples": [
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0
+      ]
+    }
+  },
+  "projected_cost_usd": "0.00",
+  "provider_contract_version": "V16",
+  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "scenario": "ambiguous-provider-call-outcome",
+  "scenario_valid": true,
+  "schema_version": "1.0.0",
+  "scientific_attempt_consumption": {
+    "count": 0,
+    "run_ids": []
+  },
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "12c846d097d22ed93169f5c9fcf4cc27f5b7bdf21d78f51e41beba9e76e3c659",
+  "shadow_only": true,
+  "stop_reason": "provider launch acknowledgement is ambiguous",
+  "terminal_state": "category3-shadow-stopped-cleanup-unresolved",
+  "undeclared_adapter_calls": [],
+  "zero_undeclared_calls": true
+}

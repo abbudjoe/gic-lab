@@ -22,6 +22,7 @@ CENTRAL_PROVIDER_REGISTRY: Final = "src/giclab/harness/t09_provider_contracts.py
 ACTIVE_CONTRACT_SELECTION_ROOT: Final = "src/giclab/control/"
 ACTIVE_SELECTION_TEXT_PATHS: Final = ("Makefile", ".github/workflows/ci.yml")
 _FIXED_SELECTOR: Final = re.compile(r"--provider-contract(?:=|\s+)[\"']?(V[0-9]+)\b")
+_FIXED_RECEIPT_ROOT: Final = re.compile(r"control/receipts/packages/v[1-9][0-9]*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -257,7 +258,23 @@ def lint_source(source: str, *, relative_path: str) -> tuple[VersionDispatchFind
     tree = ast.parse(source, filename=relative_path)
     visitor = _Visitor(relative=relative_path, lines=source.splitlines())
     visitor.visit(tree)
-    return tuple(visitor.findings)
+    findings = list(visitor.findings)
+    for matched in _FIXED_RECEIPT_ROOT.finditer(source):
+        line = source.count("\n", 0, matched.start()) + 1
+        previous = source.rfind("\n", 0, matched.start())
+        findings.append(
+            VersionDispatchFinding(
+                path=relative_path,
+                line=line,
+                column=matched.start() - previous,
+                code="T09V009",
+                message=(
+                    "active shared source selects a literal package receipt root; "
+                    "derive it from SelectedRuntimeTarget"
+                ),
+            )
+        )
+    return tuple(findings)
 
 
 def lint_active_selection_text(
@@ -280,6 +297,19 @@ def lint_active_selection_text(
                     message=(
                         "aggregate command selects a literal provider contract; "
                         "use goal-compatible target resolution"
+                    ),
+                )
+            )
+        for receipt_root in _FIXED_RECEIPT_ROOT.finditer(line):
+            findings.append(
+                VersionDispatchFinding(
+                    path=relative_path,
+                    line=line_number,
+                    column=receipt_root.start() + 1,
+                    code="T09V009",
+                    message=(
+                        "active aggregate command selects a literal package receipt root; "
+                        "derive it from SelectedRuntimeTarget"
                     ),
                 )
             )

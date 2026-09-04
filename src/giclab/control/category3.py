@@ -23,9 +23,13 @@ from giclab.control.adapters import (
     AmbiguousProviderOutcome,
     Category3Adapters,
     CleanupInterrupted,
+    ConsumedConditionFailure,
     EffectAuthorityKind,
+    FirstPairCheckpointDisposition,
     MetadataEnvelope,
+    PrivacyUnresolved,
     ProviderHandle,
+    ReplacementEligibleFailure,
     StructuralPrivacyFinding,
     TerminationUnavailable,
 )
@@ -94,6 +98,7 @@ class PreparedCategory3:
     composition_sha256: str
     state_capsule_sha256: str
     stage_sha256: str
+    effect_authorization_context_sha256: str
     shadow_prerequisite_policy: str
     shadow_receipt_sha256s: tuple[str, ...]
     validated_receipts: ValidatedControlReceiptSet | None
@@ -180,12 +185,21 @@ def prepare_category3(
     """Run every deterministic prerequisite and mint the sole effect token."""
 
     transitions: list[dict[str, object]] = []
-    if adapters.authority.kind not in {
-        EffectAuthorityKind.SHADOW_ONLY,
-        EffectAuthorityKind.LIVE_AUTHORIZED,
-    } or not adapters.authority.authorizes(
-        contract_version=request.contract.version,
-        control_revision=request.expected_repository_commit,
+    context = adapters.authorization_context
+    if (
+        adapters.authority.kind
+        not in {
+            EffectAuthorityKind.SHADOW_ONLY,
+            EffectAuthorityKind.LIVE_AUTHORIZED,
+        }
+        or context.authority_kind is not adapters.authority.kind
+        or context.provider_contract_version != request.contract.version
+        or context.plan_id != request.contract.plan_id
+        or context.plan_sha256 != request.contract.expected_plan_sha256
+        or context.command_package_sha256 != request.contract.expected_command_manifest_sha256
+        or context.control_commit != request.expected_repository_commit
+        or context.control_tree != request.expected_repository_tree
+        or not adapters.authority.authorizes(context)
     ):
         _transition(
             transitions,
@@ -268,6 +282,7 @@ def prepare_category3(
             )
             proof_policy = "validated-control-receipt-binding"
             command_package_sha256 = validated_receipts.command_package_sha256
+            control_binding_semantic_sha256 = validated_receipts.binding_semantic_sha256
         elif isinstance(proof, ValidatedShadowRehearsal):
             if (
                 not proof.is_valid()
@@ -281,6 +296,7 @@ def prepare_category3(
             receipt_hashes = ()
             proof_policy = "validated-static-shadow-rehearsal"
             command_package_sha256 = proof.staging.command_package_sha256
+            control_binding_semantic_sha256 = proof.staging.semantic_sha256
         else:  # pragma: no cover - typed request exhaustiveness guard
             raise ControlProofError("control proof type is unsupported")
     except (ControlProofError, OSError, ValueError) as exc:
@@ -298,6 +314,23 @@ def prepare_category3(
             f"control proof validation failed: {exc}",
         )
     _transition(transitions, Category3Phase.STATE_CAPSULE, "passed")
+    if (
+        command_package_sha256 != context.command_package_sha256
+        or control_binding_semantic_sha256 != context.control_binding_semantic_sha256
+    ):
+        _transition(
+            transitions,
+            Category3Phase.SHADOW_RECEIPTS,
+            "failed",
+            detail="effect authority does not bind the validated control proof",
+        )
+        return PreparationOutcome(
+            None,
+            composition,
+            tuple(transitions),
+            Category3Phase.SHADOW_RECEIPTS.value,
+            "effect authorization context drifted from the validated proof",
+        )
     _transition(
         transitions,
         Category3Phase.SHADOW_RECEIPTS,
@@ -350,6 +383,11 @@ def prepare_category3(
     object.__setattr__(prepared, "composition_sha256", str(composition["semantic_sha256"]))
     object.__setattr__(prepared, "state_capsule_sha256", state_capsule_sha256)
     object.__setattr__(prepared, "stage_sha256", stage_sha256)
+    object.__setattr__(
+        prepared,
+        "effect_authorization_context_sha256",
+        context.semantic_sha256,
+    )
     object.__setattr__(prepared, "shadow_prerequisite_policy", proof_policy)
     object.__setattr__(prepared, "shadow_receipt_sha256s", receipt_hashes)
     object.__setattr__(prepared, "validated_receipts", validated_receipts)
@@ -384,7 +422,10 @@ class _TransactionState:
     raw_evidence: list[str] = field(default_factory=list)
     finalized_evidence: list[str] = field(default_factory=list)
     evaluator_outputs: list[str] = field(default_factory=list)
+    essential_failures: list[dict[str, object]] = field(default_factory=list)
     pair_checkpoint_sha256: str | None = None
+    pair_checkpoint_decision: str | None = None
+    pair_checkpoint_reasons: tuple[str, ...] = ()
     cleanup_state: str = "not-started"
     cleanup_resumed: bool = False
     provider_resources_zero: bool | None = None
@@ -461,6 +502,9 @@ def _result_document(
         "scenario": request.scenario,
         "implementation_flavor": adapters.implementation_flavor.value,
         "effect_authority": adapters.authority.kind.value,
+        "effect_authorization_context_sha256": (
+            adapters.authorization_context.public_semantic_sha256
+        ),
         "provider_contract_version": request.contract.version,
         "repository_commit": request.expected_repository_commit,
         "repository_tree": request.expected_repository_tree,
@@ -486,6 +530,9 @@ def _result_document(
             "finalized": state.finalized_evidence,
             "evaluator": state.evaluator_outputs,
             "pair_checkpoint_sha256": state.pair_checkpoint_sha256,
+            "pair_checkpoint_decision": state.pair_checkpoint_decision,
+            "pair_checkpoint_reasons": list(state.pair_checkpoint_reasons),
+            "essential_failures": state.essential_failures,
             "classification": (
                 "shadow-control-plane-output" if shadow_only else "live-control-plane-output"
             ),
@@ -510,6 +557,18 @@ def _result_document(
     document["fake_evidence_outputs" if shadow_only else "effect_evidence_outputs"] = (
         state.effect_evidence
     )
+    # Validate serialization before irreversibly terminalizing the single-use grant.
+    _canonical_sha256(document)
+    authority_consumption = adapters.diagnostics.terminalize_authority(
+        complete=(
+            state.cleanup_state in {"complete", "not-required"}
+            and state.provider_resources_zero is True
+            and state.privacy_clean
+            and state.security_restored
+        )
+    )
+    production_evidence["authority_consumption"] = dict(authority_consumption)
+    document["production_control_evidence"] = production_evidence
     document["semantic_sha256"] = _canonical_sha256(document)
     return document
 
@@ -577,9 +636,20 @@ def _establish_provider(
         )
         failed_phase: Category3Phase | None = None
         failed_reason = ""
+        replacement_eligible = False
         try:
             adapters.provider_transport.provider_entry(handle)
             _transition(state.transitions, Category3Phase.PROVIDER_ENTRY, "passed")
+        except ReplacementEligibleFailure as exc:
+            failed_phase = Category3Phase.PROVIDER_ENTRY
+            failed_reason = str(exc)
+            replacement_eligible = True
+            _transition(
+                state.transitions,
+                Category3Phase.PROVIDER_ENTRY,
+                "failed",
+                detail=failed_reason,
+            )
         except AdapterFailure as exc:
             failed_phase = Category3Phase.PROVIDER_ENTRY
             failed_reason = str(exc)
@@ -593,6 +663,16 @@ def _establish_provider(
             try:
                 adapters.host_runtime.preflight(handle)
                 _transition(state.transitions, Category3Phase.HOST_PREFLIGHT, "passed")
+            except ReplacementEligibleFailure as exc:
+                failed_phase = Category3Phase.HOST_PREFLIGHT
+                failed_reason = str(exc)
+                replacement_eligible = True
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PREFLIGHT,
+                    "failed",
+                    detail=failed_reason,
+                )
             except AdapterFailure as exc:
                 failed_phase = Category3Phase.HOST_PREFLIGHT
                 failed_reason = str(exc)
@@ -615,7 +695,9 @@ def _establish_provider(
             state.stop(failed_phase, f"{failed_reason}; replacement absence is unverified")
             return
         replacement_allowed = (
-            request.contract.capabilities.replacement_policy is ReplacementPolicy.BOUNDED_PREFLIGHT
+            replacement_eligible
+            and request.contract.capabilities.replacement_policy
+            is ReplacementPolicy.BOUNDED_PREFLIGHT
             and launch_ordinal < max_launches
         )
         if not replacement_allowed:
@@ -710,6 +792,40 @@ def _run_conditions(
             )
             if not run_output:
                 raise AdapterFailure("empty fake condition output")
+        except ConsumedConditionFailure as exc:
+            record = exc.record
+            state.essential_failures.append(
+                {
+                    "run_id": record.run_id,
+                    "stopping_phase": record.stopping_phase,
+                    "failure_class": record.failure_class,
+                    "manifest_sha256": record.manifest_sha256,
+                    "receipt_sha256": record.receipt_sha256,
+                    "export_receipt_sha256": record.export_receipt_sha256,
+                    "essential_file_count": record.essential_file_count,
+                    "essential_total_bytes": record.essential_total_bytes,
+                    "evidence_binding_sha256": record.evidence_binding_sha256,
+                    "infrastructure_invalid": True,
+                    "unscored": True,
+                }
+            )
+            state.effect_evidence.append(
+                {
+                    "run_id": record.run_id,
+                    "kind": "essential-infrastructure-failure",
+                    "sha256": record.evidence_binding_sha256,
+                    "shadow_only": adapters.authority.kind is EffectAuthorityKind.SHADOW_ONLY,
+                }
+            )
+            failure_phase = Category3Phase(record.stopping_phase)
+            _transition(
+                state.transitions,
+                failure_phase,
+                "essential-failure-sealed",
+                detail=f"{run_id}: {record.failure_class}",
+            )
+            state.stop(failure_phase, str(exc))
+            return
         except AdapterFailure as exc:
             operation = adapters.audit.calls[-1].operation if adapters.audit.calls else ""
             phase = {
@@ -736,8 +852,24 @@ def _run_conditions(
                 )
                 state.stop(Category3Phase.PAIR_CHECKPOINT, str(exc))
                 return
-            state.pair_checkpoint_sha256 = checkpoint
-            _transition(state.transitions, Category3Phase.PAIR_CHECKPOINT, "passed")
+            state.pair_checkpoint_sha256 = checkpoint.decision_sha256
+            state.pair_checkpoint_decision = checkpoint.disposition.value
+            state.pair_checkpoint_reasons = checkpoint.reasons
+            if checkpoint.disposition is FirstPairCheckpointDisposition.STOP:
+                detail = ", ".join(checkpoint.reasons) or "retained checkpoint stopped"
+                _transition(
+                    state.transitions,
+                    Category3Phase.PAIR_CHECKPOINT,
+                    FirstPairCheckpointDisposition.STOP.value,
+                    detail=detail,
+                )
+                state.stop(Category3Phase.PAIR_CHECKPOINT, detail)
+                return
+            _transition(
+                state.transitions,
+                Category3Phase.PAIR_CHECKPOINT,
+                FirstPairCheckpointDisposition.CONTINUE.value,
+            )
 
 
 def _cleanup(
@@ -778,6 +910,24 @@ def _cleanup(
     except StructuralPrivacyFinding as exc:
         state.privacy_clean = False
         _transition(state.transitions, Category3Phase.CLEANUP, "privacy-blocked", detail=str(exc))
+        state.stop(Category3Phase.CLEANUP, str(exc))
+    except PrivacyUnresolved as exc:
+        state.privacy_clean = False
+        _transition(
+            state.transitions,
+            Category3Phase.CLEANUP,
+            "privacy-unresolved-path-identity-changed",
+            detail=str(exc),
+        )
+        state.stop(Category3Phase.CLEANUP, str(exc))
+    except AdapterFailure as exc:
+        state.privacy_clean = False
+        _transition(
+            state.transitions,
+            Category3Phase.CLEANUP,
+            "privacy-unresolved",
+            detail=str(exc),
+        )
         state.stop(Category3Phase.CLEANUP, str(exc))
 
     if state.handle is not None:
@@ -821,13 +971,13 @@ def _cleanup(
     )
 
 
-def execute_category3_transaction(
+def _execute_category3_transaction_body(
     request: Category3Request,
     *,
     adapters: Category3Adapters,
     composition_builder: CompositionBuilder = _default_composition_builder,
 ) -> dict[str, object]:
-    """Execute the shared transaction with a validated injected effect authority."""
+    """Execute the state machine while the public wrapper owns final release."""
 
     preparation = prepare_category3(
         request,
@@ -930,3 +1080,27 @@ def execute_category3_transaction(
 
     _cleanup(adapters, state)
     return _result_document(request, adapters, preparation, state)
+
+
+def execute_category3_transaction(
+    request: Category3Request,
+    *,
+    adapters: Category3Adapters,
+    composition_builder: CompositionBuilder = _default_composition_builder,
+) -> dict[str, object]:
+    """Execute one transaction and terminalize/release every held resource on exit."""
+
+    try:
+        return _execute_category3_transaction_body(
+            request,
+            adapters=adapters,
+            composition_builder=composition_builder,
+        )
+    finally:
+        try:
+            adapters.diagnostics.terminalize_authority(complete=False)
+        except (AdapterFailure, OSError, ValueError):
+            # A damaged durable authority state remains non-replayable by validation.
+            pass
+        finally:
+            adapters.diagnostics.release_resources()

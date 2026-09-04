@@ -1,0 +1,99 @@
+{
+  "affected_abstraction": [
+    "shared-control/essential-failure-held-size-admission",
+    "shared-control/successor-public-topology-selection"
+  ],
+  "authority_consumed": "none",
+  "cost_usd": "0.00",
+  "coverage": [
+    "offline-composition",
+    "shadow-execution",
+    "target-resolution"
+  ],
+  "earliest_detectable_stage": "third exact-head live-boundary rereview",
+  "failed_invariant": "complete essential envelopes must be admitted from held descriptor metadata and public topology validation must follow the selected target while preserving every sealed historical root",
+  "immutable_facts": {
+    "authority_consumed": "none",
+    "cost_usd": "0.00",
+    "earliest_detectable_stage": "third exact-head live-boundary rereview",
+    "live_environment_required": false,
+    "repair": "held-first descriptor-size admission and selected-target sealed-root topology validation",
+    "review_disposition": "CHANGES REQUIRED — NOT APPROVED",
+    "review_id": 5101177903,
+    "reviewed_head": "b73acefd41bf129a7e0264b93995b36249bc0270",
+    "reviewed_tree": "0038a556c54e2fc95362a78c71914281f8dad28c",
+    "root_causes": [
+      "complete-envelope member and aggregate caps were decided from pathname metadata before held descriptors were opened",
+      "public topology validation hard-coded the V16 receipt root and scanned only JSON pathnames rather than the selected and retained bound inventories"
+    ]
+  },
+  "immutable_facts_sha256": "ee4f037e9b29fd7c2def72d7acf251db54a338b296f1712c6bb21ccb88ce6d69",
+  "incident_id": "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "b73acefd41bf129a7e0264b93995b36249bc0270",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_essential_bundle_one_byte_over_cap_fails_closed"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_complete_envelope_totals_cross_bind_every_retained_projection"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_roots"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_anti_shadow_declared_marker_exception_does_not_hide_another_field"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_restored_selected_v17_and_retained_v16_topology_both_validate"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_version_lint.py::test_literal_package_receipt_root_fails"
+    }
+  ],
+  "repair": "held-first-envelope-and-selected-target-public-topology",
+  "root_cause": "pathname size checks preceded held opens and the public topology gate selected V16 literally while omitting non-JSON bound members",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "not-run",
+  "stage": "third exact-head live-boundary rereview",
+  "status": "resolved"
+}

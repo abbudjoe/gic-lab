@@ -16,6 +16,7 @@ from typing import Final
 import yaml
 from jsonschema import Draft202012Validator
 
+from giclab.control.effects import validate_package_effect_registration
 from giclab.control.registry_validation import resolve_registered_command_package
 from giclab.harness import t09_provider_contracts as provider_contracts
 from giclab.harness.t09_provider_contracts import (
@@ -474,6 +475,16 @@ def _resolve_selected_runtime_target(
             or successor_contract.version != successor
         ):
             raise TargetSelectionError("package-bound successor is not exactly registered")
+        try:
+            effect_identity = validate_package_effect_registration(root, successor_contract)
+        except ValueError as exc:
+            raise TargetSelectionError(
+                "package-bound successor effect declaration is invalid"
+            ) from exc
+        if effect_identity is None:
+            raise TargetSelectionError(
+                "package-bound successor lacks its package-specific effect declaration"
+            )
         selected_contract = successor_contract
         selected_status = status
 

@@ -1891,6 +1891,11 @@ def test_retry5_oversized_tree_gets_private_essential_failure_seal(
             restoration_commit=None,
         )
     )
+    if failed_index >= 2:
+        source_checkpoint = state_path.parent / "first-pair-checkpoint-decision.json"
+        restored_checkpoint = restored_root / "pilot-v7/first-pair-checkpoint-decision.json"
+        assert restored_checkpoint.read_bytes() == source_checkpoint.read_bytes()
+        assert host.file_sha256(restored_checkpoint) == host.file_sha256(source_checkpoint)
     verification_path = inbound / f"{run_id}-export-verification.json"
     uploaded_acknowledgement = tmp_path / f"uploaded-{run_id}-verification.json"
     uploaded_acknowledgement.write_bytes(verification_path.read_bytes())

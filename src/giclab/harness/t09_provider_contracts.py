@@ -149,6 +149,41 @@ class T09ContractCapabilities:
 
 
 @dataclass(frozen=True, slots=True)
+class PackageEffectRegistration:
+    """Exact package-owned live-effect declaration; it never grants authority."""
+
+    implementation_path: str
+    implementation_bytes: int
+    implementation_sha256: str
+    factory_entry_point: str
+    authority_grant_schema_version: str
+    effect_protocol_version: str
+
+    def __post_init__(self) -> None:
+        path = PurePosixPath(self.implementation_path)
+        if (
+            not self.implementation_path
+            or path.is_absolute()
+            or ".." in path.parts
+            or path.as_posix() != self.implementation_path
+        ):
+            raise T09ProviderContractError("package effect path is unsafe")
+        if (
+            type(self.implementation_bytes) is not int
+            or not 0 < self.implementation_bytes <= 2_000_000
+        ):
+            raise T09ProviderContractError("package effect byte identity is invalid")
+        if _HEX64.fullmatch(self.implementation_sha256) is None:
+            raise T09ProviderContractError("package effect SHA-256 is malformed")
+        if _SAFE_ID.fullmatch(self.factory_entry_point) is None:
+            raise T09ProviderContractError("package effect factory is malformed")
+        if self.authority_grant_schema_version != "1.0.0":
+            raise T09ProviderContractError("package effect authority schema is unsupported")
+        if self.effect_protocol_version != "1.0.0":
+            raise T09ProviderContractError("package effect protocol is unsupported")
+
+
+@dataclass(frozen=True, slots=True)
 class T09ProviderContract:
     """One immutable provider/authority surface from a retained T09 version."""
 
@@ -192,6 +227,7 @@ class T09ProviderContract:
     campaign_openai_cost_cap_usd: float
     campaign_aggregate_cost_cap_usd: float
     cumulative_t09_cost_cap_usd: float
+    effect_registration: PackageEffectRegistration | None = None
 
     def __post_init__(self) -> None:
         identifiers = (

@@ -1,0 +1,137 @@
+{
+  "complete": true,
+  "incident_count": 6,
+  "incidents": [
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+      "path": "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
+      "regression_nodes": [
+        "tests/control/test_target_selection.py::test_current_goal_selects_exact_v16_target",
+        "tests/control/test_target_selection.py::test_synthetic_package_bound_successor_selects_v17_without_shared_edits",
+        "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation",
+        "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
+      ],
+      "regression_output": "....                                                                     [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
+      "path": "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json",
+      "regression_nodes": [
+        "tests/control/test_checkpoint_review_repair.py::test_both_task_a_attempts_scored_zero_may_continue",
+        "tests/control/test_checkpoint_review_repair.py::test_task_a_invalid_evidence_stops_before_task_b",
+        "tests/control/test_checkpoint_review_repair.py::test_retained_first_pair_decision_enforces_every_stop_gate",
+        "tests/control/test_checkpoint_review_repair.py::test_shared_checkpoint_cannot_continue_without_retained_first_pair_decision",
+        "tests/control/test_essential_failure_evidence.py::test_every_post_entry_failure_is_sealed_exported_unscored_and_zero_retry",
+        "tests/control/test_essential_failure_evidence.py::test_nonzero_exit_with_completed_answer_is_infrastructure_invalid",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted",
+        "tests/control/test_essential_failure_evidence.py::test_interrupted_failure_export_resumes_from_identical_sealed_source",
+        "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[False-2]",
+        "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[True-2]",
+        "tests/control/test_live_authority_transaction.py::test_first_valid_private_overlay_mints_one_opaque_single_use_proof",
+        "tests/control/test_live_authority_transaction.py::test_effect_and_metadata_authority_split_stops_before_metadata_send",
+        "tests/control/test_live_authority_transaction.py::test_provider_launch_authority_split_stops_before_post",
+        "tests/control/test_live_authority_transaction.py::test_validator_replay_and_second_campaign_fail",
+        "tests/control/test_held_identity_boundaries.py::test_same_size_effect_source_replacement_before_load_is_rejected",
+        "tests/control/test_held_identity_boundaries.py::test_effect_source_replacement_during_factory_is_rejected",
+        "tests/control/test_held_identity_boundaries.py::test_transaction_root_itself_or_parent_symlink_is_rejected",
+        "tests/control/test_held_identity_boundaries.py::test_symlink_hardlink_swap_or_mutation_never_reaches_scientific_acceptance",
+        "tests/control/test_live_effect_conformance.py::test_live_shaped_checkpoint_authority_and_held_identity_repairs",
+        "tests/control/test_live_effect_conformance.py::test_live_shaped_review_failure_subreceipts_are_complete"
+      ],
+      "regression_output": ".....................................................                    [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY",
+      "path": "control/incidents/INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
+      "regression_nodes": [
+        "tests/control/test_checkpoint_review_repair.py::test_pair_checkpoint_requires_explicit_scored_and_finalizer_evidence",
+        "tests/control/test_checkpoint_review_repair.py::test_self_consistent_effect_receipt_cannot_understate_or_rewrite_lifecycle_truth",
+        "tests/control/test_checkpoint_review_repair.py::test_retained_provider_source_mutation_stops_before_task_b",
+        "tests/control/test_checkpoint_review_repair.py::test_omitted_closed_replacement_slot_stops_before_task_b",
+        "tests/control/test_checkpoint_review_repair.py::test_checkpoint_receives_only_the_exact_shared_derived_provider_cost",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted",
+        "tests/control/test_essential_failure_evidence.py::test_every_essential_envelope_member_has_a_finite_size_cap",
+        "tests/control/test_essential_failure_evidence.py::test_essential_envelope_rejects_noncanonical_extensions_and_private_fields",
+        "tests/control/test_held_identity_boundaries.py::test_full_live_shaped_controller_terminalizes_after_root_path_replacement",
+        "tests/control/test_held_identity_boundaries.py::test_full_controller_terminalizes_and_releases_after_terminal_validation_failure",
+        "tests/control/test_held_identity_boundaries.py::test_terminal_result_construction_failure_still_closes_every_held_descriptor",
+        "tests/control/test_held_identity_boundaries.py::test_public_shadow_receipt_is_stable_across_fresh_transaction_roots",
+        "tests/control/test_live_effect_conformance.py::test_public_receipt_topology_injection_is_rejected"
+      ],
+      "regression_output": "......................................                                   [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
+      "path": "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json",
+      "regression_nodes": [
+        "tests/control/test_live_effect_conformance.py::test_live_shaped_package_effect_conformance_is_schema_valid",
+        "tests/control/test_live_effect_conformance.py::test_anti_shadow_lint_inventory_and_mutations",
+        "tests/control/test_effect_runtime_seams.py::test_noncanonical_parser_credential_reaches_injected_channel_and_is_destroyed",
+        "tests/control/test_effect_runtime_seams.py::test_plan_and_condition_budgets_reject_drift_and_cross_substitution",
+        "tests/control/test_package_effect_loader.py::test_exact_package_effect_factory_loads_and_builds_production_assembly",
+        "tests/control/test_package_effect_loader.py::test_live_grant_rejects_every_changed_authorization_binding",
+        "tests/control/test_production_coupling.py::test_post_export_raw_mutation_stops_before_effect_finalizer",
+        "tests/control/test_production_coupling.py::test_effect_produced_answer_changes_retained_evaluator_output"
+      ],
+      "regression_output": "....................                                                     [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY",
+      "path": "control/incidents/INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
+      "regression_nodes": [
+        "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed",
+        "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate",
+        "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted",
+        "tests/control/test_essential_failure_evidence.py::test_essential_bundle_one_byte_over_cap_fails_closed",
+        "tests/control/test_essential_failure_evidence.py::test_complete_envelope_totals_cross_bind_every_retained_projection",
+        "tests/control/test_historical_receipts.py::test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_roots",
+        "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected",
+        "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned",
+        "tests/control/test_historical_receipts.py::test_anti_shadow_declared_marker_exception_does_not_hide_another_field",
+        "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra",
+        "tests/control/test_historical_receipts.py::test_restored_selected_v17_and_retained_v16_topology_both_validate",
+        "tests/control/test_version_lint.py::test_literal_package_receipt_root_fails"
+      ],
+      "regression_output": "..................                                                       [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-V16-LIFECYCLE-REGISTRY",
+      "path": "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+      "regression_nodes": [
+        "tests/control/test_production_coupling.py::test_registered_active_contract_reaches_production_adapter_assembly",
+        "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access",
+        "tests/control/test_category3_shadow.py::test_lifecycle_omission_stops_before_every_external_boundary"
+      ],
+      "regression_output": "...                                                                      [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
+    }
+  ],
+  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "schema_version": "1.0.0",
+  "semantic_sha256": "3f220e26cb9878c8eea333519a4d7e06b51e2e3ac9731414930dabb7e350d2a0"
+}

@@ -38,6 +38,46 @@ low-level effects under those wrappers. A pure fake world may support narrow uni
 tests, but it cannot produce tracked control evidence. This change mints only
 shadow-only authority and contains no live low-level implementation.
 
+The post-merge package boundary audit showed that wrapping production primitives was
+not sufficient: shared production source still selected fake credentials, advanced a
+synthetic clock, built fixture stage/freeze data, forced one CRITIC call with fixed
+caps, synthesized raw/finalizer identities, replaced condition answers, branched on a
+fake scenario, and authorized only a contract version/revision pair. Those were
+shared control-plane defects because a package effect could not perform the real
+transaction without hiding work or changing shared source.
+
+Therefore the production assembly now depends on typed effect-neutral interfaces.
+One injected `RuntimeClock` supplies separate monotonic, wall-time, and sleep domains;
+one `ModelMetadataChannel` receives the exact mutable credential selected by the
+strict parser; exact package documents supply budgets and command/session identity;
+and typed stage, preflight, qualification, freeze, condition, raw, finalizer,
+evaluator, and cleanup receipts are validated against their requests. The
+authoritative condition accountant is Option A: the production wrapper's real-time
+event observer applies `ProviderBudgetBoundary` as calls and actions occur, then
+reconciles the file-backed effect outcome. An effect may not install a competing
+authoritative ledger.
+
+Replacement authority is equally explicit: only a validated retained pre-empirical
+closeout produces the typed replacement-eligible failure consumed by the controller.
+Generic transport, effect, and receipt-validation failures cannot spend the bounded
+replacement slot.
+
+Deterministic credentials, time, traces, answers, and failure plans live only in
+`shadow_effects.py`; public CI still drives the same controller and production
+assembly. The complete base assumption inventory and zero-finding shared-source scan
+are sealed in the anti-shadow receipt. A temporary no-network package module proves
+the exact loader, externally supplied test grant, multi-event sessions, raw-to-
+finalizer-to-evaluator chain, cleanup, zero real cost, and unchanged shared-source byte
+map. It creates no tracked V17 identity.
+
+Live authority is a full `EffectAuthorizationContext`, not a version switch. It binds
+control commit/tree, contract, plan and command package, control-proof semantic hash,
+exact effect implementation path/bytes/SHA/factory/protocol, transaction root, and
+external authorization reference/source hash. Shared code can mint only shadow
+authority. A live grant and live effects may exist only in the future package module,
+and the central loader imports its sole declared factory only after every byte and
+grant binding passes.
+
 Resolve one frozen `SelectedRuntimeTarget` before every aggregate control gate. The
 resolver reads the machine goal, enforces an exact consecutive successor and one of
 the two non-authorizing package states, validates the selected package's exact plan
@@ -78,10 +118,92 @@ A later reviewed package-only PR may add one declarative V17 provider contract,
 update the goal to `package-bound-not-authorized`, add V17 package data, provide
 package-specific reviewed live low-level effects, supply a package-specific
 externally validated authority grant, and seal V17 receipts. It must not change
-`agent_check.py`, `cli.py`, `category3.py`, `production.py`, `proofs.py`,
-`composition.py`, `consumers.py`, `registry_validation.py`, `shadow.py`,
-`state_capsule.py`, `target.py`, the shared controller, or validated-proof
-architecture. The package-only allowlist excludes `version_lint.py`, `Makefile`, and
-`.github/workflows/ci.yml` as well. It also must not introduce a second controller,
-infer authority from Git, or reuse the stopped V16 metadata/authorization reference.
-Needing a prohibited shared change returns the work to a separate Category 1 repair.
+`adapters.py`, `agent_check.py`, `anti_shadow_lint.py`, `category3.py`, `cli.py`,
+`composition.py`, `consumers.py`, `contracts.py`, `effects.py`,
+`live_conformance.py`, `production.py`, `proofs.py`, `registry_validation.py`,
+`shadow.py`, `shadow_effects.py`, `state_capsule.py`, `target.py`, the shared
+controller, effect protocol, or validated-proof architecture. The package-only
+allowlist excludes `version_lint.py`, `Makefile`, and `.github/workflows/ci.yml` as
+well. It also must not introduce a second controller, infer authority from Git, or
+reuse the stopped V16 metadata/authorization reference. Needing a prohibited shared
+change returns the work to a separate Category 1 repair.
+
+## Exact-head review amendment: checkpoint, failure evidence, authority, and identity
+
+Review 5088727234 showed that effect-neutral interfaces alone were insufficient. The
+controller could still bypass the retained first-pair policy, infrastructure failures
+could lose essential evidence, live authorization could split across phases, and
+validated filesystem paths could be replaced before use.
+
+This ADR therefore adds four decisions:
+
+1. `t09_sira_pilot.first_pair_decision` is the sole Task A continuation policy. The
+   production wrapper derives every input from retained evidence and package budgets;
+   the controller consumes its typed continue/stop result. A policy stop is not an
+   infrastructure exception.
+2. Any post-entry infrastructure failure is a consumed typed transaction. Bounded
+   essential evidence must be sealed, exported, and acknowledged before a clean
+   evidence stop can be claimed. Nonzero exits are always unscored.
+3. One opaque validator-minted, external, single-use authorization transaction binds
+   effect loading, metadata, provider launch, cleanup, and terminal consumption. The
+   selected provider contract validates the reference and source. Structural or
+   equality-returning grant objects are not authority.
+4. Effect source, transaction root, and downstream artifacts use held descriptors and
+   exact byte/inode identities across use. Pathname resolution is not a security
+   identity. Descriptors are released only after terminal evidence is complete.
+
+The conformance receipt publishes deterministic redacted attestations for runtime-only
+inode and private authorization identities, while the runtime validator retains and
+cross-checks the exact values. This keeps equivalent receipt trees byte-identical and
+does not turn repository evidence into live authority.
+
+The amendment preserves Option A accounting: the production wrapper's real-time event
+observer remains the only authoritative condition accountant. It also preserves all
+EXP-0001 science, ordering, retry, cost, and descriptive-only interpretation
+contracts. No live execution or V17 artifact is part of this decision.
+
+## Second exact-head rereview amendment
+
+Review 5097085114 establishes four additional decisions:
+
+1. Provider cost is policy evidence, not an effect assertion. Shared code derives one
+   exact lifecycle proof from the selected profile, its retained price source, every
+   consumed entry/owner/closeout slot, the freeze boundary, injected clock domains,
+   and immutable prior-cost state. An effect receipt only reconciles this result.
+2. Essential failure evidence is one complete envelope. Payload, manifest, completion
+   receipt, and export acknowledgement share finite member and entry limits, one
+   aggregate cap, exact canonical schemas, held identities, and complete privacy
+   traversal. No sibling metadata may escape the envelope.
+3. Held-root pathname loss is a terminal condition, not an exception escape. Cleanup
+   and privacy inspection continue through the held descriptor; the replacement path
+   is untouched. A controller-level `finally` terminalizes reserved authority and
+   releases every held descriptor on every exit.
+4. Runtime filesystem topology is private operational evidence. Public/tracked
+   receipts expose only stable validation attestations and never absolute temporary
+   roots, device, inode, UID, mount, or semantic hashes derived from those values.
+
+These decisions preserve exact private live authorization and artifact validation;
+only the public projection is stable. They also make scored/finalizer checkpoint fields
+mandatory rather than pass-valued defaults. The package-only V17 boundary is now a hard
+stop: any later need to change these shared decisions requires a new Category 1 repair.
+
+## Third exact-head rereview amendment
+
+Review 5101177903 adds two final shared-control decisions:
+
+1. Complete failure-envelope admission is descriptor-derived. Candidate names may be
+   discovered through held directories, but every type, owner, link, mode, per-member
+   size, file-count, and aggregate-byte decision comes from the descriptors retained
+   across parsing, privacy inspection, export validation, and terminal evidence. A
+   retained writer cannot turn a previously small pathname into an oversized accepted
+   member, and a special file cannot block the admission opener.
+2. Public topology certification follows `SelectedRuntimeTarget`, not a package-version
+   literal. It scans the exact selected root and all sealed historical roots under
+   their own proofs, covers every bound JSON/YAML/text member, and rejects both bound
+   omissions and unbound additions. Receipt generation uses the same target-aware
+   scanner before and after the non-circular aggregate seal.
+
+The temporary successor proof selects V17, emits a V17 topology receipt through the
+normal generator, preserves the sealed V16 proof, and leaves the shared source byte map
+unchanged. Therefore the package-only boundary is evidence-backed; it is not permission
+to create V17 or to perform live/scientific effects in this PR.

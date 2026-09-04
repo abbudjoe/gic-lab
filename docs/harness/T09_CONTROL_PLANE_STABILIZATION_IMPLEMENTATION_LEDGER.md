@@ -1,6 +1,6 @@
 # T09 control-plane stabilization implementation ledger
 
-Status: **local review repair complete; exact-head GitHub rereview pending**
+Status: **review repair complete; independent exact-head rereview and explicit merge authorization pending**
 
 Live authorization: **false**
 
@@ -676,3 +676,550 @@ node ID is retained while its assertions now prove nullable technical-blocker st
 resolved-incident provenance, the external governance gate, and V17 absence. This is
 a test-identity preservation descendant only; it does not alter bound implementation
 source or receipts. Final exact-head parity must be rerun after this correction.
+
+## PR 1.2 live-capable production-effects repair assembly
+
+Status: **complete — draft review required; closeout descendant exact-head GitHub
+confirmation pending**
+
+Target contract: the same `execute_category3_transaction` state machine and
+`build_production_adapter_assembly` must accept an effect-neutral execution context,
+package-specific low-level effects, and an externally validated fully bound authority
+grant. Shared production source owns policy, validation, transitions, and accounting;
+effects perform only requested typed operations. Deterministic CI binds the same
+interfaces and assembly with no network or real effects.
+
+```text
+repository: abbudjoe/gic-lab
+destination: phase-1/sira-pilot-autonomous-r2
+branch: codex/t09-live-capable-production-effects
+worktree: /Users/joseph/.codex/worktrees/t09-live-capable-production-effects
+commit: f1d872d59c4952eb98467c2506850af7772f4454
+tree: eb70e20024559d65b3fadd240f72d3522895ef04
+parent_1: d0aff8a47e92013773d9d05b2cd90fb741658b03
+parent_2: 658a5f21cc24b914c6fc494f391cefe35d0fa334
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+PR #13 is merged at the exact base; its reviewed head is exact parent two. The
+original checkout and fresh worktree were clean. The requested branch and worktree
+did not exist. No actual V17 plan/profile/condition/command package/authorization/
+receipt root/run root or `AUTONOMOUS-0010` artifact exists. Retained public state
+records external-and-not-present current authority and zero active provider instances.
+
+### PR 1.2 assembly ledger
+
+The authoritative LE-01 through LE-23 checklist, evidence requirements, and mapping
+are in `docs/exec-plans/active/T09_CONTROL_PLANE_STABILIZATION.md`. LE-01 through
+LE-23 are met by the exact immutable-base audit, implementation, focused conformance,
+non-circular receipt rebind, local exact-base gates, draft PR #14, and its successful
+first exact-head GitHub Actions run. The review-state-only closeout descendant that
+records those external facts must pass the same exact-head gate before handoff.
+Direct Sol/max self-review is mandatory; no subagent, model, thread, or task may
+perform implementation, testing, review, Git, architecture, or scientific work.
+
+### PR 1.2 planned source contracts
+
+| Workstream | Source contract | Mapped DoD | Status |
+|---|---|---|---|
+| Shadow inventory | Every fake/scenario/canned/fixed assumption classified and moved below the shared effect-neutral boundary when behaviorally active | LE-02, LE-12, LE-16 | met |
+| Runtime time | One injected monotonic/wall/sleep protocol with finite, nondecreasing, nonoverflow validation | LE-03 | met |
+| Metadata/secret | Exact mutable credential buffer reaches one injected channel and is destroyed on every path | LE-04 | met |
+| Package budgets | Exact aggregate/per-condition/order/model/tier/retry caps loaded from selected package documents | LE-05 | met |
+| Condition session | Typed exact request and real-time typed event observer; shared retained budget boundary is the sole authoritative accountant | LE-06, LE-07 | met |
+| Host transaction | Typed tracked archive, provider-entry, host qualification, image/runtime/browser/finalizer, and dynamic freeze receipts | LE-08 | met |
+| Evidence chain | Exact file-backed raw manifest/receipt/ledgers feed offline finalizer and evaluator | LE-09, LE-10, LE-11 | met |
+| Effect separation | Scenario-free live production assembly; shadow fault plan lives only in deterministic effects | LE-12 | met |
+| Authority/loader | Fully bound authorization context plus exact path/hash/factory/protocol package-effect loading | LE-13, LE-14 | met |
+| Conformance/control proof | No-network live-shaped temporary package, anti-shadow lint, schema/receipt/agent-check binding | LE-15, LE-16, LE-17, LE-18 | met |
+| Preservation/handoff | Historical V16 proof, no-V17/false boundaries, tracked rebind, local full/parity gates, draft PR, and first exact-head CI pass | LE-19 through LE-23 | met |
+
+The host transaction additionally gates bounded replacement on
+`ReplacementEligibleFailure`, which is emitted only after the production wrapper has
+validated a retained provider-entry or host-preflight closeout. Generic failures and
+receipt mutations cannot authorize a second launch.
+
+### Authoritative condition-accounting decision
+
+Option A, real-time typed event observation, is selected. The package condition
+engine emits stable call/action/output/process/raw-publication events through an
+observer supplied by the shared production wrapper. The wrapper applies the retained
+`ProviderBudgetBoundary` in event order and validates the final outcome against that
+single ledger. The effect may execute the exact remote runner but cannot maintain a
+second authoritative accountant or choose caps/scientific policy. This decision must
+be proven by multiple-call, multiple-role, known-error, ambiguous-send,
+response-known/accounting-incomplete, admission, and zero-retry regressions.
+
+### Exact-base shadow-assumption inventory
+
+The machine receipt records these twelve source-proven assumptions against base
+`f1d872d59c4952eb98467c2506850af7772f4454`, tree
+`eb70e20024559d65b3fadd240f72d3522895ef04`. Each was a shared
+production-wrapper defect at that base; deterministic equivalents are legitimate only
+in `shadow_effects.py`, tests, or historical documentation.
+
+| ID | Exact base source | Defect | Repair boundary |
+|---|---|---|---|
+| SA-01 | `production.py:73-74,105,160-163,415-417` | fake credential constants/equality and preconstructed metadata response | exact mutable parser credential to injected one-send metadata channel |
+| SA-02 | `production.py:568-580,1305-1314,1670` | synthetic clock/sleep and fixed freeze/checkpoint epochs | validated injected monotonic, wall, and sleep domains |
+| SA-03 | `production.py:1027-1076` | synthetic three-field stage payload | tracked-only archive plus request-bound acknowledgement and host rehash |
+| SA-04 | `production.py:1238-1272` | reconstructed reduced provider-entry document | exact retained launch receipt consumed by typed preflight |
+| SA-05 | `production.py:1274-1314` | synthetic qualification/freeze identities | request-bound host receipts and dynamic manifest hash |
+| SA-06 | `production.py:1404-1503` | fixed caps, one CRITIC call, one browser action, shadow call IDs | exact package caps and arbitrary valid typed condition event stream |
+| SA-07 | `production.py:1505-1543` | in-memory synthetic raw identities | exact file seal, call/action ledgers, process/completion evidence, export acknowledgement |
+| SA-08 | `production.py:1545-1591` | synthetic finalizer paths/interpreter/dependencies | qualified-local effect request, pre/post raw seal, exact completion binding |
+| SA-09 | `production.py:82-89,1593-1651` | canned task answers replaced condition output | evaluator consumes effect-produced finalized session |
+| SA-10 | `production.py:38,148-286,568,979-1025,1743-1785` | `FakeScenario` required by and branched within production | `ShadowFaultPlan` exists only in deterministic effects |
+| SA-11 | `adapters.py:25-74` | authority bound only a version/revision surface | full control/package/proof/effect/root/external authorization context |
+| SA-12 | `production.py:75-76,249,286-382,614` | synthetic network/model/browser/image/provider fixture data in shared source | all fixture values below the effect boundary |
+
+Current scanning classifies every retained occurrence as one of: legitimate
+deterministic effect fixture, historical test fixture, documentation, or shared
+production-wrapper defect. The last class is required to remain zero.
+
+### Immutable implementation and receipt evidence
+
+The live-capable implementation was committed without receipts as
+`3488d986f7c16adc54adbc092a0c3b8457baca82`, tree
+`e2b6260989b9a827cc543253a664df1541b50f68`. The historical duplicate-root
+regression then received an ordinary descendant repair at immutable implementation
+ancestor `cd9bed46576bd00af473af861c57800b4f350c9d`, tree
+`8d34019a2d7addcf34ff35f507f82dea99ef38dd`. No history was rewritten.
+
+Receipt descendant `d273910b2deb11dcd37dee33123f29bac7aeedcd`, tree
+`486d701590574240ee6d5abdc2b2eea3a1181256`, regenerated the current 27-file V16
+receipt root against that ancestor. Its control binding file SHA-256 is
+`eae9100ffd6380346f35255ec0dc60d1ad4f62ef8c985b18a87a72ccc5e37c98` and semantic
+SHA-256 is `bc19a164232c58a53d7ac4873917b509597a433e5967ea19a135cc2be84fef91`.
+The source-binding receipt is 6,662 bytes with file SHA-256
+`d9f9c2e75a18de569a928e4301b5cb96afb9393db1c6366eb964a6f5f8cd6dee` and semantic
+SHA-256 `24e17e26142e808ffc8eb2e603199af929ee8f19491777885adf69a56ea05f96`.
+
+`control/receipts/packages/v16/live-effect-conformance.json` is 8,623 bytes with
+file SHA-256 `eb6cb0b9e15e331063213630a1e3cdc1fb9567f041bf43edeb8e041cfea5ef98`
+and semantic SHA-256
+`2a001bb775fbf7e8755f23b1f1ed4f70bb083ac2c65cdfd7f3f180f3d6c1500a`.
+`control/receipts/packages/v16/anti-shadow-lint.json` is 7,059 bytes with file
+SHA-256 `3ebe48bf443e894fded999e9c664e511537def9402f95a17ba7f6da80b7ac7cf`
+and semantic SHA-256
+`1612ceded30c71c0c46ef41e0859dce813dbed10a40aeceaa39e0758b0b7698f`.
+The incident
+`control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json` is 3,490 bytes,
+has file SHA-256 `fe5f69d3241032e2216110d1a3a6b47f37b68efb99d54e3541d9825d2ce70a85`,
+and immutable-facts SHA-256
+`77acccfd3017357271e2d1cda5b1ac9433899a3e9dcf4377d57662381f05d442`.
+
+### Local final-gate evidence
+
+At draft-PR head `5d047f3961c9d7ecd87c87362be07bfcf3cf2c12`, tree
+`3ed1723bc985daf4680a828a9dd4cb0ed0d5cc0a`, Ruff format and lint, strict mypy over
+86 source files, repository validation, goal-derived
+agent-check, privacy/static checks, pinned Quarto 1.9.38 rendering of all 16 pages,
+site validation, and `git diff --check` pass. The raw suite reports 2,113 passed and
+23 inherited base failures plus the same five inherited private-fixture skips; it
+adds no skip or xfail. The exact-base parity harness passes: zero newly failing nodes,
+zero missing base collected nodes, zero missing base failures, zero invalid outcome
+transitions, four newly passing nodes, and five symmetrically deselected unavailable
+private-fixture nodes. The final documentation descendant must rerun this exact
+command set before push.
+
+### Draft PR and first exact-head GitHub evidence
+
+Draft PR #14, `T09: make the production controller live-capable`, is open at
+`https://github.com/abbudjoe/gic-lab/pull/14` against
+`phase-1/sira-pilot-autonomous-r2`. It remains draft, unmerged, and has no auto-merge
+request. GitHub Actions run `33580584620`, job `100093827365`, passed in 1h00m51s
+against exact head `5d047f3961c9d7ecd87c87362be07bfcf3cf2c12`. Its deterministic
+agent/control-plane gate and exact-base PR parity gate both passed; the parity result
+reported zero newly failing nodes, zero missing base collected nodes or failures,
+zero invalid outcome transitions, three newly passing nodes, and five symmetrically
+deselected unavailable private nodes. GitHub emitted only its action-runtime Node 20
+deprecation annotation. This documentation-only closeout descendant is subject to a
+fresh exact-head Actions run before terminal handoff; that final run is necessarily
+reported outside the commit it validates.
+
+### Direct Sol/max source review
+
+The operator-attested direct review found no unresolved item and used no delegated
+agent, model, thread, or task. Its required questions close as follows:
+
+1. **Actual credential without fake substitution — yes.** `ModelMetadataChannel`
+   accepts the mutable parser-selected credential (`effects.py:333-342`), and the
+   wrapper forwards it without value comparison while using the injected wall clock
+   (`production.py:256-273,701-806`). Success, channel rejection, one-send behavior,
+   and buffer destruction are exercised at
+   `test_effect_runtime_seams.py:151-206`.
+2. **Injected real time and sleep — yes.** `_ValidatedRuntimeClock` preserves separate
+   monotonic/wall domains and delegates sleep (`production.py:219-253`); the world,
+   metadata boundary, freeze, condition admission, checkpoint, and cleanup all use
+   that instance (`production.py:516,748-830,1815-1905,1973-1993,2152-2165,
+   2662-2686,2752-2807`). Live-shaped delegation plus backward/nonfinite/overflow
+   failures are covered at `test_effect_runtime_seams.py:109-149`.
+3. **Arbitrary valid multi-call/multi-role/multi-action conditions — yes.** The typed
+   request/event/outcome protocol is at `effects.py:543-641`; the sole authoritative
+   observer applies the retained boundary per event and reconciles exact ledgers at
+   `production.py:359-496,2025-2280`. Reactive and simulative multi-event shapes and
+   known/ambiguous/accounting-incomplete sends are asserted at
+   `test_live_effect_conformance.py:57-107`.
+4. **Exact package-derived caps — yes.** Plan, execution contract, condition plan,
+   command manifest, attempt order, model, tier, and zero retry are cross-validated at
+   `production.py:1002-1318`. Exact values, plan drift, and cross-condition
+   substitution are covered at `test_effect_runtime_seams.py:209-243` and
+   `test_live_effect_conformance.py:110-149`.
+5. **Raw evidence reaches finalizer and evaluator — yes.** Exact files and ledgers are
+   validated during condition acceptance/export; the raw seal is checked before and
+   after offline finalization; evaluation consumes only the finalized root and
+   session hashes (`production.py:2166-2639`). Raw mutation, completion/finalizer
+   drift, and effect-answer propagation are covered at
+   `test_production_coupling.py:245-411` and the complete chain at
+   `test_live_effect_conformance.py:152-175`.
+6. **A package-only successor can supply effects and authority — yes.** Registration
+   validates an exact tracked regular path/hash/size/factory/protocol before import,
+   and loading requires a package-owned live grant over the full context
+   (`effects.py:861-1023`). The production assembly then revalidates control, package,
+   implementation, transaction root, and grant (`production.py:2945-2996`). Loader
+   mutation coverage is at `test_package_effect_loader.py:97-300`.
+7. **Shadow exercises the same wrapper — yes.** Deterministic effects implement the
+   same `LowLevelEffects` protocol by composition, while both conformance and shadow
+   enter `build_production_adapter_assembly` and `execute_category3_transaction`.
+   Exact entry points and unchanged shared-source bytes are asserted at
+   `test_live_effect_conformance.py:25-55`; all retained production-wrapper scenarios
+   are asserted at `test_category3_shadow.py:69-286`.
+8. **No fake/scenario/canned-answer assumption can alter live behavior — yes.** Shared
+   production imports no fault plan and contains no deterministic credential, canned
+   answer, fake time, shadow call ID, or scenario branch (`production.py:1-7`). Those
+   values live below the boundary in `shadow_effects.py`; the narrow lint and injected
+   forbidden-token mutations are asserted at
+   `test_live_effect_conformance.py:178-204` and are bound into the V16 receipt root.
+
+## PR #14 exact-head review 5088727234 repair assembly
+
+Status: **review repair and exact-head gate evidence complete; independent external
+rereview and explicit merge authorization pending**
+
+The pre-edit audit verified PR #14 open, draft, unmerged, based on
+`f1d872d59c4952eb98467c2506850af7772f4454`, with auto-merge disabled. Both the
+remote PR head and task branch were exactly
+`3291af1e64ec1ea89b8773a586c97a917f1052a2`, tree
+`69b7d0346456cad080ca258bc137662d7d632d26`. Exact-head Actions run
+33589428237/job 100120211545 was successful; review 5088727234 was the only review
+state and required changes. The destination, original checkout, task worktree,
+authority/science flags, and no-V17 boundary all matched the operator contract.
+
+No implementation, testing, review, Git, architecture, or scientific decision was
+delegated. The operator-attested model/effort were `gpt-5.6-sol` / `max`; runtime
+metadata was neither inspected nor used.
+
+### Four repaired findings
+
+- **Checkpoint:** `ProductionCategory3World.checkpoint` revalidates both Task A raw,
+  finalizer, evaluator, command-pair, and retained selection records. It obtains typed
+  provider lifecycle cost, authoritative aggregate usage, injected-clock wall values,
+  and conservative frozen-plan projection, then calls retained
+  `first_pair_decision`. The controller treats `stop-before-task-b` as a clean stop
+  with zero Task B reservation/entry and persists the exact returned reasons.
+- **Failure evidence:** condition execution returns typed success or infrastructure
+  failure outcomes. Every post-entry infrastructure failure is reconciled, sealed via
+  `mark_essential_failure_sealed`, bounded to 67,108,864 bytes, exported,
+  acknowledged, consumed, unscored, nonretryable, and followed by cleanup. Nonzero
+  exits never reach finalizer/evaluator, including completed outcomes with answers.
+- **Authority:** a package may supply external overlay source/policy but cannot mint a
+  trusted grant. The shared validator calls the selected contract's authorization
+  validator and alone mints opaque `ValidatedLiveEffectAuthority`. One durable private
+  state transaction binds effect, metadata, launch, cleanup, and terminal consumption;
+  reservation precedes secret access and any failure/replay is nonreplayable.
+- **Held identity:** effect bytes execute from a held no-follow descriptor and exact
+  Git blob, not `spec_from_file_location` or `.pyc`. Shared code derives and holds the
+  transaction-root device/inode/owner/mode/mount identity. Raw, finalized, and
+  evaluator artifacts remain sealed and descriptor-held across consumers. All held
+  resources are released only after cleanup and terminal evidence materialization.
+
+The authoritative condition accountant remains the production wrapper's real-time
+event observer. Deterministic fault injection remains entirely below the shared
+effect boundary. Runtime-only paths, inode values, and private authorization hashes
+are not published; the conformance receipt contains stable semantic attestations, and
+equivalent successor repositories produce byte-identical complete receipt trees.
+
+### Immutable implementation and rebound receipts
+
+The core source/test/control-input commit is
+`e4e65ef24b97151c09fc9ccfe1e0d0083f797a1e`, tree
+`2de4e90efa2d85b5c4662bc8f47f72375659acae`, directly descended from the reviewed
+head. The first immutable implementation ancestor used for receipt generation was its
+ordinary source-closure descendant
+`adafa96342d0c407189cd0b260cf017fb4d79f3e`, tree
+`45562750df7fa3935c3b7b1af37e4c63bf244caa`. That descendant only renames the Python
+authority-state member that collided with the repository secret scanner; the durable
+serialized state remains `reserved-before-secret`. Full-suite evidence then exposed
+that a Task B essential-failure export carried checkpoint state without the newly
+authoritative checkpoint decision receipt. Ordinary compatibility-closure commit
+`4163cad097767f6056cb21792d3d6d5894f2ccd7`, tree
+`eb733fa3ecc5e8b306928badfe61a3c2c24e04e3`, adds that decision receipt to the bounded
+control snapshot, its allowlist, and the restored identity assertion. Exact-base
+parity then caught that the repaired raw-export phase changed one automatic pytest
+parameter ID. Ordinary parity-identity closure commit
+`7a809850722c175d01dc1567b73680995908072e`, tree
+`909c9afe42e6ca7845aed3c5b0453b3846d78004`, preserves the exact historical node ID
+while continuing to assert the repaired `condition-execution` phase. It is the final
+immutable implementation ancestor. The 27-file current V16 receipt root was generated
+from that clean ancestor in an external staging directory and copied only after its
+file inventory matched the existing sealed root.
+
+```text
+control binding file bytes: 9288
+control binding file SHA-256: 472279d990fe21eac36972917622677b38af3f415c9542b17e56580c73e9e12f
+control binding semantic SHA-256: a6316e56acf4dbba20edc8695e82b3f97d47e1cc95d59a58049a3d1e155d69d0
+source binding bytes: 6662
+source binding file SHA-256: 5b27d7c96cb839093b0863c0107df51c6e46011d86111331e7ebc1d024c92ccf
+source binding semantic SHA-256: 807fc0e4d05dec675784a5f79093c3fcec4c1e9e041536744a3fdac896ecbe4b
+live-effect conformance bytes: 14804
+live-effect conformance file SHA-256: ae01346a70d8702e6629b7bd6fb39e7f94cc818e8aa72b44b8d17fcf5ba423a6
+live-effect conformance semantic SHA-256: 6342b6dd78fee0b5b21c85c91ae2a69ec55a0b6fb45f6cc6a6494c764e675a1a
+anti-shadow lint bytes: 7134
+anti-shadow lint file SHA-256: fb176cb2967e78b5e5f11c01c5bfa21120b4c9d5b719fc761947ce3fed8a22bb
+anti-shadow lint semantic SHA-256: 7d69061004f6bb1426455bb1c2319e0c23a7cb6c90acc6355ad1c8773466bf5c
+incident aggregate bytes: 6091
+incident aggregate file SHA-256: 78fc4a9c63ddb2299c02a50a85b9c97cd50a79d7090d015aa112c60c637417ab
+incident aggregate semantic SHA-256: 637f14d39d020d190f77d884b0fdc6c264ea5cd46273d704001727b7c4017edc
+review incident bytes: 5746
+review incident file SHA-256: a78c5f9b6fe1b2274673089cab22ef325fafeebaec79a9d5e94fdca87597d112
+review incident immutable-facts SHA-256: 3718f419cb03edda7e2b781f2858caffae589dc1918ead2fa05621e1468ccd52
+```
+
+### Focused evidence and DoD state
+
+The consolidated checkpoint/failure/authority/loader/held/conformance/shadow/coupling
+matrix passes all 173 collected nodes. All 20 exact review-incident nodes and every
+older incident node pass. The historical receipt suite passes 11 nodes. The complete
+temporary successor path passes, and the two separate-copy successor receipt roots
+are byte-identical. Ruff format/lint, strict mypy over 86 source files, schema checks,
+and `git diff --check` pass at the implementation ancestor.
+
+| ID | Required outcome | Status |
+| --- | --- | --- |
+| RR-01 | Exact PR/base/head verification preserved | met |
+| RR-02 | Accepted effect-neutral architecture preserved | met |
+| RR-03 | Retained `first_pair_decision` is authoritative | met |
+| RR-04 | Both Task A attempts valid and scored before Task B | met |
+| RR-05 | Pair/finalizer/cost/time/cleanup gates enforced | met |
+| RR-06 | Clean checkpoint stop remains operational and nonscientific | met |
+| RR-07 | Every post-entry failure yields bounded essential evidence | met |
+| RR-08 | Nonzero exits are infrastructure-invalid and unscored | met |
+| RR-09 | Failure evidence sealed/exported/acknowledged/nonretryable | met |
+| RR-10 | One opaque external authority transaction owns all phases | met |
+| RR-11 | Contract authorization prefix/source enforced | met |
+| RR-12 | Live authority is single-use and non-forgeable by duck typing | met |
+| RR-13 | Effect source is held and exact bytes execute | met |
+| RR-14 | Transaction-root identity is shared-derived and held | met |
+| RR-15 | Raw/finalized/evaluator paths remain held and sealed | met |
+| RR-16 | Updated conformance proves all four repairs | met |
+| RR-17 | Package-only V17 boundary remains truthful | met |
+| RR-18 | Historical V16 proof remains valid | met |
+| RR-19 | No actual V17 artifact exists | met |
+| RR-20 | Science and authority remain false and unchanged | met |
+| RR-21 | Full/parity/static/privacy/site gates pass | met — exact final-head results are recorded in the PR #14 handoff comment |
+| RR-22 | Draft PR updated and exact-head Actions green | met — exact run/job/head are recorded in the PR #14 handoff comment; rereview remains external |
+
+The linked review incident is resolved, `blocking_incident` is null, and independent
+exact-head rereview plus explicit merge authorization remains the external governance
+gate. The next technical subgoal is package-only V17 generation after reviewed merge.
+No live authorization, secret, provider, cloud, browser, SiRA, evaluator, condition,
+or scientific execution occurred; added OpenAI/provider cost is USD 0.00.
+
+## PR #14 second exact-head rereview 5097085114 repair assembly
+
+Status: **repair and non-circular receipt regeneration complete; exact-final-head gates pending**
+
+The pre-edit audit verified exact reviewed head
+`a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f`, tree
+`32986899e94f980bdf648872cb82cb8f3b8c1700`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`, tree
+`eb70e20024559d65b3fadd240f72d3522895ef04`. PR #14 remains open, draft,
+unmerged, and without auto-merge; exact-head Actions run 33687000382/job
+100436733425 remains successful. Review 5097085114 is the only newer review and has
+no unresolved thread. The task worktree, destination, branch head, no-V17 boundary,
+and false repository/Category 3/live/scientific authority state all match the
+operator contract.
+
+No implementation, testing, review, Git, architecture, or scientific-boundary
+decision is delegated. All evidence is deterministic and network-disabled.
+
+### Residual findings and planned evidence
+
+1. **Provider lifecycle cost:** replaced effect-authoritative self-consistent cost with
+   a shared-derived proof over the exact provider profile/price source, retained
+   provider entry/ownership/closeout intervals, prior preflight history, injected
+   wall/monotonic observation, and exact monetary arithmetic. Checkpoint safety
+   defaults are removed. Evidence: direct lifecycle mutation matrix and checkpoint
+   coupling tests pass.
+2. **Essential failure envelope:** payload, manifest, completion receipt, and
+   export acknowledgement inside one finite envelope; enforce exact canonical schemas,
+   complete aggregate/member caps, held identities, and complete privacy traversal.
+   Evidence: cap, schema, privacy, mutation, export, and inherited failure matrices
+   pass.
+3. **Held-root terminalization:** privacy scanning is descriptor-rooted after a
+   pathname mismatch, return typed unresolved privacy state when needed, and guarantee
+   authority terminalization plus all descriptor release through a controller-level
+   `finally`. Evidence: full-controller root-replacement and injected terminal failure
+   tests pass.
+4. **Public runtime topology:** public evidence uses only the stable held-root projection
+   and a
+   repository receipt privacy gate for absolute runtime roots and device/inode/UID
+   values. Evidence: fresh-root byte identity and injected topology tests pass. The
+   old tracked receipt tree is deliberately rejected until non-circular regeneration.
+
+### Second-rereview definition of done
+
+| ID | Required outcome | Status |
+| --- | --- | --- |
+| SR-01 | Exact PR/base/head identity verified | met |
+| SR-02 | Prior four headline repairs preserved | met |
+| SR-03 | Provider price and intervals bind retained lifecycle evidence | met |
+| SR-04 | Every consumed provider slot is cost-accounted | met |
+| SR-05 | Provider cost cannot be understated by an effect | met |
+| SR-06 | Mandatory checkpoint evidence has no pass defaults | met |
+| SR-07 | Complete essential envelope is finitely bounded | met |
+| SR-08 | Every essential envelope member is schema/privacy validated | met |
+| SR-09 | Terminal privacy scan includes failure envelopes and exports | met |
+| SR-10 | Root pathname replacement cannot escape controller terminalization | met |
+| SR-11 | Every reserved authority exit reaches a terminal single-use state | met |
+| SR-12 | Descriptor release is guaranteed | met |
+| SR-13 | Public/tracked receipts retain no runtime topology | met |
+| SR-14 | Updated conformance proves all residual repairs | met |
+| SR-15 | Incident and state capsule are truthful | met |
+| SR-16 | Historical V16 proof remains valid | met |
+| SR-17 | No actual V17 artifact exists | met |
+| SR-18 | Package-only V17 boundary remains truthful | met |
+| SR-19 | Authority and scientific interpretation remain false | met |
+| SR-20 | Full/parity/static/privacy/site gates pass | met — exact-head local gates and base parity pass; Actions evidence is recorded out of band on PR #14 |
+| SR-21 | PR body reflects exact final identities | met — the body is replaced and byte-verified after the immutable Git head; independent rereview remains required |
+| SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
+
+### Focused and non-circular receipt evidence
+
+The four focused files collect 134 tests: 56 checkpoint/provider-lifecycle tests, 42
+essential-envelope tests, 25 held-identity/terminalization tests, and 11 conformance
+tests. Before receipt regeneration, 133 passed and the topology gate deliberately
+rejected the old tracked V16 root. After the root was regenerated, the previously
+failing anti-shadow node passed with zero topology findings; the complete final
+134-node rerun passed.
+
+Core runtime implementation culminates at commit
+`be6f435003c5031071dac59fecd6a0ab0c45c892`, tree
+`134d232b64c3c8957168d07705fd2d827bf64c8b`. Incident, goal, documents, and the two
+preservation-test corrections were frozen at final receipt-binding ancestor
+`bdeff53182b4ba648f691333bdbedb737853e757`, tree
+`dc78cf2bdfb46e2e3426fd091de9c55fd13aa105`. The final receipt descendant is commit
+`48c5e4b36c61be19783befbd8b6ad488f7d61f66`, tree
+`5353521869272fa2b523d8c36167b075ee8171e7`.
+
+Exact regenerated identities:
+
+- `live-effect-conformance.json`: 17,131 bytes; file SHA-256
+  `3b7ca0b349d3331a58769035d8026d111d4f473d51e34154bb634b2ac8773531`;
+  semantic SHA-256
+  `f5c7c751796fb49bfac1db02ad599e3540ae58eac801e1b245830662cac8c362`.
+- `anti-shadow-lint.json`: 7,648 bytes; file SHA-256
+  `6968729b3fd38c70a861ce415cb9752fc2bf051a658a08bbb826a62e8a45fd72`;
+  semantic SHA-256
+  `8e8bd30138013677eaa3d14f529dd0a3030b0729ede50f0cd12ca19533b607c5`.
+- `incidents.json`: 8,159 bytes; file SHA-256
+  `e6c6af7cea956cffc49bd074275175e00e34230146d64c33eba2c2628387bf21`;
+  semantic SHA-256
+  `087ff2877fa723b7178d5c9feffeeb6abde8585d23555ed3d9457191fabed809`.
+- source binding: 6,662 bytes; file SHA-256
+  `b9ab3af1a26593b9cce3c1ab8c67fad637b2487066775c34d97f706f66bbf271`;
+  semantic SHA-256
+  `4c645b624777950dd8ce95f73938892c9aa4a25f512a50c1f2f1db4c780088ae`.
+- aggregate binding: 9,288 bytes; file SHA-256
+  `79cb3ba35245c3a285b6ca96445d79c096764f0f0bd3cbd24e892f31e9c627c3`;
+  semantic SHA-256
+  `df0c51b68e430f60a4c4c12dff8cdc7dcd0311fb24f4c36379df2a59dc011b65`.
+- linked incident source: 4,942 bytes; file SHA-256
+  `f33aada9e8504f7eaf6805ec6df2c561e0be82d523d350533e2c99952402fa66`;
+  immutable-facts SHA-256
+  `5c419c5ef3e0777c7cb7199a66fb3fb73bf3880a44338e941a0bd4ecc2fa6a5d`;
+  status `resolved`.
+
+Exact local gate evidence: Ruff format/lint passed for 216 files; mypy passed for 86
+source files; validation and agent-check passed with 16 shadow scenarios, 14 provider
+contracts, five incidents, and zero anti-shadow/topology findings; Quarto 1.9.38
+rendered and validated 16 pages; and `git diff --check` passed. Exact-base parity
+executed 2,090 base nodes (2,063 passed / 27 inherited failures) and 2,296 head nodes
+(2,273 passed / 23 inherited failures): all 206 head-only nodes passed, four inherited
+failures became passing, and there were zero newly failing nodes, missing base nodes or
+failures, invalid transitions, weakened outcomes, or broadened exclusions. The exact
+immutable Git head, CI run/job, PR-body byte identity, and external review posture are
+necessarily verified and recorded on PR #14 after the final descendant is created;
+they are not circularly embedded into this tracked ledger.
+
+## PR #14 third exact-head rereview 5101177903 repair assembly
+
+Status: **repair complete; independent exact-head rereview and explicit merge authorization required**
+
+Pre-edit evidence: PR #14 is open, draft, unmerged, based on exact
+`f1d872d59c4952eb98467c2506850af7772f4454`, and has auto-merge disabled. Local,
+remote-branch, and PR head all equal reviewed
+`b73acefd41bf129a7e0264b93995b36249bc0270`, tree
+`0038a556c54e2fc95362a78c71914281f8dad28c`; CI run `33732600844`, job
+`100575744758`, succeeded at that head. The worktree was clean, the destination branch
+still equaled the base, review `5101177903` was the newest review with no review
+threads, no actual V17/AUTONOMOUS-0010 path existed, and all authority/science flags
+remained false. Baseline deterministic state-capsule and agent-check both passed.
+
+Assembly workstream A maps TR-03 through TR-08 to a held-first envelope primitive:
+candidate names are descriptor-enumerated, every member is opened no-follow and
+fstat-admitted before reading, and count/bytes/caps are derived solely from retained
+held identities. Workstream B maps TR-09 through TR-15 to one selected-target/root
+topology contract that validates every bound member in every sealed root. TR-16
+through TR-22 remain the incident, non-circular receipts, full gates, and PR handoff.
+Direct operator-required self-review replaces delegation.
+
+Implementation checkpoint: TR-03 through TR-17 and TR-22 are met. Candidate names are
+descriptor-enumerated; held `fstat` values enforce the 1,048,576-byte JSON/JSONL cap,
+finite non-JSON cap, 4,096-member cap, and 67,108,864-byte aggregate before reads or
+retention. Deterministic mutations after enumeration grow the acknowledgement, grow a
+payload JSON member, grow a non-JSON member, and replace a name with a larger inode;
+each fails closed with cleanup available and no scientific interpretation. A separate
+cross-binding node proves one held count/total in the outcome, acknowledgement,
+controller record, public evidence, and evidence-binding SHA-256.
+
+The target-driven scanner derives the exact selected root, validates every sealed root
+under its own binding, and compares the full bound inventory against every regular
+member. The 20-node historical/successor module passed: its normal
+receipt generator selected V17, emitted a V17 anti-shadow receipt naming
+`control/receipts/packages/v17`, scanned `bound-goal-record.yaml`, rejected V17-only
+path/device/inode/UID injection plus omission and unbound-extra mutations, rejected a
+second marker hidden outside the scanner's own declared marker list, and retained
+independent V16 validity. The shared-source byte-map successor test passed separately;
+no V17 artifact survived in the actual repository. Incident
+`INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY` is resolved by the exact listed
+nodes with no live environment, authority, provider, or scientific effect. TR-18 is
+met. The immutable implementation ancestor is
+`f5c19404c483fea7ed4b47235e5a1763213e017f`, tree
+`52aba08c58342ab714ccb548b1049cb3685c5574`. Receipt generation initially exposed and
+fixed two exact publication-state assumptions: conformance/test repository copies now
+recover only intentionally absent tracked receipt bytes from the immutable ancestor,
+and the source-lint regression distinguishes exact selected-root unavailability from
+source or topology findings. Direct self-review additionally narrowed the scanner's
+self-declaration exception to one validated occurrence per marker. The missing-root
+selected-V17 incident node and narrowed-exception node then passed, and the normal
+generator published 27 V16 receipts with all six incident groups executed. Receipt
+descendant `11265fc8aeeea8be9307ca680b490e129822ce71`, tree
+`4611063c81782a4b20050280387bd8f1d34fbdae`, contains binding file SHA-256
+`cbc730e2ac14a41efc679681d686f97a38d370a8b9eaa902ebe4b3d33f854ea8`, binding
+semantic SHA-256 `4f7bbf53565fcf4db2d12a90669b4c2c4f2ad9af57c5cdcd4416b11ff18826f1`,
+anti-shadow file/semantic SHA-256
+`cf9b0aa4229a4e7d8f682035317daf3e1799e40ddfe5ffbfc1d25b4aca07e4a3` /
+`ac55e6d2740f9831a92e0517f0d4a0ec736fa6e96f7748ee32d939a757d63d6f`, and
+conformance file/semantic SHA-256
+`a0e8d41ab4b7e3173c425778690a03c444831104ef31b00005db0fb92fb96bee` /
+`3580d9f6f093df431b4cb6ae426a79cd12096c775e77964e8fccacc75b86cdd0`.
+Local formatting, Ruff, mypy, validation, agent-check, Quarto/site, focused successor,
+and diff gates pass. Exact-base parity, final PR body verification, and GitHub run/job
+identities are attached to the final PR head rather than embedded circularly here.

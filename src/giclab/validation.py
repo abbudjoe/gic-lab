@@ -22,6 +22,7 @@ from giclab.control.proofs import (
     BASE_COMMIT as T09_CONTROL_RECEIPT_BASE_COMMIT,
 )
 from giclab.control.proofs import (
+    LEGACY_REQUIRED_SHARED_SOURCES,
     REQUIRED_SHARED_SOURCES,
     ControlProofError,
     ControlProofReference,
@@ -109,6 +110,12 @@ SCHEMA_FILES = (
     "schemas/t09-category3-shadow-receipt.schema.json",
     "schemas/t09-active-version-lint-receipt.schema.json",
     "schemas/t09-agent-check-receipt.schema.json",
+    "schemas/t09-anti-shadow-lint-receipt.schema.json",
+    "schemas/t09-effect-authorization-context.schema.json",
+    "schemas/t09-live-effect-conformance-receipt.schema.json",
+    "schemas/t09-essential-failure-manifest.schema.json",
+    "schemas/t09-essential-failure-complete.schema.json",
+    "schemas/t09-essential-failure-export-acknowledgement.schema.json",
     "schemas/t09-incident-completeness-receipt.schema.json",
     "schemas/t09-control-target.schema.json",
     "schemas/agent-state-capsule.schema.json",
@@ -146,6 +153,7 @@ REQUIRED_PATHS = (
     "control/goals/EXP-0001.yaml",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
     "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
+    "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json",
     "control/receipts/active-version-lint.json",
     "control/receipts/agent-check.json",
     "control/receipts/bound-goal-record.yaml",
@@ -437,7 +445,13 @@ def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[st
         )
         if ancestor.returncode != 0:
             errors.append("T09 shared control-plane source commit is not based on the exact base")
-    required_paths = set(REQUIRED_SHARED_SOURCES)
+    required_paths = set(
+        LEGACY_REQUIRED_SHARED_SOURCES
+        if document.get("schema_version") == "1.0.0"
+        else REQUIRED_SHARED_SOURCES
+        if document.get("schema_version") == "2.0.0"
+        else ()
+    )
     files = document.get("files")
     bindings: dict[str, str] = {}
     if not isinstance(files, list):
@@ -3500,6 +3514,23 @@ def validate_active_version_dispatch_gate(root: Path = ROOT) -> list[str]:
     ]
 
 
+def validate_anti_shadow_source_gate(root: Path = ROOT) -> list[str]:
+    """Reject deterministic fixture assumptions from effect-neutral shared source."""
+
+    from giclab.control.anti_shadow_lint import validate_anti_shadow_lint
+
+    receipt = validate_anti_shadow_lint(root)
+    findings = receipt.get("findings")
+    if not isinstance(findings, list):
+        return ["anti-shadow lint receipt is malformed"]
+    return [
+        f"{finding.get('path', 'unknown')}:{finding.get('line', 0)}: "
+        f"{finding.get('message', 'prohibited shadow assumption')}"
+        for finding in findings
+        if isinstance(finding, dict)
+    ]
+
+
 def _control_proof_reference(
     receipt_root: Path,
     binding: Mapping[str, object],
@@ -3536,7 +3567,7 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
         return [f"tracked control receipt inventory is invalid: {exc}"]
 
     compatible_roots: list[str] = []
-    selected_versions: dict[str, str] = {}
+    selected_seals: dict[tuple[str, object, object], str] = {}
     for receipt_root in receipt_roots:
         relative_root = receipt_root.relative_to(root).as_posix()
         binding_path = receipt_root / "t09-control-receipt-bindings.json"
@@ -3552,7 +3583,12 @@ def validate_tracked_control_receipts(root: Path = ROOT) -> list[str]:
             contract = provider_contracts.PROVIDER_CONTRACTS.get(version)
             if contract is None:
                 raise ControlProofError("binding selected provider contract is not registered")
-            previous = selected_versions.setdefault(version, relative_root)
+            seal_key = (
+                version,
+                selected.get("semantic_sha256"),
+                revision.get("commit"),
+            )
+            previous = selected_seals.setdefault(seal_key, relative_root)
             if previous != relative_root:
                 raise ControlProofError(
                     f"duplicate sealed roots select {version}: {previous}, {relative_root}"
@@ -3794,6 +3830,7 @@ def run_all(root: Path = ROOT) -> list[str]:
         ("manifests", validate_manifests),
         ("workflows", validate_workflows),
         ("active-version dispatch", validate_active_version_dispatch_gate),
+        ("anti-shadow source", validate_anti_shadow_source_gate),
         ("tracked control receipts", validate_tracked_control_receipts),
         ("control projection boundaries", validate_control_projection_boundaries),
         ("T09 control-foundation boundaries", validate_t09_control_foundation_boundaries),

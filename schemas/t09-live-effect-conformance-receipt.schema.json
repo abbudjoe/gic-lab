@@ -1,0 +1,742 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-live-effect-conformance-receipt.schema.json",
+  "title": "T09 package-effect live-shaped no-network conformance receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "control_implementation_commit",
+    "control_implementation_tree",
+    "effect_protocol_version",
+    "shared_controller_entry_point",
+    "production_assembly_entry_point",
+    "temporary_package",
+    "shared_source_byte_map_unchanged",
+    "actual_v17_artifacts_present",
+    "actual_v17_artifacts_created",
+    "network_provider_cloud_browser_science_effects",
+    "live_authority_created",
+    "scientific_interpretation_allowed",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"enum": ["1.0.0", "2.0.0", "3.0.0", "4.0.0"]},
+    "control_implementation_commit": {"$ref": "#/$defs/git"},
+    "control_implementation_tree": {"$ref": "#/$defs/git"},
+    "effect_protocol_version": {"const": "1.0.0"},
+    "shared_controller_entry_point": {
+      "const": "giclab.control.category3.execute_category3_transaction"
+    },
+    "production_assembly_entry_point": {
+      "const": "giclab.control.production.build_production_adapter_assembly"
+    },
+    "temporary_package": {"$ref": "#/$defs/temporaryPackage"},
+    "shared_source_byte_map_unchanged": {"const": true},
+    "actual_v17_artifacts_present": {"type": "boolean"},
+    "actual_v17_artifacts_created": {"const": false},
+    "network_provider_cloud_browser_science_effects": {"const": 0},
+    "live_authority_created": {"const": false},
+    "scientific_interpretation_allowed": {"const": false},
+    "complete": {"const": true},
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "1.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "temporary_package": {
+            "required": ["authorization_context_semantic_sha256"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"enum": ["2.0.0", "3.0.0", "4.0.0"]}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "temporary_package": {
+            "required": [
+              "held_effect_source",
+              "held_transaction_root",
+              "authorization_context_binding",
+              "authorization",
+              "first_pair_checkpoint",
+              "provider_cost_accounting",
+              "held_evidence_chain",
+              "review_failure_subreceipts",
+              "public_runtime_topology"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "4.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "temporary_package": {
+            "properties": {
+              "review_failure_subreceipts": {
+                "required": [
+                  "essential-envelope-growth-after-enumeration",
+                  "oversized-held-json-member",
+                  "oversized-held-complete-envelope",
+                  "selected-v17-topology-injection",
+                  "selected-v17-bound-goal-topology-injection",
+                  "selected-v17-scan-omission"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "temporaryPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "temporary_repository_commit",
+        "temporary_repository_tree",
+        "provider_contract_version",
+        "plan_id",
+        "command_package_sha256",
+        "effect_implementation",
+        "controller_terminal_state",
+        "metadata",
+        "clock",
+        "condition_traces",
+        "model_call_accounting",
+        "browser_accounting",
+        "typed_failure_accounting",
+        "package_budget",
+        "host_transaction",
+        "raw_finalizer_evaluator_chain",
+        "cleanup",
+        "zero_real_effects",
+        "temporary_conformance_grant_only",
+        "repository_state_grants_authority",
+        "scientific_interpretation_allowed",
+        "projected_real_cost_usd"
+      ],
+      "properties": {
+        "temporary_repository_commit": {"$ref": "#/$defs/git"},
+        "temporary_repository_tree": {"$ref": "#/$defs/git"},
+        "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+        "plan_id": {"type": "string", "minLength": 1},
+        "command_package_sha256": {"$ref": "#/$defs/sha256"},
+        "effect_implementation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "bytes", "sha256", "factory_entry_point", "protocol_version"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"},
+            "bytes": {"type": "integer", "minimum": 1},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "factory_entry_point": {"const": "build_package_effects"},
+            "protocol_version": {"const": "1.0.0"}
+          }
+        },
+        "held_effect_source": {"$ref": "#/$defs/heldEffectSource"},
+        "held_transaction_root": {"$ref": "#/$defs/heldTransactionRoot"},
+        "authorization_context_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "authorization_context_binding": {"$ref": "#/$defs/authorizationContextBinding"},
+        "authorization": {"$ref": "#/$defs/authorization"},
+        "first_pair_checkpoint": {"$ref": "#/$defs/firstPairCheckpoint"},
+        "provider_cost_accounting": {"$ref": "#/$defs/providerCost"},
+        "controller_terminal_state": {"const": "category3-live-complete-clean"},
+        "metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "noncanonical_runtime_credential_reached_channel",
+            "request_count",
+            "zero_retry",
+            "zero_redirect",
+            "zero_pagination",
+            "credential_material_retained"
+          ],
+          "properties": {
+            "noncanonical_runtime_credential_reached_channel": {"const": true},
+            "request_count": {"const": 1},
+            "zero_retry": {"const": true},
+            "zero_redirect": {"const": true},
+            "zero_pagination": {"const": true},
+            "credential_material_retained": {"const": false}
+          }
+        },
+        "clock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "injected",
+            "wall_sample_count",
+            "monotonic_sample_count",
+            "sleep_calls",
+            "domains_separate"
+          ],
+          "properties": {
+            "injected": {"const": true},
+            "wall_sample_count": {"type": "integer", "minimum": 1},
+            "monotonic_sample_count": {"type": "integer", "minimum": 1},
+            "sleep_calls": {
+              "type": "array",
+              "minItems": 1,
+              "items": {"type": "number", "minimum": 0},
+              "contains": {"const": 0.25}
+            },
+            "domains_separate": {"const": true}
+          }
+        },
+        "condition_traces": {
+          "type": "object",
+          "minProperties": 4,
+          "maxProperties": 4,
+          "additionalProperties": {"$ref": "#/$defs/conditionTrace"}
+        },
+        "model_call_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total_calls",
+            "stable_unique_call_ids",
+            "terminal_states_complete",
+            "roles_are_multi_role",
+            "zero_retries"
+          ],
+          "properties": {
+            "total_calls": {"type": "integer", "minimum": 16},
+            "stable_unique_call_ids": {"const": true},
+            "terminal_states_complete": {"const": true},
+            "roles_are_multi_role": {"const": true},
+            "zero_retries": {"const": true}
+          }
+        },
+        "browser_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total_actions", "multiple_actions_per_condition"],
+          "properties": {
+            "total_actions": {"type": "integer", "minimum": 8},
+            "multiple_actions_per_condition": {"const": true}
+          }
+        },
+        "typed_failure_accounting": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "known-provider-exception",
+            "ambiguous-task-model-send",
+            "response-accounting-incomplete"
+          ],
+          "properties": {
+            "known-provider-exception": {
+              "$ref": "#/$defs/knownFailure"
+            },
+            "ambiguous-task-model-send": {
+              "$ref": "#/$defs/unknownFailure"
+            },
+            "response-accounting-incomplete": {
+              "$ref": "#/$defs/unknownFailure"
+            }
+          }
+        },
+        "package_budget": {
+          "type": "object",
+          "required": [
+            "plan_sha256",
+            "command_package_sha256",
+            "execution_contract_sha256",
+            "attempt_order",
+            "model_revision",
+            "service_tier",
+            "zero_retry",
+            "aggregate_caps",
+            "condition_caps",
+            "condition_plan_sha256s"
+          ]
+        },
+        "host_transaction": {
+          "const": {
+            "tracked_package_staged_and_acknowledged": true,
+            "retained_provider_entry_consumed": true,
+            "preflight_qualification_freeze_receipts_validated": true,
+            "dynamic_frozen_manifest": true
+          }
+        },
+        "raw_finalizer_evaluator_chain": {
+          "const": {
+            "attempt_count": 4,
+            "raw_files_hash_validated": true,
+            "finalizer_consumed_raw_manifests": true,
+            "effect_answer_reached_finalized_session": true,
+            "evaluator_consumed_finalized_sessions": true
+          }
+        },
+        "held_evidence_chain": {
+          "const": {
+            "raw_attempt_bindings": 4,
+            "finalized_attempt_bindings": 4,
+            "evaluator_consumed_held_finalized_identities": true,
+            "revalidated_before_and_after_consumers": true
+          }
+        },
+        "review_failure_subreceipts": {"$ref": "#/$defs/reviewFailures"},
+        "public_runtime_topology": {
+          "const": {
+            "stable_held_root_projection_only": true,
+            "absolute_runtime_paths_retained": false,
+            "device_inode_uid_values_retained": false,
+            "repository_receipt_scan_bound": true
+          }
+        },
+        "cleanup": {
+          "const": {
+            "state": "complete",
+            "resumed": false,
+            "provider_resources_zero": true,
+            "security_restored": true,
+            "privacy_clean": true
+          }
+        },
+        "zero_real_effects": {"const": true},
+        "temporary_conformance_grant_only": {"const": true},
+        "repository_state_grants_authority": {"const": false},
+        "scientific_interpretation_allowed": {"const": false},
+        "projected_real_cost_usd": {"const": "0.00"}
+      }
+    },
+    "heldEffectSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path", "bytes", "sha256", "factory_entry_point", "protocol_version",
+        "compiled_from_held_bytes", "git_blob_bytes_matched",
+        "regular_current_user_single_link_safe_mode",
+        "path_revalidated_after_execution_and_factory",
+        "runtime_identity_values_retained", "public_attestation_semantic_sha256"
+      ],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "factory_entry_point": {"const": "build_package_effects"},
+        "protocol_version": {"const": "1.0.0"},
+        "compiled_from_held_bytes": {"const": true},
+        "git_blob_bytes_matched": {"const": true},
+        "regular_current_user_single_link_safe_mode": {"const": true},
+        "path_revalidated_after_execution_and_factory": {"const": true},
+        "runtime_identity_values_retained": {"const": false},
+        "public_attestation_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "heldTransactionRoot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_derived_by_shared_code", "descriptor_held_through_cleanup",
+        "no_symlink_path_components_validated", "current_user_owned",
+        "group_world_write_absent", "device_inode_mode_mount_revalidated",
+        "runtime_identity_values_retained", "public_attestation_semantic_sha256"
+      ],
+      "properties": {
+        "identity_derived_by_shared_code": {"const": true},
+        "descriptor_held_through_cleanup": {"const": true},
+        "no_symlink_path_components_validated": {"const": true},
+        "current_user_owned": {"const": true},
+        "group_world_write_absent": {"const": true},
+        "device_inode_mode_mount_revalidated": {"const": true},
+        "runtime_identity_values_retained": {"const": false},
+        "public_attestation_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "authorizationContextBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "control_commit", "control_tree", "provider_contract_version", "plan_path",
+        "plan_sha256", "command_package_sha256", "control_binding_semantic_sha256",
+        "effect_implementation_sha256", "external_authorization_reference",
+        "current_turn_scope", "exact_private_source_sha256_validated",
+        "shared_held_transaction_root_identity_validated",
+        "private_runtime_identity_values_retained", "public_binding_semantic_sha256"
+      ],
+      "properties": {
+        "control_commit": {"$ref": "#/$defs/git"},
+        "control_tree": {"$ref": "#/$defs/git"},
+        "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+        "plan_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "plan_sha256": {"$ref": "#/$defs/sha256"},
+        "command_package_sha256": {"$ref": "#/$defs/sha256"},
+        "control_binding_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "effect_implementation_sha256": {"$ref": "#/$defs/sha256"},
+        "external_authorization_reference": {
+          "type": "string", "pattern": "^AUTH-T09-V[1-9][0-9]*-"
+        },
+        "current_turn_scope": {"const": "T09-PR14-EXACT-HEAD-CONFORMANCE"},
+        "exact_private_source_sha256_validated": {"const": true},
+        "shared_held_transaction_root_identity_validated": {"const": true},
+        "private_runtime_identity_values_retained": {"const": false},
+        "public_binding_semantic_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference", "source_binding", "single_use_state", "replay_rejected",
+        "private_overlay_contents_retained",
+        "same_reference_and_source_across_effect_metadata_launch_cleanup"
+      ],
+      "properties": {
+        "reference": {"type": "string", "pattern": "^AUTH-T09-V[1-9][0-9]*-"},
+        "source_binding": {
+          "const": {
+            "exact_sha256_validated": true,
+            "same_across_effect_metadata_launch_cleanup": true,
+            "private_runtime_value_retained": false
+          }
+        },
+        "single_use_state": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorization_reference", "terminal_state", "single_use",
+            "replay_permitted", "contains_private_overlay_contents",
+            "exact_private_source_context_root_and_receipt_validated",
+            "private_runtime_identity_values_retained"
+          ],
+          "properties": {
+            "authorization_reference": {"type": "string", "pattern": "^AUTH-T09-V[1-9][0-9]*-"},
+            "terminal_state": {"const": "terminal-complete"},
+            "single_use": {"const": true},
+            "replay_permitted": {"const": false},
+            "contains_private_overlay_contents": {"const": false},
+            "exact_private_source_context_root_and_receipt_validated": {"const": true},
+            "private_runtime_identity_values_retained": {"const": false}
+          }
+        },
+        "replay_rejected": {"const": true},
+        "private_overlay_contents_retained": {"const": false},
+        "same_reference_and_source_across_effect_metadata_launch_cleanup": {"const": true}
+      }
+    },
+    "firstPairCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "retained_first_pair_decision_invoked", "task_a_valid_evidence",
+        "task_a_evaluator_succeeded", "task_a_valid_scored_attempt",
+        "finalizer_closure_valid", "pair_match_valid", "decision", "reasons",
+        "exact_private_decision_and_evidence_identities_validated",
+        "private_runtime_identity_values_retained", "public_checkpoint_semantic_sha256",
+        "task_b_admitted_only_after_retained_decision",
+        "safety_fields_have_no_defaults"
+      ],
+      "properties": {
+        "retained_first_pair_decision_invoked": {"const": true},
+        "task_a_valid_evidence": {"const": [true, true]},
+        "task_a_evaluator_succeeded": {"const": [true, true]},
+        "task_a_valid_scored_attempt": {"const": [true, true]},
+        "finalizer_closure_valid": {"const": true},
+        "pair_match_valid": {"const": true},
+        "decision": {"const": "continue-to-task-b"},
+        "reasons": {"const": []},
+        "exact_private_decision_and_evidence_identities_validated": {"const": true},
+        "private_runtime_identity_values_retained": {"const": false},
+        "public_checkpoint_semantic_sha256": {"$ref": "#/$defs/sha256"},
+        "task_b_admitted_only_after_retained_decision": {"const": true},
+        "safety_fields_have_no_defaults": {"const": true}
+      }
+    },
+    "providerCost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "owned_instance_identity", "launch_ordinal", "hourly_price_usd",
+        "provider_profile_sha256", "provider_price_source_sha256",
+        "active_entry_receipt_source_bound", "all_closed_slots_source_bound",
+        "closed_slot_count",
+        "interval_count", "prior_preflight_cost_usd", "current_empirical_cost_usd",
+        "cumulative_provider_cost_usd", "effect_reconciliation_matches_shared_proof",
+        "shared_lifecycle_proof_validated", "runtime_receipt_hashes_retained_publicly",
+        "shared_lifecycle_value_authoritative",
+        "zero_real_provider_effects"
+      ],
+      "properties": {
+        "owned_instance_identity": {"$ref": "#/$defs/sha256"},
+        "launch_ordinal": {"const": 1},
+        "hourly_price_usd": {"const": 1.29},
+        "provider_profile_sha256": {"$ref": "#/$defs/sha256"},
+        "provider_price_source_sha256": {"$ref": "#/$defs/sha256"},
+        "active_entry_receipt_source_bound": {"const": true},
+        "all_closed_slots_source_bound": {"const": true},
+        "closed_slot_count": {"const": 0},
+        "interval_count": {"const": 1},
+        "prior_preflight_cost_usd": {"const": 0.0},
+        "current_empirical_cost_usd": {"const": 0.0},
+        "cumulative_provider_cost_usd": {"const": 0.0},
+        "effect_reconciliation_matches_shared_proof": {"const": true},
+        "shared_lifecycle_proof_validated": {"const": true},
+        "runtime_receipt_hashes_retained_publicly": {"const": false},
+        "shared_lifecycle_value_authoritative": {"const": true},
+        "zero_real_provider_effects": {"const": true}
+      }
+    },
+    "reviewFailures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unscored-task-a-checkpoint-stop", "ambiguous-send-essential-failure",
+        "nonzero-process-exit-essential-failure", "split-authorization-rejection",
+        "effect-module-replacement-rejection", "symlink-transaction-root-rejection",
+        "raw-replacement-rejection", "understated-provider-cost-rejection",
+        "omitted-provider-slot-rejection", "oversized-essential-manifest-rejection",
+        "sensitive-essential-receipt-rejection", "root-replacement-terminalization",
+        "public-runtime-topology-injection-rejection"
+      ],
+      "properties": {
+        "unscored-task-a-checkpoint-stop": {
+          "const": {
+            "decision": "stop-before-task-b",
+            "reason": "task_a_valid_scored_attempt_missing",
+            "task_b_condition_reservations": 0,
+            "task_b_condition_entries": 0,
+            "cleanup_complete": true
+          }
+        },
+        "ambiguous-send-essential-failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "failure_class", "sealed", "exported_and_acknowledged", "unscored",
+            "zero_retry", "cleanup_complete", "complete_envelope_file_count",
+            "complete_envelope_total_bytes", "manifest_receipt_export_scanned"
+          ],
+          "properties": {
+            "failure_class": {"const": "ambiguous-send"},
+            "sealed": {"const": true},
+            "exported_and_acknowledged": {"const": true},
+            "unscored": {"const": true},
+            "zero_retry": {"const": true},
+            "cleanup_complete": {"const": true},
+            "complete_envelope_file_count": {"type": "integer", "minimum": 7, "maximum": 4096},
+            "complete_envelope_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+            "manifest_receipt_export_scanned": {"const": true}
+          }
+        },
+        "nonzero-process-exit-essential-failure": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "failure_class", "sealed", "exported_and_acknowledged", "unscored",
+            "zero_retry", "cleanup_complete", "complete_envelope_file_count",
+            "complete_envelope_total_bytes", "manifest_receipt_export_scanned"
+          ],
+          "properties": {
+            "failure_class": {"const": "process-exit-nonzero"},
+            "sealed": {"const": true},
+            "exported_and_acknowledged": {"const": true},
+            "unscored": {"const": true},
+            "zero_retry": {"const": true},
+            "cleanup_complete": {"const": true},
+            "complete_envelope_file_count": {"type": "integer", "minimum": 7, "maximum": 4096},
+            "complete_envelope_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+            "manifest_receipt_export_scanned": {"const": true}
+          }
+        },
+        "split-authorization-rejection": {
+          "const": {
+            "rejected_before_metadata": true,
+            "secret_reads": 0,
+            "authenticated_metadata_requests": 0,
+            "provider_calls": 0,
+            "condition_reservations": 0
+          }
+        },
+        "effect-module-replacement-rejection": {
+          "const": {
+            "same_size_replacement_rejected": true,
+            "compiled_from_held_bytes": true,
+            "path_revalidated_after_factory": true
+          }
+        },
+        "symlink-transaction-root-rejection": {
+          "const": {
+            "root_symlink_rejected": true,
+            "secret_reads": 0,
+            "authenticated_metadata_requests": 0,
+            "provider_calls": 0,
+            "condition_reservations": 0
+          }
+        },
+        "raw-replacement-rejection": {
+          "const": {
+            "same_size_replacement_rejected": true,
+            "stopping_phase": "finalization",
+            "evaluator_calls": 0,
+            "scientific_interpretation_allowed": false
+          }
+        },
+        "understated-provider-cost-rejection": {
+          "const": {
+            "shared_lifecycle_value_authoritative": true,
+            "self_hashed_effect_receipt_rejected": true,
+            "task_b_condition_entries": 0
+          }
+        },
+        "omitted-provider-slot-rejection": {
+          "const": {
+            "closed_replacement_slot_required": true,
+            "task_b_condition_entries": 0
+          }
+        },
+        "oversized-essential-manifest-rejection": {
+          "const": {
+            "complete_envelope_cap_enforced": true,
+            "essential_failure_accepted": false
+          }
+        },
+        "sensitive-essential-receipt-rejection": {
+          "const": {
+            "exact_schema_enforced": true,
+            "terminal_privacy_scan_included_envelope": true,
+            "privacy_clean": false
+          }
+        },
+        "root-replacement-terminalization": {
+          "const": {
+            "terminal_result_returned": true,
+            "held_root_cleanup_used": true,
+            "replacement_directory_unchanged": true,
+            "privacy_path_identity_unresolved": true,
+            "authority_terminal_state": "terminal-failed-nonreplayable",
+            "held_descriptors_released": true,
+            "provider_resources_zero": true,
+            "scientific_interpretation_allowed": false
+          }
+        },
+        "public-runtime-topology-injection-rejection": {
+          "const": {
+            "forbidden_path_rejected": true,
+            "forbidden_inode_rejected": true
+          }
+        },
+        "essential-envelope-growth-after-enumeration": {
+          "const": {
+            "candidate_path_sizes_authoritative": false,
+            "held_fstat_sizes_authoritative": true,
+            "clean_failure_record_retained": false,
+            "regression_node": "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed"
+          }
+        },
+        "oversized-held-json-member": {
+          "const": {
+            "maximum_bytes": 1048576,
+            "one_byte_over_rejected_before_read": true,
+            "regression_node": "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read"
+          }
+        },
+        "oversized-held-complete-envelope": {
+          "const": {
+            "maximum_files": 4096,
+            "maximum_bytes": 67108864,
+            "one_byte_over_rejected": true,
+            "regression_node": "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate"
+          }
+        },
+        "selected-v17-topology-injection": {
+          "const": {
+            "selected_root_derived_from_target": true,
+            "json_path_and_filesystem_fields_rejected": true,
+            "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected"
+          }
+        },
+        "selected-v17-bound-goal-topology-injection": {
+          "const": {
+            "bound_goal_yaml_scanned": true,
+            "runtime_path_rejected": true,
+            "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned"
+          }
+        },
+        "selected-v17-scan-omission": {
+          "const": {
+            "bound_omission_rejected": true,
+            "unbound_extra_rejected": true,
+            "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra"
+          }
+        }
+      }
+    },
+    "knownFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_state",
+        "unknown_outcomes",
+        "model_call_attempts",
+        "zero_retries"
+      ],
+      "properties": {
+        "terminal_state": {"const": "sent_provider_error_reconciled"},
+        "unknown_outcomes": {"const": 0},
+        "model_call_attempts": {"const": 1},
+        "zero_retries": {"const": true}
+      }
+    },
+    "conditionTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_call_count",
+        "model_roles",
+        "browser_action_count",
+        "stable_unique_call_ids",
+        "terminal_states_complete"
+      ],
+      "properties": {
+        "model_call_count": {"type": "integer", "minimum": 3},
+        "model_roles": {
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "browser_action_count": {"type": "integer", "minimum": 2},
+        "stable_unique_call_ids": {"const": true},
+        "terminal_states_complete": {"const": true}
+      }
+    },
+    "unknownFailure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "terminal_state",
+        "unknown_outcomes",
+        "model_call_attempts",
+        "zero_retries"
+      ],
+      "properties": {
+        "terminal_state": {"const": "sent_outcome_unknown"},
+        "unknown_outcomes": {"const": 1},
+        "model_call_attempts": {"const": 1},
+        "zero_retries": {"const": true}
+      }
+    }
+  }
+}

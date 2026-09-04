@@ -38,6 +38,9 @@ _HEX40: Final = re.compile(r"^[a-f0-9]{40}$")
 _HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
 _PRIVATE_MARKERS: Final = (
     "/Users/",
+    "/private/",
+    "/var/folders/",
+    "/tmp/",
     "BEGIN PRIVATE KEY",
     "OPENAI_API_KEY",
     "LAMBDA_API_KEY",
@@ -49,7 +52,7 @@ _PRIVATE_MARKERS: Final = (
 )
 _PACKAGE_RECEIPT_ROOT: Final = re.compile(r"^v[1-9][0-9]*$")
 
-REQUIRED_SHARED_SOURCES: Final = frozenset(
+LEGACY_REQUIRED_SHARED_SOURCES: Final = frozenset(
     {
         "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
         "containers/sira-smoke/pragmatic/t09_remote_runner.py",
@@ -83,6 +86,14 @@ REQUIRED_SHARED_SOURCES: Final = frozenset(
         "src/giclab/harness/t09_sira_pilot.py",
         "src/giclab/registry.py",
         "src/giclab/validation.py",
+    }
+)
+REQUIRED_SHARED_SOURCES: Final = LEGACY_REQUIRED_SHARED_SOURCES | frozenset(
+    {
+        "src/giclab/control/anti_shadow_lint.py",
+        "src/giclab/control/effects.py",
+        "src/giclab/control/live_conformance.py",
+        "src/giclab/control/shadow_effects.py",
     }
 )
 
@@ -364,22 +375,57 @@ def _git_blob(repository: Path, commit: str, relative: str) -> bytes:
     return completed.stdout
 
 
-def _public_safe(value: object, *, repository: Path) -> None:
+def _public_safe(
+    value: object,
+    *,
+    repository: Path,
+    parent_key: str | None = None,
+) -> None:
     repository_marker = str(repository.resolve())
     if isinstance(value, str):
         lowered = value.casefold()
-        if repository_marker in value or any(
-            marker.casefold() in lowered for marker in _PRIVATE_MARKERS
+        declared_topology_policy = parent_key == "forbidden_path_markers"
+        if repository_marker in value or (
+            not declared_topology_policy
+            and any(marker.casefold() in lowered for marker in _PRIVATE_MARKERS)
         ):
             raise ControlProofError("control proof contains a private path or secret marker")
     elif isinstance(value, dict):
         for key, child in value.items():
-            if any(marker.casefold() in str(key).casefold() for marker in _PRIVATE_MARKERS[5:]):
+            normalized_key = str(key).casefold()
+            if normalized_key in {"device", "inode", "uid"}:
+                raise ControlProofError("control proof contains runtime filesystem topology")
+            if any(marker.casefold() in normalized_key for marker in _PRIVATE_MARKERS[8:]):
                 raise ControlProofError("control proof contains a secret-like field")
-            _public_safe(child, repository=repository)
+            _public_safe(child, repository=repository, parent_key=str(key))
     elif isinstance(value, list):
         for child in value:
-            _public_safe(child, repository=repository)
+            _public_safe(child, repository=repository, parent_key=parent_key)
+
+
+def _public_topology_safe(
+    value: object,
+    *,
+    repository: Path,
+    parent_key: str | None = None,
+) -> None:
+    """Reject runtime filesystem identities while permitting explicit lint policy text."""
+
+    repository_marker = str(repository.resolve())
+    if isinstance(value, str):
+        if repository_marker in value or (
+            parent_key != "forbidden_path_markers"
+            and any(marker in value for marker in _PRIVATE_MARKERS[:4])
+        ):
+            raise ControlProofError("control proof contains private runtime topology")
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            if str(key).casefold() in {"device", "inode", "uid"}:
+                raise ControlProofError("control proof contains runtime filesystem topology")
+            _public_topology_safe(child, repository=repository, parent_key=str(key))
+    elif isinstance(value, list):
+        for child in value:
+            _public_topology_safe(child, repository=repository, parent_key=parent_key)
 
 
 def discover_sealed_control_receipt_roots(repository: Path) -> tuple[Path, ...]:
@@ -642,6 +688,11 @@ def _identity_from_receipt(document: Mapping[str, object]) -> tuple[object, obje
         return repository.get("commit"), repository.get("tree")
     if "source_commit" in document or "source_tree" in document:
         return document.get("source_commit"), document.get("source_tree")
+    if "control_implementation_commit" in document:
+        return (
+            document.get("control_implementation_commit"),
+            document.get("control_implementation_tree"),
+        )
     return document.get("repository_commit"), document.get("repository_tree")
 
 
@@ -671,7 +722,7 @@ def generate_source_binding_receipt(
             }
         )
     document: dict[str, object] = {
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "base_commit": BASE_COMMIT,
         "source_commit": source_commit,
         "source_tree": source_tree,
@@ -728,6 +779,8 @@ def generate_control_binding_document(
     agent_check_receipt: Path,
     source_binding_receipt: Path,
     incident_receipt: Path,
+    anti_shadow_lint_receipt: Path,
+    live_effect_conformance_receipt: Path,
 ) -> dict[str, object]:
     """Build the exact binding document after every constituent is sealed."""
 
@@ -738,12 +791,25 @@ def generate_control_binding_document(
         raise ControlProofError("control binding commit/tree does not resolve")
     if set(shadow_failures) != set(REQUIRED_FAILURE_SCENARIOS):
         raise ControlProofError("control binding failure matrix is incomplete")
+    registration = selected_target.selected_contract.effect_registration
     document: dict[str, object] = {
-        "schema_version": "4.0.0",
+        "schema_version": "5.0.0",
         "repository_slug": REPOSITORY_SLUG,
         "base_commit": BASE_COMMIT,
         "control_plane_revision": {"commit": control_commit, "tree": control_tree},
         "selected_runtime_target": selected_target.to_document(),
+        "package_effect_registration": (
+            None
+            if registration is None
+            else {
+                "implementation_path": registration.implementation_path,
+                "implementation_bytes": registration.implementation_bytes,
+                "implementation_sha256": registration.implementation_sha256,
+                "factory_entry_point": registration.factory_entry_point,
+                "authority_grant_schema_version": (registration.authority_grant_schema_version),
+                "effect_protocol_version": registration.effect_protocol_version,
+            }
+        ),
         "artifacts": {
             "goal_record": _byte_artifact_binding(approved, goal_record_snapshot),
             "registry_receipt": _artifact_binding(approved, registry_receipt),
@@ -761,6 +827,14 @@ def generate_control_binding_document(
             "agent_check_receipt": _artifact_binding(approved, agent_check_receipt),
             "source_binding_receipt": _artifact_binding(approved, source_binding_receipt),
             "incident_receipt": _artifact_binding(approved, incident_receipt),
+            "anti_shadow_lint_receipt": _artifact_binding(
+                approved,
+                anti_shadow_lint_receipt,
+            ),
+            "live_effect_conformance_receipt": _artifact_binding(
+                approved,
+                live_effect_conformance_receipt,
+            ),
         },
         "authority": {
             "live_authorization": False,
@@ -797,6 +871,9 @@ def _validate_control_receipt_set(
         raise ControlProofError("binding document is not an object")
     _validate_schema(root, CONTROL_BINDING_SCHEMA, binding)
     binding_semantic = _semantic_sha256(binding)
+    binding_version = binding.get("schema_version")
+    if binding_version not in {"4.0.0", "5.0.0"}:
+        raise ControlProofError("control binding schema version is unsupported")
     if (
         reference.expected_repository_slug != REPOSITORY_SLUG
         or binding.get("repository_slug") != reference.expected_repository_slug
@@ -876,6 +953,29 @@ def _validate_control_receipt_set(
         or reference.expected_plan_id != contract.plan_id
     ):
         raise ControlProofError("binding selected another runtime target")
+    if binding_version == "5.0.0":
+        registration = contract.effect_registration
+        expected_registration: dict[str, object] | None = (
+            None
+            if registration is None
+            else {
+                "implementation_path": registration.implementation_path,
+                "implementation_bytes": registration.implementation_bytes,
+                "implementation_sha256": registration.implementation_sha256,
+                "factory_entry_point": registration.factory_entry_point,
+                "authority_grant_schema_version": (registration.authority_grant_schema_version),
+                "effect_protocol_version": registration.effect_protocol_version,
+            }
+        )
+        if binding.get("package_effect_registration") != expected_registration:
+            raise ControlProofError("binding package-effect registration drifted")
+        if registration is not None:
+            encoded_effect = _git_blob(root, commit, registration.implementation_path)
+            if (
+                len(encoded_effect) != registration.implementation_bytes
+                or hashlib.sha256(encoded_effect).hexdigest() != registration.implementation_sha256
+            ):
+                raise ControlProofError("binding package-effect source differs from Git")
     if authority != {
         "live_authorization": False,
         "scientific_interpretation_allowed": False,
@@ -883,7 +983,7 @@ def _validate_control_receipt_set(
     }:
         raise ControlProofError("binding document claims live or scientific authority")
 
-    names = (
+    names: tuple[str, ...] = (
         "registry_receipt",
         "active_version_lint_receipt",
         "composition_receipt",
@@ -893,6 +993,12 @@ def _validate_control_receipt_set(
         "source_binding_receipt",
         "incident_receipt",
     )
+    if binding_version == "5.0.0":
+        names = (
+            *names,
+            "anti_shadow_lint_receipt",
+            "live_effect_conformance_receipt",
+        )
     documents: dict[str, dict[str, object]] = {}
     semantics: dict[str, str] = {}
     for name in names:
@@ -966,6 +1072,15 @@ def _validate_control_receipt_set(
         "source_binding_receipt": "schemas/t09-control-plane-source-binding.schema.json",
         "incident_receipt": "schemas/t09-incident-completeness-receipt.schema.json",
     }
+    if binding_version == "5.0.0":
+        schema_map.update(
+            {
+                "anti_shadow_lint_receipt": ("schemas/t09-anti-shadow-lint-receipt.schema.json"),
+                "live_effect_conformance_receipt": (
+                    "schemas/t09-live-effect-conformance-receipt.schema.json"
+                ),
+            }
+        )
     for name, schema_path in schema_map.items():
         _validate_schema(root, schema_path, documents[name])
     for failure in failures.values():
@@ -973,6 +1088,7 @@ def _validate_control_receipt_set(
 
     all_documents = [*documents.values(), *failures.values()]
     for document in all_documents:
+        _public_topology_safe(document, repository=root)
         identity = _identity_from_receipt(document)
         if identity != (commit, tree):
             raise ControlProofError("bound receipts do not share the exact control revision")
@@ -1050,17 +1166,165 @@ def _validate_control_receipt_set(
     if documents["state_capsule"].get("selected_runtime_target") != selected:
         raise ControlProofError("state capsule does not bind the selected runtime target")
     capsule_control = documents["state_capsule"].get("control_plane")
-    if not isinstance(capsule_control, dict) or any(
-        capsule_control.get(field) is not True
-        for field in (
-            "registry_complete",
-            "composition_valid",
-            "active_version_lint_valid",
-            "shadow_happy_path",
-            "failure_matrix_valid",
+    capsule_required_fields: tuple[str, ...] = (
+        "registry_complete",
+        "composition_valid",
+        "active_version_lint_valid",
+        "shadow_happy_path",
+        "failure_matrix_valid",
+    )
+    if binding_version == "5.0.0":
+        capsule_required_fields = (
+            *capsule_required_fields,
+            "anti_shadow_lint_valid",
+            "live_effect_conformance_valid",
         )
+    if not isinstance(capsule_control, dict) or any(
+        capsule_control.get(field) is not True for field in capsule_required_fields
     ):
         raise ControlProofError("state capsule does not claim the complete bound control proof")
+
+    if binding_version == "5.0.0":
+        anti_shadow = documents["anti_shadow_lint_receipt"]
+        anti_counts = anti_shadow.get("classification_counts")
+        anti_topology = anti_shadow.get("public_receipt_topology_scan")
+        conformance = documents["live_effect_conformance_receipt"]
+        temporary_package = conformance.get("temporary_package")
+        base_inventory = anti_shadow.get("base_assumption_inventory")
+        if (
+            anti_shadow.get("complete") is not True
+            or anti_shadow.get("findings") != []
+            or not isinstance(anti_counts, dict)
+            or anti_counts.get("shared production-wrapper defect") != 0
+            or not isinstance(base_inventory, list)
+            or [item.get("assumption_id") for item in base_inventory if isinstance(item, dict)]
+            != [f"SA-{index:02d}" for index in range(1, 13)]
+        ):
+            raise ControlProofError("anti-shadow source lint receipt is incomplete")
+        if anti_shadow.get("schema_version") == "3.0.0":
+            expected_receipt_root = f"control/receipts/packages/{contract.version.lower()}"
+            sealed_roots = (
+                anti_topology.get("sealed_roots_scanned")
+                if isinstance(anti_topology, dict)
+                else None
+            )
+            if (
+                not isinstance(anti_topology, dict)
+                or anti_topology.get("selected_provider_contract_version") != contract.version
+                or anti_topology.get("selected_receipt_root") != expected_receipt_root
+                or anti_topology.get("selected_root_matches_version") is not True
+                or not isinstance(sealed_roots, list)
+                or expected_receipt_root not in sealed_roots
+            ):
+                raise ControlProofError(
+                    "anti-shadow topology receipt does not bind the selected package root"
+                )
+        if (
+            conformance.get("complete") is not True
+            or conformance.get("shared_source_byte_map_unchanged") is not True
+            or conformance.get("actual_v17_artifacts_created") is not False
+            or conformance.get("network_provider_cloud_browser_science_effects") != 0
+            or conformance.get("live_authority_created") is not False
+            or conformance.get("scientific_interpretation_allowed") is not False
+            or not isinstance(temporary_package, dict)
+            or temporary_package.get("provider_contract_version") != contract.version
+            or temporary_package.get("controller_terminal_state") != "category3-live-complete-clean"
+            or temporary_package.get("zero_real_effects") is not True
+            or temporary_package.get("repository_state_grants_authority") is not False
+        ):
+            raise ControlProofError("live-effect conformance receipt is incomplete")
+        assert isinstance(temporary_package, dict)
+        conformance_metadata = temporary_package.get("metadata")
+        conformance_clock = temporary_package.get("clock")
+        conformance_traces = temporary_package.get("condition_traces")
+        model_accounting = temporary_package.get("model_call_accounting")
+        browser_accounting = temporary_package.get("browser_accounting")
+        host_transaction = temporary_package.get("host_transaction")
+        evidence_chain = temporary_package.get("raw_finalizer_evaluator_chain")
+        cleanup = temporary_package.get("cleanup")
+        if (
+            conformance_metadata
+            != {
+                "noncanonical_runtime_credential_reached_channel": True,
+                "request_count": 1,
+                "zero_retry": True,
+                "zero_redirect": True,
+                "zero_pagination": True,
+                "credential_material_retained": False,
+            }
+            or not isinstance(conformance_clock, dict)
+            or conformance_clock.get("injected") is not True
+            or conformance_clock.get("domains_separate") is not True
+            or 0.25 not in conformance_clock.get("sleep_calls", [])
+            or not isinstance(conformance_traces, dict)
+            or set(conformance_traces) != set(contract.run_ids)
+            or not isinstance(model_accounting, dict)
+            or not isinstance(browser_accounting, dict)
+            or host_transaction
+            != {
+                "tracked_package_staged_and_acknowledged": True,
+                "retained_provider_entry_consumed": True,
+                "preflight_qualification_freeze_receipts_validated": True,
+                "dynamic_frozen_manifest": True,
+            }
+            or evidence_chain
+            != {
+                "attempt_count": len(contract.run_ids),
+                "raw_files_hash_validated": True,
+                "finalizer_consumed_raw_manifests": True,
+                "effect_answer_reached_finalized_session": True,
+                "evaluator_consumed_finalized_sessions": True,
+            }
+            or cleanup
+            != {
+                "state": "complete",
+                "resumed": False,
+                "provider_resources_zero": True,
+                "security_restored": True,
+                "privacy_clean": True,
+            }
+        ):
+            raise ControlProofError("live-effect conformance subproofs are incomplete")
+        total_calls = 0
+        total_actions = 0
+        for run_id, raw_trace in conformance_traces.items():
+            if not isinstance(raw_trace, dict):
+                raise ControlProofError("live-effect condition trace is malformed")
+            call_count = raw_trace.get("model_call_count")
+            roles = raw_trace.get("model_roles")
+            action_count = raw_trace.get("browser_action_count")
+            minimum_calls = 5 if "SIMULATIVE" in run_id else 3
+            minimum_roles = 3 if "SIMULATIVE" in run_id else 2
+            if (
+                not isinstance(call_count, int)
+                or isinstance(call_count, bool)
+                or call_count < minimum_calls
+                or not isinstance(roles, list)
+                or len(set(roles)) < minimum_roles
+                or not isinstance(action_count, int)
+                or isinstance(action_count, bool)
+                or action_count < 2
+                or raw_trace.get("stable_unique_call_ids") is not True
+                or raw_trace.get("terminal_states_complete") is not True
+            ):
+                raise ControlProofError("live-effect condition trace shape drifted")
+            total_calls += call_count
+            total_actions += action_count
+        if (
+            model_accounting.get("total_calls") != total_calls
+            or model_accounting.get("stable_unique_call_ids") is not True
+            or model_accounting.get("terminal_states_complete") is not True
+            or model_accounting.get("roles_are_multi_role") is not True
+            or model_accounting.get("zero_retries") is not True
+            or browser_accounting.get("total_actions") != total_actions
+            or browser_accounting.get("multiple_actions_per_condition") is not True
+        ):
+            raise ControlProofError("live-effect accounting aggregate drifted")
+        if (
+            selected_target.successor_status == "not-created"
+            and conformance.get("actual_v17_artifacts_present") is not False
+        ):
+            raise ControlProofError("live-effect conformance observed an undeclared successor")
     happy = documents["shadow_happy_path"]
     if (
         happy.get("scenario") != HAPPY_PATH
@@ -1096,6 +1360,16 @@ def _validate_control_receipt_set(
         or happy_accounting["aggregate_charged_upper_cost_usd"] <= 0
     ):
         raise ControlProofError("happy-path shadow accounting proof is incomplete")
+    if binding_version == "5.0.0":
+        conformance_package = documents["live_effect_conformance_receipt"].get("temporary_package")
+        if (
+            not isinstance(conformance_package, dict)
+            or not isinstance(happy_production, dict)
+            or conformance_package.get("package_budget") != happy_production.get("package_budget")
+        ):
+            raise ControlProofError(
+                "live-effect conformance package budget differs from the shared shadow"
+            )
     for scenario, document in failures.items():
         command_package_matches = (
             document.get("command_package_sha256") is None
@@ -1130,6 +1404,13 @@ def _validate_control_receipt_set(
         "state_capsule": semantics["state_capsule"],
         "source_binding": semantics["source_binding_receipt"],
     }
+    if binding_version == "5.0.0":
+        scalar_bindings.update(
+            {
+                "anti_shadow_lint": semantics["anti_shadow_lint_receipt"],
+                "live_effect_conformance": semantics["live_effect_conformance_receipt"],
+            }
+        )
     for check_name, expected in scalar_bindings.items():
         check = checks.get(check_name)
         if not isinstance(check, dict) or check.get("semantic_sha256") != expected:
@@ -1186,7 +1467,17 @@ def _validate_control_receipt_set(
         if isinstance(source_files, list)
         else set()
     )
-    if observed_sources != REQUIRED_SHARED_SOURCES:
+    expected_sources = (
+        LEGACY_REQUIRED_SHARED_SOURCES
+        if source.get("schema_version") == "1.0.0"
+        else REQUIRED_SHARED_SOURCES
+        if source.get("schema_version") == "2.0.0"
+        else frozenset()
+    )
+    expected_source_version = "1.0.0" if binding_version == "4.0.0" else "2.0.0"
+    if source.get("schema_version") != expected_source_version:
+        raise ControlProofError("source-binding schema does not match the binding generation")
+    if observed_sources != expected_sources:
         raise ControlProofError("source-binding receipt lacks the exact shared source set")
     assert isinstance(source_files, list)
     for item in source_files:

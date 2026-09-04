@@ -32,8 +32,31 @@ t09_v16_stopped_checkpoint:
   incident: INC-T09-V16-LIFECYCLE-REGISTRY
   evidence_record: experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 t09_control_plane_stabilization_workstream:
-  status: implementation-complete-independent-rereview-required
-  branch: codex/t09-control-target-selection
+  status: live-capable-production-effects-third-rereview-repair-complete-rereview-required
+  branch: codex/t09-live-capable-production-effects
+  pull_request: 14
+  reviewed_head: b73acefd41bf129a7e0264b93995b36249bc0270
+  reviewed_tree: 0038a556c54e2fc95362a78c71914281f8dad28c
+  review_id: 5101177903
+  review_disposition: changes-required-not-approved
+  review_incident: INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY
+  review_incident_status: resolved
+  blocking_incident: null
+  external_governance_gate: independent-exact-head-rereview-and-explicit-merge-authorization
+  implementation_ancestor_commit: f5c19404c483fea7ed4b47235e5a1763213e017f
+  implementation_ancestor_tree: 52aba08c58342ab714ccb548b1049cb3685c5574
+  receipt_binding_ancestor_commit: f5c19404c483fea7ed4b47235e5a1763213e017f
+  receipt_binding_ancestor_tree: 52aba08c58342ab714ccb548b1049cb3685c5574
+  receipt_descendant_commit: 11265fc8aeeea8be9307ca680b490e129822ce71
+  receipt_descendant_tree: 4611063c81782a4b20050280387bd8f1d34fbdae
+  current_v16_binding_file_sha256: cbc730e2ac14a41efc679681d686f97a38d370a8b9eaa902ebe4b3d33f854ea8
+  current_v16_binding_semantic_sha256: 4f7bbf53565fcf4db2d12a90669b4c2c4f2ad9af57c5cdcd4416b11ff18826f1
+  current_v16_source_binding_file_sha256: 6b8d1699ce1e39c6a3fbe758321b5c76921377dfa722a114892c1018bd93be16
+  current_v16_source_binding_semantic_sha256: 17efbb0143b1c265ae4516ac1c8f4d33486d3cb16d903cdc4e3461e6d1f4fc26
+  live_effect_conformance_file_sha256: a0e8d41ab4b7e3173c425778690a03c444831104ef31b00005db0fb92fb96bee
+  live_effect_conformance_semantic_sha256: 3580d9f6f093df431b4cb6ae426a79cd12096c775e77964e8fccacc75b86cdd0
+  anti_shadow_bypass_file_sha256: cf9b0aa4229a4e7d8f682035317daf3e1799e40ddfe5ffbfc1d25b4aca07e4a3
+  anti_shadow_bypass_semantic_sha256: ac55e6d2740f9831a92e0517f0d4a0ec736fa6e96f7748ee32d939a757d63d6f
   selected_runtime_target_source: goal-record
   selected_runtime_package: V16
   selected_runtime_plan: PLAN-EXP0001-PILOT-V16
@@ -42,6 +65,26 @@ t09_control_plane_stabilization_workstream:
   offline_composition_valid: true
   shadow_happy_path_valid: true
   required_failure_matrix_valid: true
+  effect_protocol_version: 1.0.0
+  production_effect_seams_live_capable: true
+  retained_first_pair_decision_authoritative: true
+  post_entry_essential_failure_evidence_required: true
+  unified_single_use_live_authority_protocol_valid: true
+  held_module_root_evidence_identity_protocol_valid: true
+  provider_lifecycle_cost_source_bound: true
+  complete_essential_failure_envelope_valid: true
+  complete_envelope_held_size_admission_valid: true
+  essential_envelope_counts_derived_from_held_artifacts: true
+  held_root_terminalization_guaranteed: true
+  public_runtime_topology_retained: false
+  selected_target_public_topology_validation: true
+  retained_sealed_roots_validate_independently: true
+  bound_goal_and_text_receipts_topology_scanned: true
+  authoritative_condition_accounting: real-time-typed-event-observer
+  anti_shadow_lint_valid: true
+  live_effect_conformance_valid: true
+  package_effect_factory_protocol_valid: true
+  current_control_receipt_rebind_required_before_handoff: false
   live_authorization: false
   scientific_interpretation_allowed: false
   next_runtime_package: not-created
@@ -479,4 +522,4 @@ t09_autonomous_retry2_v9_checkpoint:
   scientific_result_claimed: false
   experiment_outcome_assigned: false
 authoritative_plan: docs/exec-plans/active/PHASE_1_ARTIFACT_EXECUTION.md
-last_updated: '2026-08-31'
+last_updated: '2026-09-02'

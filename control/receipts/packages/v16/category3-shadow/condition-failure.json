@@ -1,0 +1,727 @@
+{
+  "adapter_call_ledger": [
+    {
+      "adapter": "host",
+      "index": 1,
+      "operation": "host.stage",
+      "outcome": "passed",
+      "subject": "tracked-package-archive"
+    },
+    {
+      "adapter": "secret",
+      "index": 2,
+      "operation": "secret.read",
+      "outcome": "passed",
+      "subject": "strict-mixed-dotenv"
+    },
+    {
+      "adapter": "metadata",
+      "index": 3,
+      "operation": "metadata.request",
+      "outcome": "passed",
+      "subject": "V16"
+    },
+    {
+      "adapter": "provider",
+      "index": 4,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    },
+    {
+      "adapter": "metadata",
+      "index": 5,
+      "operation": "metadata.is_fresh",
+      "outcome": "passed",
+      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
+    },
+    {
+      "adapter": "provider",
+      "index": 6,
+      "operation": "provider.launch",
+      "outcome": "accepted",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "provider",
+      "index": 7,
+      "operation": "provider.enter",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "host",
+      "index": 8,
+      "operation": "host.preflight",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "host",
+      "index": 9,
+      "operation": "host.qualify",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "evidence",
+      "index": 10,
+      "operation": "evidence.record",
+      "outcome": "retained:1fa79da2ce3d",
+      "subject": "qualification"
+    },
+    {
+      "adapter": "host",
+      "index": 11,
+      "operation": "host.freeze",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "evidence",
+      "index": 12,
+      "operation": "evidence.record",
+      "outcome": "retained:534c48dd71fa",
+      "subject": "scientific-freeze"
+    },
+    {
+      "adapter": "condition",
+      "index": 13,
+      "operation": "condition.reserve",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 14,
+      "operation": "condition.enter",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "condition",
+      "index": 15,
+      "operation": "condition.run",
+      "outcome": "essential-failure-sealed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "host",
+      "index": 16,
+      "operation": "host.cleanup",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "evidence",
+      "index": 17,
+      "operation": "evidence.scan_privacy",
+      "outcome": "passed",
+      "subject": "effect-evidence"
+    },
+    {
+      "adapter": "provider",
+      "index": 18,
+      "operation": "provider.terminate",
+      "outcome": "accepted",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "provider",
+      "index": 19,
+      "operation": "provider.inventory",
+      "outcome": "zero",
+      "subject": "owned-resources"
+    }
+  ],
+  "authority_consumed": {
+    "launch_count": 1,
+    "model_metadata": true,
+    "provider_launch": "consumed",
+    "replacement_count": 0
+  },
+  "call_counts": {
+    "browser_actions": 0,
+    "condition_entries": 1,
+    "condition_reservations": 1,
+    "launch_calls": 1,
+    "metadata_requests": 1,
+    "model_call_attempts": 0,
+    "provider_gets": 2,
+    "provider_posts": 2,
+    "secret_reads": 1,
+    "termination_calls": 1,
+    "unknown_model_outcomes": 0
+  },
+  "cleanup": {
+    "privacy_clean": true,
+    "provider_resources_zero": true,
+    "resumed": false,
+    "security_restored": true,
+    "state": "complete"
+  },
+  "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "condition_identities_consumed": [
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+  ],
+  "condition_identities_reserved": [
+    "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+  ],
+  "earliest_stopping_phase": "condition-execution",
+  "effect_authority": "shadow-only",
+  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+  "evidence_retained": {
+    "classification": "shadow-control-plane-output",
+    "essential_failures": [
+      {
+        "essential_file_count": 7,
+        "essential_total_bytes": 5221,
+        "evidence_binding_sha256": "57c28cff2bf502a338c53e509045824812e2f1a9c8571aa18bd1d77ac547553b",
+        "export_receipt_sha256": "800ec2a1e648d434cd6583aca1b26de5797b4bbbd4d33b3d4c40783786cccdd7",
+        "failure_class": "outcome-validation-failure",
+        "infrastructure_invalid": true,
+        "manifest_sha256": "f3ee6782e257275de8f8cfd806f89267fc066693d5cf5abde6cf7e7f103315de",
+        "receipt_sha256": "d009126a8903eb71a993349d509baafbdb12c6a57fdbff782d57955b818906ef",
+        "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "stopping_phase": "condition-execution",
+        "unscored": true
+      }
+    ],
+    "evaluator": [],
+    "finalized": [],
+    "pair_checkpoint_decision": null,
+    "pair_checkpoint_reasons": [],
+    "pair_checkpoint_sha256": null,
+    "raw": []
+  },
+  "fake_evidence_outputs": [
+    {
+      "kind": "essential-infrastructure-failure",
+      "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "sha256": "57c28cff2bf502a338c53e509045824812e2f1a9c8571aa18bd1d77ac547553b",
+      "shadow_only": true
+    }
+  ],
+  "implementation_flavor": "production-wrapper",
+  "ordered_state_transitions": [
+    {
+      "index": 1,
+      "outcome": "passed",
+      "phase": "verify-exact-repository-package-identity"
+    },
+    {
+      "index": 2,
+      "outcome": "passed",
+      "phase": "offline-composition"
+    },
+    {
+      "index": 3,
+      "outcome": "passed",
+      "phase": "state-capsule-snapshot"
+    },
+    {
+      "detail": "validated-static-shadow-rehearsal",
+      "index": 4,
+      "outcome": "passed",
+      "phase": "shadow-rehearsal-receipt-validation"
+    },
+    {
+      "index": 5,
+      "outcome": "passed",
+      "phase": "local-staging"
+    },
+    {
+      "index": 6,
+      "outcome": "passed",
+      "phase": "secret-channel-qualification"
+    },
+    {
+      "index": 7,
+      "outcome": "passed",
+      "phase": "metadata-receipt"
+    },
+    {
+      "index": 8,
+      "outcome": "passed",
+      "phase": "provider-read-only-preflight"
+    },
+    {
+      "index": 9,
+      "outcome": "passed",
+      "phase": "final-metadata-freshness"
+    },
+    {
+      "detail": "ordinal-1",
+      "index": 10,
+      "outcome": "passed",
+      "phase": "launch"
+    },
+    {
+      "index": 11,
+      "outcome": "passed",
+      "phase": "provider-entry"
+    },
+    {
+      "index": 12,
+      "outcome": "passed",
+      "phase": "host-preflight"
+    },
+    {
+      "index": 13,
+      "outcome": "passed",
+      "phase": "image-finalizer-qualification"
+    },
+    {
+      "index": 14,
+      "outcome": "passed",
+      "phase": "scientific-freeze"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 15,
+      "outcome": "passed",
+      "phase": "condition-reservation"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "index": 16,
+      "outcome": "passed",
+      "phase": "empirical-entry"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: outcome-validation-failure",
+      "index": 17,
+      "outcome": "essential-failure-sealed",
+      "phase": "condition-execution"
+    },
+    {
+      "index": 18,
+      "outcome": "passed",
+      "phase": "cleanup"
+    },
+    {
+      "index": 19,
+      "outcome": "passed",
+      "phase": "terminal-provider-security-verification"
+    }
+  ],
+  "production_control_evidence": {
+    "accounting": {
+      "aggregate_charged_upper_cost_usd": 0.0,
+      "aggregate_observed_cost_usd": 0.0,
+      "authority": "ProviderBudgetBoundary-real-time-event-observer",
+      "conditions": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+          "calls": [],
+          "observed_lower_bound": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "outstanding_reservation_projection": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "outstanding_reservations": 0,
+          "reserved_upper_bound": {
+            "aggregate": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            },
+            "condition": {
+              "browser_actions": 0,
+              "cached_input_tokens": 0,
+              "cost_usd": 0.0,
+              "default_service_tier_responses": 0,
+              "input_tokens": 0,
+              "model_call_attempts": 0,
+              "output_bytes": 0,
+              "output_tokens": 0,
+              "total_tokens": 0
+            }
+          },
+          "schema_version": "0.2.0",
+          "terminal_counts": {
+            "admitted_not_sent": 0,
+            "sent_outcome_unknown": 0,
+            "sent_provider_error_reconciled": 0,
+            "sent_response_reconciled": 0,
+            "sent_transport_error_known": 0
+          },
+          "unknown_outcomes": 0,
+          "unreconciled_provider_attempts": 0
+        }
+      },
+      "fake_usage": true,
+      "projected_real_cost_usd": 0.0,
+      "unique_call_ids": 0,
+      "zero_retries": true
+    },
+    "authority_consumption": {
+      "contains_private_overlay_contents": false,
+      "single_use": false,
+      "terminal_state": "shadow-only"
+    },
+    "authority_source": "validated-deterministic-production-effects",
+    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+    "cleanup_handoff_sha256": "e5dd668066b83ef6e565748ad99ff440ececacd45cf25705ae6ca38b4629a251",
+    "cleanup_receipt_sha256": "4a19c3269e424d63a5687108edc54937faef9684eb797808ff41ecf88c3fd45a",
+    "cleanup_resume_byte_identical": true,
+    "cleanup_used_held_root_after_path_mismatch": false,
+    "effect_authority": "shadow-only",
+    "effect_implementation": {
+      "bytes": 100560,
+      "factory_entry_point": "build_deterministic_effects",
+      "path": "src/giclab/control/shadow_effects.py",
+      "protocol_version": "1.0.0",
+      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+    },
+    "effect_protocol_version": "1.0.0",
+    "essential_failures": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "completed": false,
+        "export_receipt_sha256": "800ec2a1e648d434cd6583aca1b26de5797b4bbbd4d33b3d4c40783786cccdd7",
+        "export_resumed": false,
+        "failure_class": "outcome-validation-failure",
+        "file_count": 7,
+        "held_artifact_binding_sha256": "5697974994a0091ea78904dd11dcebd0d1b7fe9e0b931c9bd81081718d8f8aa8",
+        "manifest_sha256": "f3ee6782e257275de8f8cfd806f89267fc066693d5cf5abde6cf7e7f103315de",
+        "process_exit_code": null,
+        "receipt_sha256": "d009126a8903eb71a993349d509baafbdb12c6a57fdbff782d57955b818906ef",
+        "retry_count": 0,
+        "total_bytes": 5221,
+        "unknown_call_ids": [],
+        "unscored": true
+      }
+    },
+    "evaluations": {},
+    "first_pair_checkpoint": null,
+    "held_evidence": {
+      "essential_failure": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "5697974994a0091ea78904dd11dcebd0d1b7fe9e0b931c9bd81081718d8f8aa8"
+      },
+      "finalized": {},
+      "raw": {},
+      "revalidated_across_consumers": true
+    },
+    "held_transaction_root": {
+      "current_user_owned": true,
+      "descriptor_held_through_cleanup": true,
+      "device_inode_mode_mount_revalidated": true,
+      "group_world_write_absent": true,
+      "identity_derived_by_shared_code": true,
+      "no_symlink_path_components_validated": true,
+      "public_attestation_semantic_sha256": "acaa9f688fc4409739fed1c33841d77cda264c9c73dcf347bf3f9560452e5ad6",
+      "runtime_identity_values_retained": false
+    },
+    "host_receipts": {
+      "frozen_manifest": "4fd322f992a410f39cb0395a10518498088b788f6f89f44af0cd947f60196306",
+      "postfreeze_validation": "a452149d74ddef7d0a49b44564a8be56eb3e80ef3f676c3d24da66e1fb796956",
+      "qualification": "1fa79da2ce3dea6217e7a4b8453d441fd7c182c661645c9c7dc49d164fd4eb6c"
+    },
+    "implementation_flavor": "production-wrapper",
+    "package_budget": {
+      "aggregate_caps": {
+        "max_browser_actions": 120,
+        "max_cached_input_tokens": 4000000,
+        "max_cost_usd": 40.0,
+        "max_input_tokens": 4000000,
+        "max_model_call_attempts": 4620,
+        "max_output_bytes": 2147483648,
+        "max_output_tokens": 4000000,
+        "max_total_tokens": 4000000,
+        "max_wall_seconds": 14400
+      },
+      "attempt_order": [
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+      ],
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "condition_caps": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        }
+      },
+      "condition_plan_sha256s": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "8c0b447b794853e9f69fe9fc665cde632e3c4d0aa9a99a4346d46f345aaf20bf",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "30515859c919b5dd62a821b57efeb39135760c059ee9a05fbe1c6d54b269ca1c",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "6a3bc1f4775bc27dcb8aaa19770ce43a72e03da0a7466a8eba978121a2d6170d",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "081af4f0f0477f529b06df136a72042dd792508af33adb3a34bf31d7e3959378"
+      },
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "model_revision": "gpt-4o-2024-11-20",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "service_tier": "default",
+      "zero_retry": true
+    },
+    "package_staging": {
+      "archive_bytes": 194560,
+      "archive_member_count": 11,
+      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "host_acknowledgement_sha256": "331e343f966ccac051d127ab7031b02d08cca4f55a353ed983a2588a4ef5d0f0",
+      "host_rehash_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
+      "package_source": "working-tree",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "tracked_only": true
+    },
+    "production_primitives": [
+      "ProviderBudgetBoundary.invoke",
+      "T09ProviderContract.validate_owner",
+      "admit_model_metadata_receipt_at_prelaunch_boundary",
+      "bind_model_metadata_receipt_to_authorization_overlay",
+      "create_model_metadata_receipt",
+      "export_essential_failure_bundle",
+      "immutable_cleanup_export_handoff",
+      "initialize_pilot_state",
+      "launch_campaign",
+      "load_execution_contract",
+      "load_openai_dotenv_assignment",
+      "load_validated_pilot_state:cleanup",
+      "mark_empirical_entry",
+      "mark_essential_failure_sealed",
+      "privacy_violations:held-descriptor",
+      "publish_dynamic_frozen_run_manifest",
+      "reserve_condition_start",
+      "resolve_registered_command_package",
+      "stage_verified_archive",
+      "validate_campaign_launch_projection",
+      "validate_cleanup_execution_receipt",
+      "validate_entry_receipt_source_bound",
+      "validate_essential_failure_bundle",
+      "validate_finalizer_source",
+      "validate_host_preflight_receipt",
+      "validate_host_qualification_receipt",
+      "validate_model_metadata_receipt:durable-offline",
+      "validate_model_metadata_receipt_offline",
+      "validate_postfreeze_receipt",
+      "validate_tracked_package_archive"
+    ],
+    "provider_cost_receipt": null,
+    "provider_lifecycle_cost_proof": null,
+    "raw_export_acknowledgements": {},
+    "replacement_history": {
+      "closed_launch_slots": [
+        1
+      ],
+      "normalization_handler": "_normalize_provider_entry_replacement_authority",
+      "termination_failures": 0
+    },
+    "resolved_consumers": {
+      "authorization_policy_resolver": "authority:metadata-bound-single-use-v1",
+      "cleanup_handler": "cleanup:empirical-prefix-v1",
+      "command_package_loader": "command-package:registered-autonomous-v1",
+      "control_root_resolver": "control-root:versioned",
+      "lifecycle_resolver": "campaign-lifecycle:autonomous-campaign",
+      "metadata_controller": "model-metadata-receipt:strict-local-prelaunch-v1",
+      "package_effect_loader": "not-applicable",
+      "package_transition_resolver": "not-applicable",
+      "provider_selector_resolver": "provider-selector:explicit-contract-argument-v1",
+      "replacement_authority_handler": "provider-entry-authority:normalized-history-v1",
+      "stage_identity_resolver": "stage-identity:typed-provider-v1"
+    },
+    "runtime_clock": {
+      "domains_separate": true,
+      "monotonic_samples": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1001.0,
+        1001.0,
+        1002.0,
+        1002.0,
+        1003.0,
+        1003.0,
+        1004.0,
+        1004.0,
+        1005.0,
+        1005.0,
+        1006.0,
+        1006.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0
+      ],
+      "sleep_calls": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        5.0
+      ],
+      "wall_samples": [
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001000.0,
+        1800001001.0,
+        1800001001.0,
+        1800001001.0,
+        1800001001.0,
+        1800001002.0,
+        1800001002.0,
+        1800001002.0,
+        1800001002.0,
+        1800001003.0,
+        1800001003.0,
+        1800001003.0,
+        1800001003.0,
+        1800001004.0,
+        1800001004.0,
+        1800001004.0,
+        1800001004.0,
+        1800001005.0,
+        1800001005.0,
+        1800001005.0,
+        1800001005.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001006.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0
+      ]
+    }
+  },
+  "projected_cost_usd": "0.00",
+  "provider_contract_version": "V16",
+  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "scenario": "condition-failure",
+  "scenario_valid": true,
+  "schema_version": "1.0.0",
+  "scientific_attempt_consumption": {
+    "count": 1,
+    "run_ids": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    ]
+  },
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "f9937e758cade264f0d443b17d5ad998f949bba877897d13e673aeeb823b10e6",
+  "shadow_only": true,
+  "stop_reason": "consumed condition stopped with reconstructable essential evidence",
+  "terminal_state": "category3-shadow-stopped-cleanup-verified",
+  "undeclared_adapter_calls": [],
+  "zero_undeclared_calls": true
+}

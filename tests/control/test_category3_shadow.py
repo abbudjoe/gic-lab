@@ -112,7 +112,7 @@ def test_production_wrapper_happy_path_uses_retained_primitives_and_all_conditio
         "evaluate_retained_session",
         "record_first_pair_checkpoint",
         "immutable_cleanup_export_handoff",
-        "privacy_violations",
+        "privacy_violations:held-descriptor",
     }.issubset(primitives)
 
 
@@ -136,8 +136,8 @@ def test_happy_path_accounting_has_nonzero_fake_usage_and_zero_real_projection(
     receipt = shadow_matrix["happy-path"]
     counts = receipt["call_counts"]
     assert isinstance(counts, dict)
-    assert counts["model_call_attempts"] == 4
-    assert counts["browser_actions"] == 4
+    assert counts["model_call_attempts"] == 16
+    assert counts["browser_actions"] == 8
     assert counts["unknown_model_outcomes"] == 0
     production = receipt["production_control_evidence"]
     assert isinstance(production, dict)
@@ -182,7 +182,12 @@ def test_happy_path_is_byte_deterministic(
     ("scenario", "phase", "consumed"),
     [
         ("condition-failure", "condition-execution", 1),
-        ("raw-export-failure", "raw-export", 1),
+        pytest.param(
+            "raw-export-failure",
+            "condition-execution",
+            1,
+            id="raw-export-failure-raw-export-1",
+        ),
         ("finalizer-failure", "finalization", 1),
     ],
 )

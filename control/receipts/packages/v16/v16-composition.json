@@ -1,0 +1,36 @@
+{
+  "authorization_schema_sha256": "8b61a8f7e572abfd5ed6347998c2829af0f114c6b7ca457e81e8691c5574a70a",
+  "blockers": [
+    "current-turn-live-authority-is-external-and-not-present",
+    "historical-v16-prelaunch-authority-is-consumed"
+  ],
+  "budget_envelope_sha256": "a8e844f81b59578fb1493c975912320d414c99e85f17f3b56ecc94009874a66f",
+  "cleanup_family": "empirical-prefix",
+  "command_package_family": "autonomous",
+  "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+  "control_binding_schema_sha256": "0a15d8e8beea76771bd780218530e8e04cad6af4c300c50d07df20abf1508837",
+  "downstream_source_contract_sha256": "5d1a6d684adde9f83b4ef92135fcfae9c6046c3f5931e593d460be95adcf812c",
+  "evidence_identity_sha256": "7103c2a33857806d0090aa6fbda04f94d9b239c0f7209f51a625cd2c69a25cae",
+  "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+  "lifecycle_sha256": "f4ab34f7f8d86057e570e7a81271ca45a1c8b32ffaa803579c7b6e9d12727a04",
+  "metadata_policy": "local-prelaunch-receipt",
+  "pair_diff_sha256s": [
+    "d9ce275328eae0d9795881bfd5b73d184bd4994592a418a8aaf681df09ff5713",
+    "75f13841991b80fc3b8c0a2cf3148dc46e898dfad9bce4987f2681fc3d7e7c72"
+  ],
+  "privacy_contract_sha256": "30abc30219187e24b5fefc4bd08c403a286f17dd92346afc6bf004a9000f15c8",
+  "provider_contract_sha256": "82ffb5bab96b4a1d30346f400ea080e140d5f446fe876e2038d31f27b9f78003",
+  "provider_contract_version": "V16",
+  "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+  "ready_for_authenticated_preflight": false,
+  "ready_for_shadow": true,
+  "registry_receipt_sha256": "1d5eb046dfb04751bf64bb2a00323d2eeca8ae3af150b2a885361a6cc6605a52",
+  "replacement_policy": "bounded-preflight",
+  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "schema_version": "1.0.0",
+  "semantic_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "static_composition_valid": true,
+  "target_schema_sha256": "0337c5fdc1d1c87b3700575dd1261fdb91c1d847ccd7f53f69a59e4333eb32b1",
+  "version_lint_receipt_sha256": "2d04f11d6f22871f994e29ce55505b7214b01286e90e8308809d2dd4727c98c1"
+}

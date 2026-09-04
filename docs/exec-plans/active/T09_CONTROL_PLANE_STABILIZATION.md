@@ -310,3 +310,319 @@ Complete this PR 1.1 assembly on `codex/t09-control-target-selection`, open one 
 PR against `phase-1/sira-pilot-autonomous-r2`, obtain exact-head GitHub Actions, and
 stop without merge. A later PR 2 may be package-only within the explicit boundary;
 this work must not create V17 package artifacts or authority.
+
+## PR 1.2 live-capable production-effects repair
+
+Assembly status: **complete — draft review required; closeout descendant exact-head
+GitHub confirmation pending**
+
+The operator-supplied `T09 PR 1.2 — Make the Shared Production Controller
+Genuinely Live-Capable` contract governs this Category 1 repair. The exact base is
+merge commit `f1d872d59c4952eb98467c2506850af7772f4454`, tree
+`eb70e20024559d65b3fadd240f72d3522895ef04`, with ordered parents
+`d0aff8a47e92013773d9d05b2cd90fb741658b03` and
+`658a5f21cc24b914c6fc494f391cefe35d0fa334`. The target contract is one shared
+Category 3 state machine and one production assembly over effect-neutral typed seams,
+such that package-specific effects plus externally validated package-specific
+authority can execute the exact package transaction without editing shared control
+source or importing deterministic fixture assumptions into live behavior.
+
+```text
+operator_attests_model: gpt-5.6-sol
+operator_attests_effort: max
+runtime_model_introspection_required: false
+implementation_delegated: false
+live_authorization: false
+scientific_interpretation_allowed: false
+```
+
+### PR 1.2 scope and boundaries
+
+In scope are the shared runtime clock, metadata/credential seam, package-derived
+budgets, typed condition-session events and authoritative accounting, actual typed
+host/evidence/finalizer/evaluator receipts, shadow-only fault injection, fully bound
+effect authorization context, exact package-effect registration/loading, deterministic
+and live-shaped no-network conformance, anti-shadow lint, incident/capsule integration,
+and non-circular V16/conformance receipt regeneration.
+
+Out of scope are tracked V17 or `AUTONOMOUS-0010` artifacts, actual V17 package
+generation, live grants, dotenv or secret access, authenticated provider calls, cloud
+inspection or mutation, live SSH/Docker/browser/SiRA/FanOutQA/evaluator/condition
+execution, scientific adjudication, merge, auto-merge, force-push, history rewriting,
+and delegation. Direct Sol/max source/spec review replaces the assembly workflow's
+subagent review because the governing operator contract prohibits delegation.
+
+### PR 1.2 definition of done
+
+| ID | Required outcome | Planned evidence | Status |
+|---|---|---|---|
+| LE-01 | Exact base/history preserved | Git/GitHub identity, clean checkout/worktree, starting-tree checks | met |
+| LE-02 | Complete shadow-assumption inventory recorded | 12-item exact-base inventory plus classified current-source scan | met |
+| LE-03 | Runtime clock and sleeper injected | Fake/live-shaped clock conformance and invalid-time regressions | met |
+| LE-04 | Exact selected credential reaches effect-neutral metadata channel | Runtime canary, destruction, one-request, freshness tests | met |
+| LE-05 | Aggregate and condition caps are package-derived | Plan/condition parsing plus drift/substitution/overage tests | met |
+| LE-06 | Condition runtime executes an exact multi-event session | Reactive/simulative request-event-outcome tests | met |
+| LE-07 | Stable per-call accounting covers all calls/actions | Unique-ID, terminal-state, usage/cost/action reconciliation tests | met |
+| LE-08 | Host stage/preflight/qualification/freeze validate typed actual receipts | Archive/provider-entry/qualification/freeze receipt validation | met |
+| LE-09 | Raw evidence is file-backed and hash-validated | Exact raw-tree seal/export/acknowledgement and mutation tests | met |
+| LE-10 | Finalizer consumes exact raw evidence | Pre/post raw seal and source/runtime/dependency/root binding | met |
+| LE-11 | Evaluator consumes effect-produced output | Answer-propagation and canned-substitution regressions | met |
+| LE-12 | Fault injection is confined to deterministic effects | Scenario-free production assembly and retained 15-failure matrix | met |
+| LE-13 | Live authority binds complete control/package/effect context | Context mutation matrix; no shared live-grant factory | met |
+| LE-14 | Package-specific effect factory is exact and hash-bound | Path/hash/factory/protocol/symlink/escape tests | met |
+| LE-15 | Live-shaped no-network conformance passes | Temporary package-effect module and conformance receipt | met |
+| LE-16 | Anti-shadow lint passes | Narrow shared-production scan with zero findings | met |
+| LE-17 | Agent-check binds conformance receipt | Schema, receipt binding, aggregate validation tests | met |
+| LE-18 | Synthetic successor needs no shared-source edits | Before/after shared-source byte map and temporary successor | met |
+| LE-19 | Historical V16 proof remains valid | Legacy historical validation and temporary new-root regeneration suite | met |
+| LE-20 | No actual V17 package exists | Tracked path/identity/root scans | met |
+| LE-21 | Science and authority boundaries remain false/unchanged | Capsule/conformance/proof/privacy assertions | met |
+| LE-22 | Full/parity/static/privacy/site gates pass | Required exact-final-head local command set | met |
+| LE-23 | Draft PR open, exact-head CI green, no merge | Draft PR metadata and exact-head Actions run/job | met |
+
+No item may become `met` while its implementation or required evidence is partial,
+blocked, or not started. No shadow or conformance output is scientific evidence.
+
+### PR 1.2 implementation mapping
+
+- Clock and credential/metadata interfaces map to LE-03 and LE-04.
+- Package budget loading, condition sessions, and one authoritative event accountant
+  map to LE-05 through LE-07.
+- Typed stage/provider-entry/qualification/freeze, file-backed raw evidence, offline
+  finalization, and evaluator data flow map to LE-08 through LE-11.
+- Deterministic-effect fault plans, authorization context, and package-effect loader
+  map to LE-12 through LE-14.
+- Live-shaped conformance, anti-shadow lint, receipt/agent-check integration, and the
+  unchanged-source successor proof map to LE-15 through LE-18.
+- Non-circular proof regeneration, no-V17/science/authority preservation, complete
+  gates, and draft-PR handoff map to LE-01, LE-19 through LE-23.
+
+### PR 1.2 pre-edit evidence
+
+- 2026-09-01: verified clean original checkout, exact `abbudjoe/gic-lab` remote,
+  normal fetch, destination commit/tree/ordered parents, merged PR #13 exact reviewed
+  head as parent two, requested branch/worktree absence, and unchanged destination.
+- 2026-09-01: retained public state records no current live authority, zero active
+  provider instances, V17 `not-created`, and no tracked V17 or `AUTONOMOUS-0010`
+  package/root/identity artifact.
+- 2026-09-01: created clean worktree
+  `/Users/joseph/.codex/worktrees/t09-live-capable-production-effects` on
+  `codex/t09-live-capable-production-effects` at the exact base and starting tree.
+- 2026-09-01: base `make state-capsule` and `make agent-check` pass after prescribed
+  local setup. They select V16, validate all 14 registered contracts and all 16
+  production-wrapper shadow scenarios, and retain false live/science/authority flags.
+
+The implementation incident
+`INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY` is resolved after LE-02 through LE-21
+received implementation and focused evidence. It is no longer `blocking_incident`.
+The immutable tracked V16 receipt refresh and local exact-base gates are complete.
+Draft PR #14 is open and remains draft with auto-merge disabled. Its first exact-head
+GitHub Actions run `33580584620`, job `100093827365`, passed against
+`5d047f3961c9d7ecd87c87362be07bfcf3cf2c12`; exact-base parity reported no newly
+failing or missing base nodes and no invalid outcome transitions. This
+review-state-only closeout descendant must pass the same exact-head gate before the
+terminal handoff. Independent review and explicit merge authorization remain
+distinct external governance gates; none grants live or scientific authority.
+
+The exact implementation ancestor is commit
+`cd9bed46576bd00af473af861c57800b4f350c9d`, tree
+`8d34019a2d7addcf34ff35f507f82dea99ef38dd`; it contains the live-capable seams and
+the retained duplicate-root regression repair. Receipt descendant
+`d273910b2deb11dcd37dee33123f29bac7aeedcd`, tree
+`486d701590574240ee6d5abdc2b2eea3a1181256`, publishes a 27-file V16 root bound to
+that immutable ancestor. The live-effect conformance receipt is 8,623 bytes with
+file SHA-256 `eb6cb0b9e15e331063213630a1e3cdc1fb9567f041bf43edeb8e041cfea5ef98`
+and semantic SHA-256
+`2a001bb775fbf7e8755f23b1f1ed4f70bb083ac2c65cdfd7f3f180f3d6c1500a`. The
+anti-shadow receipt is 7,059 bytes with file SHA-256
+`3ebe48bf443e894fded999e9c664e511537def9402f95a17ba7f6da80b7ac7cf` and semantic
+SHA-256 `1612ceded30c71c0c46ef41e0859dce813dbed10a40aeceaa39e0758b0b7698f`.
+
+At the receipt descendant, Ruff, strict mypy, validation, agent-check, privacy/static
+checks, the 16-page pinned-Quarto render, site validation, and `git diff --check`
+pass. The raw suite reports 2,113 passed, the same 23 inherited base failures, and
+the same five inherited private-fixture skips; this change adds no skip or xfail.
+Exact-base parity passes with zero newly failing tests, zero missing
+base nodes or failures, zero invalid outcome transitions, four newly passing nodes,
+and five symmetrically deselected private nodes. The final documentation descendant
+must preserve this result before push.
+
+## PR #14 exact-head review repair
+
+Review ID 5088727234 required repair of reviewed commit
+`3291af1e64ec1ea89b8773a586c97a917f1052a2`, tree
+`69b7d0346456cad080ca258bc137662d7d632d26`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`. The accepted effect-neutral controller,
+production assembly, package-derived budgets, real-time observer accounting, typed
+host/evidence flow, and no-V17 boundary remain in force.
+
+Core implementation commit `e4e65ef24b97151c09fc9ccfe1e0d0083f797a1e`, tree
+`2de4e90efa2d85b5c4662bc8f47f72375659acae`, repairs the four findings. Its ordinary
+source-closure descendant `adafa96342d0c407189cd0b260cf017fb4d79f3e`, tree
+`45562750df7fa3935c3b7b1af37e4c63bf244caa`, avoids a repository-hygiene scanner
+collision while preserving the durable authority-state value. Full-suite review then
+found that Task B essential-failure export had to carry the newly authoritative
+checkpoint decision receipt. Ordinary compatibility-closure commit
+`4163cad097767f6056cb21792d3d6d5894f2ccd7`, tree
+`eb733fa3ecc5e8b306928badfe61a3c2c24e04e3`, adds that exact source, verification, and
+restoration binding. Exact-base parity then caught an automatic pytest parameter-ID
+drift for that repaired raw-export behavior. Ordinary parity-identity closure commit
+`7a809850722c175d01dc1567b73680995908072e`, tree
+`909c9afe42e6ca7845aed3c5b0453b3846d78004`, preserves the historical node ID while
+continuing to assert the repaired condition-execution phase and is the final immutable
+implementation ancestor. The current 27-file V16 receipt root is regenerated against
+it. Its binding file SHA-256 is
+`472279d990fe21eac36972917622677b38af3f415c9542b17e56580c73e9e12f` and semantic
+SHA-256 is `a6316e56acf4dbba20edc8695e82b3f97d47e1cc95d59a58049a3d1e155d69d0`.
+
+| ID | Review-repair outcome | Evidence state |
+| --- | --- | --- |
+| RR-01 | Exact PR/base/reviewed-head preflight | met |
+| RR-02 | Accepted effect-neutral architecture preserved | met |
+| RR-03 | Retained `first_pair_decision` authoritative | met |
+| RR-04 | Both Task A attempts valid and scored before Task B | met |
+| RR-05 | Pair/finalizer/cost/time/cleanup gates enforced | met |
+| RR-06 | Checkpoint stop is clean, nonscientific, and creates no Task B entry | met |
+| RR-07 | Every post-entry infrastructure failure has bounded essential evidence | met |
+| RR-08 | Nonzero exits are infrastructure-invalid and unscored | met |
+| RR-09 | Essential evidence sealed, exported, acknowledged, and nonretryable | met |
+| RR-10 | One opaque external authority transaction owns all live phases | met |
+| RR-11 | Contract authorization prefix/source enforced | met |
+| RR-12 | Live authority single-use and not duck-type forgeable | met |
+| RR-13 | Held exact effect bytes are compiled and executed | met |
+| RR-14 | Transaction-root identity is shared-derived and held | met |
+| RR-15 | Raw/finalized/evaluator identities remain held and sealed | met |
+| RR-16 | Updated conformance proves all four repairs | met |
+| RR-17 | Package-only V17 boundary remains truthful | met |
+| RR-18 | Historical V16 proof remains valid | met |
+| RR-19 | No actual V17 artifact exists | met |
+| RR-20 | Science and authority remain false and unchanged | met |
+| RR-21 | Full/parity/static/privacy/site gates | met — exact final-head results are recorded in the PR #14 handoff comment |
+| RR-22 | Draft PR update and exact-head Actions | met — exact run/job/head are recorded in the PR #14 handoff comment; rereview remains external |
+
+The review incident
+`INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW` is resolved after its 20 exact
+regression nodes pass. `blocking_incident` remains null. The external governance gate
+is independent exact-head rereview and explicit merge authorization; the next
+technical subgoal remains package-only V17 generation only after reviewed merge.
+
+## PR #14 second exact-head rereview repair
+
+Review ID 5097085114 examined commit
+`a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f`, tree
+`32986899e94f980bdf648872cb82cb8f3b8c1700`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`. The accepted retained checkpoint,
+typed failure, unified authority, held identity, shared controller/assembly, and
+package-only boundary remain in force.
+
+The repair derives provider cost from retained lifecycle sources; makes both scored
+attempt and finalizer closure mandatory checkpoint inputs; moves all essential failure
+members under one bounded, canonical, privacy-scanned envelope; guarantees held-root
+privacy, authority terminalization, and descriptor release at controller scope; and
+publishes stable topology-free control evidence. Incident
+`INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY` links the reviewed identity and
+exact regressions.
+
+| ID | Second-rereview outcome | Evidence state |
+| --- | --- | --- |
+| SR-01 | Exact PR/base/reviewed-head preflight | met |
+| SR-02 | Prior four headline repairs preserved | met |
+| SR-03 | Provider price and intervals bind retained lifecycle evidence | met |
+| SR-04 | Every consumed provider slot is cost-accounted | met |
+| SR-05 | Effect cannot understate provider cost | met |
+| SR-06 | Mandatory checkpoint evidence has no pass defaults | met |
+| SR-07 | Complete essential envelope is finitely bounded | met |
+| SR-08 | Every envelope member is schema/privacy validated | met |
+| SR-09 | Terminal privacy includes failure envelopes and export | met |
+| SR-10 | Root replacement cannot escape controller terminalization | met |
+| SR-11 | Reserved authority reaches one terminal single-use state | met |
+| SR-12 | Descriptor release is guaranteed | met |
+| SR-13 | Public/tracked receipts retain no runtime topology | met |
+| SR-14 | Updated conformance proves all residual repairs | met |
+| SR-15 | Incident and state capsule are truthful | met |
+| SR-16 | Historical V16 proof remains valid | met |
+| SR-17 | No actual V17 artifact exists | met |
+| SR-18 | Package-only V17 boundary remains truthful | met |
+| SR-19 | Authority and scientific interpretation remain false | met |
+| SR-20 | Full/parity/static/privacy/site gates | met — exact-head local gates and base parity pass; Actions evidence is recorded out of band on PR #14 |
+| SR-21 | PR body reflects exact final identities | met — the body is replaced and byte-verified after the immutable Git head; independent rereview remains required |
+| SR-22 | PR remains draft, unmerged, and auto-merge disabled | met |
+
+No provider, secret, cloud, browser, Docker, SiRA, evaluator, condition, paid-compute,
+or scientific effect is authorized or executed by this repair. OpenAI and provider
+cost added by it remain USD 0.00. The cumulative historical T09 cost remains
+USD 36.36170860803283125.
+
+The immutable source/state binding ancestor is commit
+`bdeff53182b4ba648f691333bdbedb737853e757`, tree
+`dc78cf2bdfb46e2e3426fd091de9c55fd13aa105`. The regenerated V16 aggregate binding
+has file SHA-256 `79cb3ba35245c3a285b6ca96445d79c096764f0f0bd3cbd24e892f31e9c627c3`
+and semantic SHA-256
+`df0c51b68e430f60a4c4c12dff8cdc7dcd0311fb24f4c36379df2a59dc011b65`.
+
+## PR #14 third exact-head rereview repair
+
+Assembly status: **repair complete; independent exact-head rereview and explicit merge authorization required**
+
+Review `5101177903` examined exact head
+`b73acefd41bf129a7e0264b93995b36249bc0270`, tree
+`0038a556c54e2fc95362a78c71914281f8dad28c`, against unchanged base
+`f1d872d59c4952eb98467c2506850af7772f4454`. The exact identity, draft/unmerged
+PR state, disabled auto-merge, successful exact-head CI, absent V17 package, and false
+authority/science state were reverified before mutation.
+
+The source contract is limited to two P1 repairs: hold every essential-failure
+envelope member before size admission, and make public receipt topology validation
+derive from the selected target while independently scanning every retained sealed
+root and every bound JSON/YAML/text member. No provider, secret, cloud, browser,
+Docker, SiRA, evaluator, condition, paid-compute, or scientific effect is permitted.
+
+| ID | Third-rereview outcome | Status |
+| --- | --- | --- |
+| TR-01 | Exact base/head/PR identity verified | met |
+| TR-02 | Prior accepted repairs preserved | met |
+| TR-03 | Complete envelope held before size admission | met |
+| TR-04 | Per-member caps use held `fstat` | met |
+| TR-05 | Aggregate count/bytes derive only from held artifacts | met |
+| TR-06 | Size-changing race tests fail closed | met |
+| TR-07 | Exact-cap and one-byte-over held tests pass | met |
+| TR-08 | Retained totals agree across every receipt/projection | met |
+| TR-09 | Topology validation has no active V16 literal | met |
+| TR-10 | Selected root/version are exact receipt fields | met |
+| TR-11 | All sealed historical roots validate independently | met |
+| TR-12 | Every bound JSON/YAML/text member is scanned | met |
+| TR-13 | Selected V17 topology injection fails in temporary proof | met |
+| TR-14 | V17 anti-shadow receipt names the V17 root | met |
+| TR-15 | Synthetic successor leaves shared source unchanged | met |
+| TR-16 | No actual V17 survives | met |
+| TR-17 | Incident and state capsule are truthful | met |
+| TR-18 | V16 receipts are non-circularly rebound | met |
+| TR-19 | Full/parity/static/privacy/site gates pass | met — exact outcomes are attached to the final PR head rather than circularly embedded here |
+| TR-20 | PR body reflects exact final identities | met — byte-verified on the final PR head |
+| TR-21 | PR remains open, draft, unmerged, auto-merge disabled | met |
+| TR-22 | Authority/science/live-effect flags remain false | met |
+
+Implementation mapping: held descriptor admission and race tests map to TR-03 through
+TR-08; selected-target and sealed-root topology validation maps to TR-09 through
+TR-15; incident/capsule truth, receipt regeneration, complete gates, and the existing
+draft PR handoff map to TR-16 through TR-22. The expected source contract is that no
+pathname metadata participates in final envelope admission and no shared literal can
+select a versioned public receipt root.
+
+Focused implementation evidence: all post-enumeration acknowledgement, payload JSON,
+non-JSON, and replacement races fail before a clean essential record; exact JSON and
+complete-envelope limits pass at the cap and reject one byte above it; the held-derived
+count/total cross-bind every retained projection. The 20-node historical/successor
+module passed with a normally generated selected V17 receipt, rejected selected-root
+JSON/field/goal/omission/extra mutations, proved that the scanner's own marker list
+cannot hide topology in another field, revalidated V16 independently, and destroyed
+the temporary successor. The V16 root was regenerated against immutable implementation
+ancestor `f5c19404c483fea7ed4b47235e5a1763213e017f`, tree
+`52aba08c58342ab714ccb548b1049cb3685c5574`, and committed as descendant
+`11265fc8aeeea8be9307ca680b490e129822ce71`, tree
+`4611063c81782a4b20050280387bd8f1d34fbdae`. Its binding file SHA-256 is
+`cbc730e2ac14a41efc679681d686f97a38d370a8b9eaa902ebe4b3d33f854ea8` and
+semantic SHA-256 is
+`4f7bbf53565fcf4db2d12a90669b4c2c4f2ad9af57c5cdcd4416b11ff18826f1`.
+The final exact-head gate outcomes and GitHub run/job identities are recorded on PR
+#14 so these tracked documents do not make the proof self-referential.

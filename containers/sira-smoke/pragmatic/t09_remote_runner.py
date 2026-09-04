@@ -18761,6 +18761,7 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
     actual_total = usage.cost_usd + lambda_cost
     decision = first_pair_decision(
         PairCheckpointInput(
+            plan_id=runtime_contract.plan_id,
             attempt_run_ids=(run_ids[0], run_ids[1]),
             valid_evidence=cast(
                 tuple[bool, bool],
@@ -18770,6 +18771,11 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
                 tuple[bool, bool],
                 tuple(outcome.get("evaluator_validity") is True for outcome in outcomes),
             ),
+            valid_scored_attempt=cast(
+                tuple[bool, bool],
+                tuple(outcome.get("valid_scored_attempt") is True for outcome in outcomes),
+            ),
+            finalizer_closure_valid=len(closures) == 1,
             pair_match_valid=pair_match_valid,
             credential_issue=any(
                 document.get("cleanup", {}).get("secret_removed") is not True
@@ -18789,6 +18795,8 @@ def first_pair_checkpoint(args: argparse.Namespace) -> dict[str, object]:
                 billable_started_at=float(campaign_started), now=now
             ),
             next_attempt_hard_wall_seconds=execution_contract.limits.max_condition_wall_seconds,
+            prior_t09_cost_usd=runtime_contract.prior_t09_cost_usd,
+            cumulative_t09_cost_cap_usd=runtime_contract.cumulative_t09_cost_cap_usd,
         )
     )
     decision = {
@@ -19243,9 +19251,13 @@ def _attempt_export_control_sources(
                 for path in sorted(root.rglob("*"))
                 if path.is_file()
             )
-        checkpoint = _pilot_root(artifact_root) / "first-pair-checkpoint.json"
-        if checkpoint.exists():
-            relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
+        for checkpoint_name in (
+            "first-pair-checkpoint.json",
+            "first-pair-checkpoint-decision.json",
+        ):
+            checkpoint = _pilot_root(artifact_root) / checkpoint_name
+            if checkpoint.exists():
+                relative_paths.append(checkpoint.relative_to(artifact_root).as_posix())
         aggregate = _pilot_root(artifact_root) / "runtime-budget/aggregate-budget.json"
         if aggregate.exists():
             relative_paths.append(aggregate.relative_to(artifact_root).as_posix())
@@ -20034,6 +20046,7 @@ def verify_attempt_export(args: argparse.Namespace) -> None:
             raise T09HostError("attempt export transition mode is unsupported")
         optional_control_names = {
             f"control/{control_root_name}/first-pair-checkpoint.json",
+            f"control/{control_root_name}/first-pair-checkpoint-decision.json",
             f"control/{control_root_name}/runtime-budget/aggregate-budget.json",
         }
         if (

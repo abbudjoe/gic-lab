@@ -1,0 +1,220 @@
+{
+  "assumption_inventory": [
+    {
+      "classification": "documentation",
+      "line": 777,
+      "path": "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
+      "token": "FakeScenario"
+    },
+    {
+      "classification": "legitimate deterministic effect fixture",
+      "line": 444,
+      "path": "src/giclab/control/shadow_effects.py",
+      "token": "production-shadow"
+    },
+    {
+      "classification": "historical test fixture",
+      "line": 370,
+      "path": "tests/control/test_live_effect_conformance.py",
+      "token": "_FAKE_OPENAI_VALUE"
+    },
+    {
+      "classification": "historical test fixture",
+      "line": 371,
+      "path": "tests/control/test_live_effect_conformance.py",
+      "token": "CALL-SHADOW"
+    },
+    {
+      "classification": "historical test fixture",
+      "line": 372,
+      "path": "tests/control/test_live_effect_conformance.py",
+      "token": "_TASK_A_ANSWER"
+    },
+    {
+      "classification": "historical test fixture",
+      "line": 373,
+      "path": "tests/control/test_live_effect_conformance.py",
+      "token": "max_model_call_attempts=1"
+    }
+  ],
+  "audited_base": {
+    "commit": "f1d872d59c4952eb98467c2506850af7772f4454",
+    "tree": "eb70e20024559d65b3fadd240f72d3522895ef04"
+  },
+  "base_assumption_inventory": [
+    {
+      "assumption_id": "SA-01",
+      "classification": "shared production-wrapper defect",
+      "defect": "module fake credentials and equality checks controlled metadata transport",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "exact mutable parser credential reaches the injected one-send metadata channel",
+      "source_lines": "73-74, 105, 160-163, 415-417"
+    },
+    {
+      "assumption_id": "SA-02",
+      "classification": "shared production-wrapper defect",
+      "defect": "advancing synthetic time, synthetic sleep, and fixed freeze/checkpoint epochs",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "validated injected monotonic, wall-time, and sleep domains",
+      "source_lines": "568-580, 1305-1314, 1670"
+    },
+    {
+      "assumption_id": "SA-03",
+      "classification": "shared production-wrapper defect",
+      "defect": "staging wrote a three-field synthetic fixture instead of the tracked package closure",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "typed tracked-only archive, acknowledgement, and host-side rehash receipt",
+      "source_lines": "1027-1076"
+    },
+    {
+      "assumption_id": "SA-04",
+      "classification": "shared production-wrapper defect",
+      "defect": "host preflight reconstructed a reduced provider-entry document",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "typed preflight consumes the exact retained launch receipt",
+      "source_lines": "1238-1272"
+    },
+    {
+      "assumption_id": "SA-05",
+      "classification": "shared production-wrapper defect",
+      "defect": "qualification and freeze returned synthetic identities without actual effect receipts",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "request-bound host qualification and dynamic freeze manifests are validated",
+      "source_lines": "1274-1314"
+    },
+    {
+      "assumption_id": "SA-06",
+      "classification": "shared production-wrapper defect",
+      "defect": "fixed caps and one hardcoded CRITIC request modeled every condition",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "package-derived caps and a multi-call/multi-role/multi-action event session",
+      "source_lines": "1404-1503"
+    },
+    {
+      "assumption_id": "SA-07",
+      "classification": "shared production-wrapper defect",
+      "defect": "raw manifest and completion identities were synthesized from in-memory accounting",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "file-backed raw seal, ledgers, process/completion evidence, export, and acknowledgement",
+      "source_lines": "1505-1543"
+    },
+    {
+      "assumption_id": "SA-08",
+      "classification": "shared production-wrapper defect",
+      "defect": "finalization used synthetic paths, interpreter, dependency, and completion identities",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "qualified-local offline finalizer consumes immutable exact raw evidence and receipts",
+      "source_lines": "1545-1591"
+    },
+    {
+      "assumption_id": "SA-09",
+      "classification": "shared production-wrapper defect",
+      "defect": "the evaluator replaced condition output with canned Task A and Task B answers",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "the evaluator consumes the effect-produced finalized session",
+      "source_lines": "82-89, 1593-1651"
+    },
+    {
+      "assumption_id": "SA-10",
+      "classification": "shared production-wrapper defect",
+      "defect": "the production object required FakeScenario and branched on scenario names",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "fault injection and deterministic values live only in shadow_effects",
+      "source_lines": "38, 148-286, 568, 979-1025, 1743-1785"
+    },
+    {
+      "assumption_id": "SA-11",
+      "classification": "shared production-wrapper defect",
+      "defect": "effect authority bound no exact package, proof, effect source, root, or external grant",
+      "path": "src/giclab/control/adapters.py",
+      "repair_boundary": "one full EffectAuthorizationContext is validated before assembly and invocation",
+      "source_lines": "25-74"
+    },
+    {
+      "assumption_id": "SA-12",
+      "classification": "shared production-wrapper defect",
+      "defect": "synthetic network, response, browser, image, and provider fixtures lived in shared source",
+      "path": "src/giclab/control/production.py",
+      "repair_boundary": "all deterministic fixture data is confined below the effect boundary",
+      "source_lines": "75-76, 249, 286-382, 614"
+    }
+  ],
+  "classification_counts": {
+    "documentation": 1,
+    "historical test fixture": 4,
+    "legitimate deterministic effect fixture": 1,
+    "shared production-wrapper defect": 0
+  },
+  "complete": true,
+  "findings": [],
+  "forbidden_rule_codes": [
+    "T09S001",
+    "T09S002",
+    "T09S003",
+    "T09S004",
+    "T09S005",
+    "T09S006",
+    "T09S007",
+    "T09S008",
+    "T09S009",
+    "T09S010",
+    "T09S011",
+    "T09S012",
+    "T09S013",
+    "T09S014",
+    "T09S015",
+    "T09S016",
+    "T09S017",
+    "T09S018",
+    "T09S019",
+    "T09S020",
+    "T09S021",
+    "T09S022",
+    "T09S023",
+    "T09S024",
+    "T09S025",
+    "T09S026",
+    "T09S027",
+    "T09S028"
+  ],
+  "lint_definition_path": "src/giclab/control/anti_shadow_lint.py",
+  "public_receipt_topology_scan": {
+    "complete": true,
+    "findings": 0,
+    "forbidden_filesystem_fields": [
+      "device",
+      "inode",
+      "uid"
+    ],
+    "forbidden_path_markers": [
+      "/private/",
+      "/var/folders/",
+      "/tmp/",
+      "/Users/"
+    ],
+    "member_count_by_root": {
+      "control/receipts": 25,
+      "control/receipts/packages/v16": 27
+    },
+    "sealed_roots_scanned": [
+      "control/receipts",
+      "control/receipts/packages/v16"
+    ],
+    "selected_provider_contract_version": "V16",
+    "selected_receipt_root": "control/receipts/packages/v16",
+    "selected_root_matches_version": true
+  },
+  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "schema_version": "3.0.0",
+  "semantic_sha256": "ac55e6d2740f9831a92e0517f0d4a0ec736fa6e96f7748ee32d939a757d63d6f",
+  "shared_effect_neutral_sources": [
+    "src/giclab/control/adapters.py",
+    "src/giclab/control/category3.py",
+    "src/giclab/control/consumers.py",
+    "src/giclab/control/contracts.py",
+    "src/giclab/control/effects.py",
+    "src/giclab/control/production.py",
+    "src/giclab/harness/t09_sira_pilot.py"
+  ]
+}

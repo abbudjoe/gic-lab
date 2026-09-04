@@ -441,6 +441,8 @@ def test_first_pair_checkpoint_passes_only_strictly_below_every_threshold() -> N
         attempt_run_ids=(ATTEMPT_ORDER[0], ATTEMPT_ORDER[1]),
         valid_evidence=(True, True),
         evaluator_succeeded=(True, True),
+        valid_scored_attempt=(True, True),
+        finalizer_closure_valid=True,
         pair_match_valid=True,
         credential_issue=False,
         cleanup_issue=False,

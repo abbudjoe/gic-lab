@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-essential-failure-manifest.schema.json",
+  "title": "T09 bounded essential-failure payload manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "provider_contract_version", "plan_id", "run_id",
+    "evaluator_run_id", "package_commit", "execution_contract_sha256",
+    "frozen_manifest_sha256", "condition_plan_sha256", "command_sha256",
+    "failure_class", "evidence_root", "manifest_scope", "files",
+    "payload_file_count", "payload_total_bytes", "envelope_file_cap",
+    "envelope_total_bytes_cap", "unknown_call_ids", "failure_reconstructable",
+    "private_access_controlled", "publication_blocked_pending_privacy_review",
+    "scientific_result"
+  ],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+    "plan_id": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "evaluator_run_id": {"type": "string", "minLength": 1},
+    "package_commit": {"$ref": "#/$defs/git"},
+    "execution_contract_sha256": {"$ref": "#/$defs/sha"},
+    "frozen_manifest_sha256": {"$ref": "#/$defs/sha"},
+    "condition_plan_sha256": {"$ref": "#/$defs/sha"},
+    "command_sha256": {"$ref": "#/$defs/sha"},
+    "failure_class": {"type": "string", "minLength": 1},
+    "evidence_root": {"const": "essential-failure"},
+    "manifest_scope": {"const": "payload-members-only-noncircular"},
+    "files": {
+      "type": "array", "maxItems": 4093,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "bytes", "sha256"],
+        "properties": {
+          "path": {"type": "string", "pattern": "^payload/[^/].*$"},
+          "bytes": {"type": "integer", "minimum": 0, "maximum": 67108864},
+          "sha256": {"$ref": "#/$defs/sha"}
+        }
+      }
+    },
+    "payload_file_count": {"type": "integer", "minimum": 1, "maximum": 4093},
+    "payload_total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+    "envelope_file_cap": {"const": 4096},
+    "envelope_total_bytes_cap": {"const": 67108864},
+    "unknown_call_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "failure_reconstructable": {"const": true},
+    "private_access_controlled": {"const": true},
+    "publication_blocked_pending_privacy_review": {"const": true},
+    "scientific_result": {"const": false}
+  },
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

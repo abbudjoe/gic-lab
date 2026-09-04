@@ -30,7 +30,11 @@
     "incident_id": {
       "enum": [
         "INC-T09-V16-LIFECYCLE-REGISTRY",
-        "INC-T09-CONTROL-FIXED-TARGET-SELECTION"
+        "INC-T09-CONTROL-FIXED-TARGET-SELECTION",
+        "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
+        "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
+        "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY",
+        "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY"
       ]
     },
     "observed_package": {
@@ -148,6 +152,205 @@
           },
           "repair": {"const": "goal-compatible-selected-runtime-target-resolver"},
           "coverage": {"const": ["target-resolution", "shadow-execution"]}
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "f1d872d59c4952eb98467c2506850af7772f4454"
+              }
+            }
+          },
+          "stage": {"const": "post-merge package-only boundary audit"},
+          "failed_invariant": {
+            "const": "package-specific live effects must execute the same controller and production assembly without shared-source changes or shadow substitutions"
+          },
+          "root_cause": {
+            "const": "fake credential transport; synthetic clock and sleep; synthetic staging and freeze; one hardcoded model call; synthetic raw, finalizer, and evaluator outputs; fake-scenario production coupling; under-bound effect authority"
+          },
+          "earliest_detectable_stage": {
+            "const": "shared-production-effect-boundary-audit"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/production-effect-boundary",
+              "shared-control/effect-authority",
+              "shared-control/evidence-chain"
+            ]
+          },
+          "repair": {"const": "effect-neutral-live-capable-production-seams"},
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "3291af1e64ec1ea89b8773a586c97a917f1052a2"
+              }
+            }
+          },
+          "stage": {"const": "exact-head live-boundary review"},
+          "failed_invariant": {
+            "const": "Task A checkpoint policy, post-entry failure evidence, live authority, and effect/root/evidence identities must remain authoritative and held across the shared transaction"
+          },
+          "root_cause": {
+            "const": "checkpoint bypassed retained policy; post-entry failures lacked essential evidence; effect and provider authority could split; module, root, and evidence identities were pathname-reopened"
+          },
+          "earliest_detectable_stage": {
+            "const": "exact-head live-boundary review"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/first-pair-checkpoint",
+              "shared-control/essential-failure-evidence",
+              "shared-control/live-authorization-transaction",
+              "shared-control/held-identity-boundary"
+            ]
+          },
+          "repair": {
+            "const": "authoritative-checkpoint-failure-authority-and-held-identity-repair"
+          },
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f"
+              }
+            }
+          },
+          "stage": {"const": "second exact-head live-boundary rereview"},
+          "failed_invariant": {
+            "const": "provider cost, essential-failure envelopes, held-root terminalization, and public evidence must be source-bound, bounded, terminal, and topology-free"
+          },
+          "root_cause": {
+            "const": "provider cost trusted self-consistent effect arithmetic; essential envelope siblings escaped aggregate validation; root pathname replacement could interrupt terminalization; public receipts retained unstable runtime topology"
+          },
+          "earliest_detectable_stage": {
+            "const": "second exact-head live-boundary rereview"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/provider-lifecycle-cost-proof",
+              "shared-control/essential-failure-envelope",
+              "shared-control/held-root-terminalization",
+              "shared-control/public-evidence-projection"
+            ]
+          },
+          "repair": {
+            "const": "source-bound-cost-complete-envelope-guaranteed-terminal-public-projection"
+          },
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "b73acefd41bf129a7e0264b93995b36249bc0270"
+              }
+            }
+          },
+          "stage": {"const": "third exact-head live-boundary rereview"},
+          "failed_invariant": {
+            "const": "complete essential envelopes must be admitted from held descriptor metadata and public topology validation must follow the selected target while preserving every sealed historical root"
+          },
+          "root_cause": {
+            "const": "pathname size checks preceded held opens and the public topology gate selected V16 literally while omitting non-JSON bound members"
+          },
+          "earliest_detectable_stage": {
+            "const": "third exact-head live-boundary rereview"
+          },
+          "authority_consumed": {"const": "none"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/essential-failure-held-size-admission",
+              "shared-control/successor-public-topology-selection"
+            ]
+          },
+          "repair": {
+            "const": "held-first-envelope-and-selected-target-public-topology"
+          },
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          }
         }
       }
     }

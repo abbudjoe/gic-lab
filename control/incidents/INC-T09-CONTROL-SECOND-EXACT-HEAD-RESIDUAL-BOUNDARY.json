@@ -1,0 +1,103 @@
+{
+  "affected_abstraction": [
+    "shared-control/provider-lifecycle-cost-proof",
+    "shared-control/essential-failure-envelope",
+    "shared-control/held-root-terminalization",
+    "shared-control/public-evidence-projection"
+  ],
+  "authority_consumed": "none",
+  "cost_usd": "0.00",
+  "coverage": [
+    "offline-composition",
+    "shadow-execution",
+    "target-resolution"
+  ],
+  "earliest_detectable_stage": "second exact-head live-boundary rereview",
+  "failed_invariant": "provider cost, essential-failure envelopes, held-root terminalization, and public evidence must be source-bound, bounded, terminal, and topology-free",
+  "immutable_facts": {
+    "authority_consumed": "none",
+    "cost_usd": "0.00",
+    "earliest_detectable_stage": "second exact-head live-boundary rereview",
+    "live_environment_required": false,
+    "repair": "source-bound provider lifecycle cost; complete bounded essential envelope; guaranteed held-root terminalization; stable public projection",
+    "review_disposition": "CHANGES REQUIRED — NOT APPROVED",
+    "review_id": 5097085114,
+    "reviewed_head": "a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f",
+    "reviewed_tree": "32986899e94f980bdf648872cb82cb8f3b8c1700",
+    "root_causes": [
+      "provider cost accepted self-consistent effect arithmetic without proving every retained lifecycle slot and price source",
+      "essential-failure manifest, completion receipt, and export acknowledgement escaped the complete aggregate cap and privacy envelope",
+      "root pathname replacement could make terminal privacy scanning escape before authority terminalization and descriptor release",
+      "tracked control evidence retained absolute runtime topology and topology-derived semantic hashes"
+    ]
+  },
+  "immutable_facts_sha256": "5c419c5ef3e0777c7cb7199a66fb3fb73bf3880a44338e941a0bd4ecc2fa6a5d",
+  "incident_id": "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "a4b0fef4c8e2dd98941fd5f812acc208b8a5e47f",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_pair_checkpoint_requires_explicit_scored_and_finalizer_evidence"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_self_consistent_effect_receipt_cannot_understate_or_rewrite_lifecycle_truth"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_retained_provider_source_mutation_stops_before_task_b"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_omitted_closed_replacement_slot_stops_before_task_b"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_checkpoint_receives_only_the_exact_shared_derived_provider_cost"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_every_essential_envelope_member_has_a_finite_size_cap"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_essential_envelope_rejects_noncanonical_extensions_and_private_fields"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_full_live_shaped_controller_terminalizes_after_root_path_replacement"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_full_controller_terminalizes_and_releases_after_terminal_validation_failure"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_terminal_result_construction_failure_still_closes_every_held_descriptor"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_public_shadow_receipt_is_stable_across_fresh_transaction_roots"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_effect_conformance.py::test_public_receipt_topology_injection_is_rejected"
+    }
+  ],
+  "repair": "source-bound-cost-complete-envelope-guaranteed-terminal-public-projection",
+  "root_cause": "provider cost trusted self-consistent effect arithmetic; essential envelope siblings escaped aggregate validation; root pathname replacement could interrupt terminalization; public receipts retained unstable runtime topology",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "not-run",
+  "stage": "second exact-head live-boundary rereview",
+  "status": "resolved"
+}

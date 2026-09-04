@@ -11,6 +11,7 @@ def project_contract_capabilities(contract: T09ProviderContract) -> dict[str, An
     """Return the public semantic behavior surface for one exact contract."""
 
     capabilities = contract.capabilities
+    effect_registration = contract.effect_registration
     return {
         "version": contract.version,
         "plan_id": contract.plan_id,
@@ -25,4 +26,18 @@ def project_contract_capabilities(contract: T09ProviderContract) -> dict[str, An
         "provider_selector_policy": capabilities.provider_selector_policy.value,
         "stage_identity_policy": capabilities.stage_identity_policy.value,
         "shadow_scenario": capabilities.shadow_scenario,
+        "package_effect_registration": (
+            None
+            if effect_registration is None
+            else {
+                "implementation_path": effect_registration.implementation_path,
+                "implementation_bytes": effect_registration.implementation_bytes,
+                "implementation_sha256": effect_registration.implementation_sha256,
+                "factory_entry_point": effect_registration.factory_entry_point,
+                "authority_grant_schema_version": (
+                    effect_registration.authority_grant_schema_version
+                ),
+                "effect_protocol_version": effect_registration.effect_protocol_version,
+            }
+        ),
     }

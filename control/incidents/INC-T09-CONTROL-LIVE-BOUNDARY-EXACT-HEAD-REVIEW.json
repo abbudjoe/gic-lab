@@ -1,0 +1,131 @@
+{
+  "affected_abstraction": [
+    "shared-control/first-pair-checkpoint",
+    "shared-control/essential-failure-evidence",
+    "shared-control/live-authorization-transaction",
+    "shared-control/held-identity-boundary"
+  ],
+  "authority_consumed": "none",
+  "cost_usd": "0.00",
+  "coverage": [
+    "offline-composition",
+    "shadow-execution",
+    "target-resolution"
+  ],
+  "earliest_detectable_stage": "exact-head live-boundary review",
+  "failed_invariant": "Task A checkpoint policy, post-entry failure evidence, live authority, and effect/root/evidence identities must remain authoritative and held across the shared transaction",
+  "immutable_facts": {
+    "authority_consumed": "none",
+    "cost_usd": "0.00",
+    "earliest_detectable_stage": "exact-head live-boundary review",
+    "live_environment_required": false,
+    "repair": "authoritative checkpoint, bounded failure evidence, unified opaque authority, and held filesystem identities",
+    "review_disposition": "CHANGES REQUIRED — NOT APPROVED",
+    "review_id": 5088727234,
+    "reviewed_head": "3291af1e64ec1ea89b8773a586c97a917f1052a2",
+    "reviewed_tree": "69b7d0346456cad080ca258bc137662d7d632d26",
+    "root_causes": [
+      "checkpoint bypassed retained first_pair_decision",
+      "post-entry failures lacked reconstructable essential evidence",
+      "effect and metadata/provider/cleanup authorization could split",
+      "effect module, transaction root, and evidence paths were reopened rather than held"
+    ]
+  },
+  "immutable_facts_sha256": "3718f419cb03edda7e2b781f2858caffae589dc1918ead2fa05621e1468ccd52",
+  "incident_id": "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "3291af1e64ec1ea89b8773a586c97a917f1052a2",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_both_task_a_attempts_scored_zero_may_continue"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_task_a_invalid_evidence_stops_before_task_b"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_retained_first_pair_decision_enforces_every_stop_gate"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_checkpoint_review_repair.py::test_shared_checkpoint_cannot_continue_without_retained_first_pair_decision"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_every_post_entry_failure_is_sealed_exported_unscored_and_zero_retry"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_nonzero_exit_with_completed_answer_is_infrastructure_invalid"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_essential_bundle_exact_cap_is_accepted"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_essential_failure_evidence.py::test_interrupted_failure_export_resumes_from_identical_sealed_source"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[False-2]"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/test_t09_retry5.py::test_retry5_oversized_tree_gets_private_essential_failure_seal[True-2]"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_authority_transaction.py::test_first_valid_private_overlay_mints_one_opaque_single_use_proof"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_authority_transaction.py::test_effect_and_metadata_authority_split_stops_before_metadata_send"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_authority_transaction.py::test_provider_launch_authority_split_stops_before_post"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_authority_transaction.py::test_validator_replay_and_second_campaign_fail"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_same_size_effect_source_replacement_before_load_is_rejected"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_effect_source_replacement_during_factory_is_rejected"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_transaction_root_itself_or_parent_symlink_is_rejected"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_held_identity_boundaries.py::test_symlink_hardlink_swap_or_mutation_never_reaches_scientific_acceptance"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_effect_conformance.py::test_live_shaped_checkpoint_authority_and_held_identity_repairs"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_effect_conformance.py::test_live_shaped_review_failure_subreceipts_are_complete"
+    }
+  ],
+  "repair": "authoritative-checkpoint-failure-authority-and-held-identity-repair",
+  "root_cause": "checkpoint bypassed retained policy; post-entry failures lacked essential evidence; effect and provider authority could split; module, root, and evidence identities were pathname-reopened",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "not-run",
+  "stage": "exact-head live-boundary review",
+  "status": "resolved"
+}

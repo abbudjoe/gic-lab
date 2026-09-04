@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-effect-authorization-context.schema.json",
+  "title": "T09 exact effect authorization context",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "effect_protocol_version",
+    "authority_kind",
+    "execution_mode",
+    "control_commit",
+    "control_tree",
+    "provider_contract_version",
+    "plan_id",
+    "plan_sha256",
+    "command_package_sha256",
+    "control_binding_semantic_sha256",
+    "effect_implementation",
+    "transaction_root_identity",
+    "external_authorization_reference",
+    "external_authorization_source_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "effect_protocol_version": {"const": "1.0.0"},
+    "authority_kind": {"enum": ["shadow-only", "live-authorized"]},
+    "execution_mode": {"enum": ["deterministic-no-network", "external-live"]},
+    "control_commit": {"$ref": "#/$defs/git"},
+    "control_tree": {"$ref": "#/$defs/git"},
+    "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+    "plan_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "plan_sha256": {"$ref": "#/$defs/sha256"},
+    "command_package_sha256": {"$ref": "#/$defs/sha256"},
+    "control_binding_semantic_sha256": {"$ref": "#/$defs/sha256"},
+    "effect_implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256", "factory_entry_point", "protocol_version"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+\\.py$"},
+        "bytes": {"type": "integer", "minimum": 1, "maximum": 2000000},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "factory_entry_point": {"type": "string", "minLength": 1, "maxLength": 256},
+        "protocol_version": {"const": "1.0.0"}
+      }
+    },
+    "transaction_root_identity": {"$ref": "#/$defs/sha256"},
+    "external_authorization_reference": {
+      "type": ["string", "null"],
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/+\\-]*$"
+    },
+    "external_authorization_source_sha256": {
+      "oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"authority_kind": {"const": "shadow-only"}}},
+      "then": {
+        "properties": {
+          "execution_mode": {"const": "deterministic-no-network"},
+          "external_authorization_reference": {"const": null},
+          "external_authorization_source_sha256": {"const": null}
+        }
+      },
+      "else": {
+        "properties": {
+          "external_authorization_reference": {"type": "string", "minLength": 1},
+          "external_authorization_source_sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

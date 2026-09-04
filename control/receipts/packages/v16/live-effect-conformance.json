@@ -1,0 +1,472 @@
+{
+  "actual_v17_artifacts_created": false,
+  "actual_v17_artifacts_present": false,
+  "complete": true,
+  "control_implementation_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "control_implementation_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "effect_protocol_version": "1.0.0",
+  "live_authority_created": false,
+  "network_provider_cloud_browser_science_effects": 0,
+  "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
+  "schema_version": "4.0.0",
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "3580d9f6f093df431b4cb6ae426a79cd12096c775e77964e8fccacc75b86cdd0",
+  "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
+  "shared_source_byte_map_unchanged": true,
+  "temporary_package": {
+    "authorization": {
+      "private_overlay_contents_retained": false,
+      "reference": "AUTH-T09-V16-CONFORMANCE-6216a38ac15aefa35c41148f",
+      "replay_rejected": true,
+      "same_reference_and_source_across_effect_metadata_launch_cleanup": true,
+      "single_use_state": {
+        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-6216a38ac15aefa35c41148f",
+        "contains_private_overlay_contents": false,
+        "exact_private_source_context_root_and_receipt_validated": true,
+        "private_runtime_identity_values_retained": false,
+        "replay_permitted": false,
+        "single_use": true,
+        "terminal_state": "terminal-complete"
+      },
+      "source_binding": {
+        "exact_sha256_validated": true,
+        "private_runtime_value_retained": false,
+        "same_across_effect_metadata_launch_cleanup": true
+      }
+    },
+    "authorization_context_binding": {
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "control_binding_semantic_sha256": "f835cbba42179ab7f8dd6fcd6e0567f6ce60427f3298e531435ed7825aa78660",
+      "control_commit": "c8ebc0f7f318e601af0a5b219dcb8cc249b9c709",
+      "control_tree": "8b674c2e21f6502921bbe00f837489cc5be3d6d7",
+      "current_turn_scope": "T09-PR14-EXACT-HEAD-CONFORMANCE",
+      "effect_implementation_sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4",
+      "exact_private_source_sha256_validated": true,
+      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-6216a38ac15aefa35c41148f",
+      "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "private_runtime_identity_values_retained": false,
+      "provider_contract_version": "V16",
+      "public_binding_semantic_sha256": "bb3f0c733508522a75d91f11d2ea5f4026f584bb0846fbc69be2a438c346b3df",
+      "shared_held_transaction_root_identity_validated": true
+    },
+    "browser_accounting": {
+      "multiple_actions_per_condition": true,
+      "total_actions": 8
+    },
+    "cleanup": {
+      "privacy_clean": true,
+      "provider_resources_zero": true,
+      "resumed": false,
+      "security_restored": true,
+      "state": "complete"
+    },
+    "clock": {
+      "domains_separate": true,
+      "injected": true,
+      "monotonic_sample_count": 178,
+      "sleep_calls": [
+        0.25,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        5.0
+      ],
+      "wall_sample_count": 55
+    },
+    "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+    "condition_traces": {
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 3,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      },
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 5,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default",
+          "policy",
+          "world_model"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      },
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 3,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      },
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+        "browser_action_count": 2,
+        "model_call_count": 5,
+        "model_roles": [
+          "actor",
+          "critic",
+          "default",
+          "policy",
+          "world_model"
+        ],
+        "stable_unique_call_ids": true,
+        "terminal_states_complete": true
+      }
+    },
+    "controller_terminal_state": "category3-live-complete-clean",
+    "effect_implementation": {
+      "bytes": 906,
+      "factory_entry_point": "build_package_effects",
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
+      "protocol_version": "1.0.0",
+      "sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4"
+    },
+    "first_pair_checkpoint": {
+      "decision": "continue-to-task-b",
+      "exact_private_decision_and_evidence_identities_validated": true,
+      "finalizer_closure_valid": true,
+      "pair_match_valid": true,
+      "private_runtime_identity_values_retained": false,
+      "public_checkpoint_semantic_sha256": "6325cc25d6aed4dca6dbeaeb4a382f8d15e608c3eaae32ec649910f33c0413d5",
+      "reasons": [],
+      "retained_first_pair_decision_invoked": true,
+      "safety_fields_have_no_defaults": true,
+      "task_a_evaluator_succeeded": [
+        true,
+        true
+      ],
+      "task_a_valid_evidence": [
+        true,
+        true
+      ],
+      "task_a_valid_scored_attempt": [
+        true,
+        true
+      ],
+      "task_b_admitted_only_after_retained_decision": true
+    },
+    "held_effect_source": {
+      "bytes": 906,
+      "compiled_from_held_bytes": true,
+      "factory_entry_point": "build_package_effects",
+      "git_blob_bytes_matched": true,
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
+      "path_revalidated_after_execution_and_factory": true,
+      "protocol_version": "1.0.0",
+      "public_attestation_semantic_sha256": "a13f55b8569ca44564205917267509cbcf009bceec1b98a3a39f0f91111a064b",
+      "regular_current_user_single_link_safe_mode": true,
+      "runtime_identity_values_retained": false,
+      "sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4"
+    },
+    "held_evidence_chain": {
+      "evaluator_consumed_held_finalized_identities": true,
+      "finalized_attempt_bindings": 4,
+      "raw_attempt_bindings": 4,
+      "revalidated_before_and_after_consumers": true
+    },
+    "held_transaction_root": {
+      "current_user_owned": true,
+      "descriptor_held_through_cleanup": true,
+      "device_inode_mode_mount_revalidated": true,
+      "group_world_write_absent": true,
+      "identity_derived_by_shared_code": true,
+      "no_symlink_path_components_validated": true,
+      "public_attestation_semantic_sha256": "acaa9f688fc4409739fed1c33841d77cda264c9c73dcf347bf3f9560452e5ad6",
+      "runtime_identity_values_retained": false
+    },
+    "host_transaction": {
+      "dynamic_frozen_manifest": true,
+      "preflight_qualification_freeze_receipts_validated": true,
+      "retained_provider_entry_consumed": true,
+      "tracked_package_staged_and_acknowledged": true
+    },
+    "metadata": {
+      "credential_material_retained": false,
+      "noncanonical_runtime_credential_reached_channel": true,
+      "request_count": 1,
+      "zero_pagination": true,
+      "zero_redirect": true,
+      "zero_retry": true
+    },
+    "model_call_accounting": {
+      "roles_are_multi_role": true,
+      "stable_unique_call_ids": true,
+      "terminal_states_complete": true,
+      "total_calls": 16,
+      "zero_retries": true
+    },
+    "package_budget": {
+      "aggregate_caps": {
+        "max_browser_actions": 120,
+        "max_cached_input_tokens": 4000000,
+        "max_cost_usd": 40.0,
+        "max_input_tokens": 4000000,
+        "max_model_call_attempts": 4620,
+        "max_output_bytes": 2147483648,
+        "max_output_tokens": 4000000,
+        "max_total_tokens": 4000000,
+        "max_wall_seconds": 14400
+      },
+      "attempt_order": [
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+      ],
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "condition_caps": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        },
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": {
+          "max_browser_actions": 30,
+          "max_cached_input_tokens": 1000000,
+          "max_cost_usd": 10.0,
+          "max_input_tokens": 1000000,
+          "max_model_call_attempts": 1155,
+          "max_output_bytes": 536870912,
+          "max_output_tokens": 1000000,
+          "max_total_tokens": 1000000,
+          "max_wall_seconds": 3600
+        }
+      },
+      "condition_plan_sha256s": {
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "8c0b447b794853e9f69fe9fc665cde632e3c4d0aa9a99a4346d46f345aaf20bf",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "30515859c919b5dd62a821b57efeb39135760c059ee9a05fbe1c6d54b269ca1c",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "6a3bc1f4775bc27dcb8aaa19770ce43a72e03da0a7466a8eba978121a2d6170d",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "081af4f0f0477f529b06df136a72042dd792508af33adb3a34bf31d7e3959378"
+      },
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "model_revision": "gpt-4o-2024-11-20",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "service_tier": "default",
+      "zero_retry": true
+    },
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "projected_real_cost_usd": "0.00",
+    "provider_contract_version": "V16",
+    "provider_cost_accounting": {
+      "active_entry_receipt_source_bound": true,
+      "all_closed_slots_source_bound": true,
+      "closed_slot_count": 0,
+      "cumulative_provider_cost_usd": 0.0,
+      "current_empirical_cost_usd": 0.0,
+      "effect_reconciliation_matches_shared_proof": true,
+      "hourly_price_usd": 1.29,
+      "interval_count": 1,
+      "launch_ordinal": 1,
+      "owned_instance_identity": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176",
+      "prior_preflight_cost_usd": 0.0,
+      "provider_price_source_sha256": "78a42953bb3df13449a2e4afabc82871c0fe70bce13e7862c44d9cbffa9e1240",
+      "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "runtime_receipt_hashes_retained_publicly": false,
+      "shared_lifecycle_proof_validated": true,
+      "shared_lifecycle_value_authoritative": true,
+      "zero_real_provider_effects": true
+    },
+    "public_runtime_topology": {
+      "absolute_runtime_paths_retained": false,
+      "device_inode_uid_values_retained": false,
+      "repository_receipt_scan_bound": true,
+      "stable_held_root_projection_only": true
+    },
+    "raw_finalizer_evaluator_chain": {
+      "attempt_count": 4,
+      "effect_answer_reached_finalized_session": true,
+      "evaluator_consumed_finalized_sessions": true,
+      "finalizer_consumed_raw_manifests": true,
+      "raw_files_hash_validated": true
+    },
+    "repository_state_grants_authority": false,
+    "review_failure_subreceipts": {
+      "ambiguous-send-essential-failure": {
+        "cleanup_complete": true,
+        "complete_envelope_file_count": 7,
+        "complete_envelope_total_bytes": 5795,
+        "exported_and_acknowledged": true,
+        "failure_class": "ambiguous-send",
+        "manifest_receipt_export_scanned": true,
+        "sealed": true,
+        "unscored": true,
+        "zero_retry": true
+      },
+      "effect-module-replacement-rejection": {
+        "compiled_from_held_bytes": true,
+        "path_revalidated_after_factory": true,
+        "same_size_replacement_rejected": true
+      },
+      "essential-envelope-growth-after-enumeration": {
+        "candidate_path_sizes_authoritative": false,
+        "clean_failure_record_retained": false,
+        "held_fstat_sizes_authoritative": true,
+        "regression_node": "tests/control/test_essential_failure_evidence.py::test_complete_envelope_mutation_after_enumeration_fails_closed"
+      },
+      "nonzero-process-exit-essential-failure": {
+        "cleanup_complete": true,
+        "complete_envelope_file_count": 7,
+        "complete_envelope_total_bytes": 7460,
+        "exported_and_acknowledged": true,
+        "failure_class": "process-exit-nonzero",
+        "manifest_receipt_export_scanned": true,
+        "sealed": true,
+        "unscored": true,
+        "zero_retry": true
+      },
+      "omitted-provider-slot-rejection": {
+        "closed_replacement_slot_required": true,
+        "task_b_condition_entries": 0
+      },
+      "oversized-essential-manifest-rejection": {
+        "complete_envelope_cap_enforced": true,
+        "essential_failure_accepted": false
+      },
+      "oversized-held-complete-envelope": {
+        "maximum_bytes": 67108864,
+        "maximum_files": 4096,
+        "one_byte_over_rejected": true,
+        "regression_node": "tests/control/test_essential_failure_evidence.py::test_non_json_member_growth_after_enumeration_uses_held_aggregate"
+      },
+      "oversized-held-json-member": {
+        "maximum_bytes": 1048576,
+        "one_byte_over_rejected_before_read": true,
+        "regression_node": "tests/control/test_essential_failure_evidence.py::test_held_json_member_cap_is_applied_before_read"
+      },
+      "public-runtime-topology-injection-rejection": {
+        "forbidden_inode_rejected": true,
+        "forbidden_path_rejected": true
+      },
+      "raw-replacement-rejection": {
+        "evaluator_calls": 0,
+        "same_size_replacement_rejected": true,
+        "scientific_interpretation_allowed": false,
+        "stopping_phase": "finalization"
+      },
+      "root-replacement-terminalization": {
+        "authority_terminal_state": "terminal-failed-nonreplayable",
+        "held_descriptors_released": true,
+        "held_root_cleanup_used": true,
+        "privacy_path_identity_unresolved": true,
+        "provider_resources_zero": true,
+        "replacement_directory_unchanged": true,
+        "scientific_interpretation_allowed": false,
+        "terminal_result_returned": true
+      },
+      "selected-v17-bound-goal-topology-injection": {
+        "bound_goal_yaml_scanned": true,
+        "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_bound_goal_record_is_topology_scanned",
+        "runtime_path_rejected": true
+      },
+      "selected-v17-scan-omission": {
+        "bound_omission_rejected": true,
+        "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_scan_rejects_bound_omission_and_unbound_extra",
+        "unbound_extra_rejected": true
+      },
+      "selected-v17-topology-injection": {
+        "json_path_and_filesystem_fields_rejected": true,
+        "regression_node": "tests/control/test_historical_receipts.py::test_selected_v17_receipt_runtime_topology_is_rejected",
+        "selected_root_derived_from_target": true
+      },
+      "sensitive-essential-receipt-rejection": {
+        "exact_schema_enforced": true,
+        "privacy_clean": false,
+        "terminal_privacy_scan_included_envelope": true
+      },
+      "split-authorization-rejection": {
+        "authenticated_metadata_requests": 0,
+        "condition_reservations": 0,
+        "provider_calls": 0,
+        "rejected_before_metadata": true,
+        "secret_reads": 0
+      },
+      "symlink-transaction-root-rejection": {
+        "authenticated_metadata_requests": 0,
+        "condition_reservations": 0,
+        "provider_calls": 0,
+        "root_symlink_rejected": true,
+        "secret_reads": 0
+      },
+      "understated-provider-cost-rejection": {
+        "self_hashed_effect_receipt_rejected": true,
+        "shared_lifecycle_value_authoritative": true,
+        "task_b_condition_entries": 0
+      },
+      "unscored-task-a-checkpoint-stop": {
+        "cleanup_complete": true,
+        "decision": "stop-before-task-b",
+        "reason": "task_a_valid_scored_attempt_missing",
+        "task_b_condition_entries": 0,
+        "task_b_condition_reservations": 0
+      }
+    },
+    "scientific_interpretation_allowed": false,
+    "temporary_conformance_grant_only": true,
+    "temporary_repository_commit": "c8ebc0f7f318e601af0a5b219dcb8cc249b9c709",
+    "temporary_repository_tree": "8b674c2e21f6502921bbe00f837489cc5be3d6d7",
+    "typed_failure_accounting": {
+      "ambiguous-task-model-send": {
+        "model_call_attempts": 1,
+        "terminal_state": "sent_outcome_unknown",
+        "unknown_outcomes": 1,
+        "zero_retries": true
+      },
+      "known-provider-exception": {
+        "model_call_attempts": 1,
+        "terminal_state": "sent_provider_error_reconciled",
+        "unknown_outcomes": 0,
+        "zero_retries": true
+      },
+      "response-accounting-incomplete": {
+        "model_call_attempts": 1,
+        "terminal_state": "sent_outcome_unknown",
+        "unknown_outcomes": 1,
+        "zero_retries": true
+      }
+    },
+    "zero_real_effects": true
+  }
+}

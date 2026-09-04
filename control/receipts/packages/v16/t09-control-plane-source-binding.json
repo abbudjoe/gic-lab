@@ -1,0 +1,193 @@
+{
+  "base_commit": "d0aff8a47e92013773d9d05b2cd90fb741658b03",
+  "files": [
+    {
+      "bytes": 6812,
+      "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+      "sha256": "45460760c3ee12e834c995d62e2b368e3ba8c55947fc75758be4324b096b0795"
+    },
+    {
+      "bytes": 1093805,
+      "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+      "sha256": "6096c2c88ef80c07beeca577933a718f2c5e950bcb706be6becdf4983f7393cd"
+    },
+    {
+      "bytes": 192,
+      "path": "src/giclab/control/__init__.py",
+      "sha256": "b3250bf7d8c6e894cdb53903359885eeb25dd02e115a9064e614ba23a712f2b7"
+    },
+    {
+      "bytes": 8411,
+      "path": "src/giclab/control/adapters.py",
+      "sha256": "4e2c377f04b66cc227c0ebd8e3dd149a5e2b92f40e80f77c37c9e54bebcedc0d"
+    },
+    {
+      "bytes": 12334,
+      "path": "src/giclab/control/agent_check.py",
+      "sha256": "92f641b4066c5f24bf8fe1b265c119ece203971e3cc37318d161f633f28e38c4"
+    },
+    {
+      "bytes": 39605,
+      "path": "src/giclab/control/anti_shadow_lint.py",
+      "sha256": "fe74d9b4e7bdb95c2f0bc79c6680190d3694f098f4cb642f7b6bc0ca9f20a929"
+    },
+    {
+      "bytes": 43498,
+      "path": "src/giclab/control/category3.py",
+      "sha256": "5cf3a071e7b9263c28d30b51b834119f18a2f36ef783188383a24f5287688042"
+    },
+    {
+      "bytes": 35106,
+      "path": "src/giclab/control/cli.py",
+      "sha256": "cbe00f14794fbbbed3261b762390806f722c2bbc7392ffb0f2385ac92c8a43f0"
+    },
+    {
+      "bytes": 14162,
+      "path": "src/giclab/control/composition.py",
+      "sha256": "ea2f5ea3bae9a0a0dd241bc8a08255e84775c006f7d1bd3c59c733635726473d"
+    },
+    {
+      "bytes": 16974,
+      "path": "src/giclab/control/consumers.py",
+      "sha256": "a02492bd29148fd75ae30bc45459718534187efdab9023ed7b45003dc6fbf7e6"
+    },
+    {
+      "bytes": 2045,
+      "path": "src/giclab/control/contracts.py",
+      "sha256": "11091738583b1df60a4949e4aba206861549aed6412a503e0a747c5157fec7bf"
+    },
+    {
+      "bytes": 88000,
+      "path": "src/giclab/control/effects.py",
+      "sha256": "bb4b458a25840b6bc27f143dbfc849eeed4c9476b3b27af8863664d9cb8b0283"
+    },
+    {
+      "bytes": 5661,
+      "path": "src/giclab/control/incidents.py",
+      "sha256": "31fe3f0845a232d0790cc48ca4009b0a2cc007488e0c1248f25a8575c4ab2a10"
+    },
+    {
+      "bytes": 67287,
+      "path": "src/giclab/control/live_conformance.py",
+      "sha256": "8c29753b24d2c0732aa07575c46db202a19f0fdaf6d0a85c98def4c9dd420c15"
+    },
+    {
+      "bytes": 255404,
+      "path": "src/giclab/control/production.py",
+      "sha256": "7a416c44193636fcdf0dd19fc33022ec33f4e70b6a31f6c3fcfee8b35b8dff0f"
+    },
+    {
+      "bytes": 68903,
+      "path": "src/giclab/control/proofs.py",
+      "sha256": "7d77a7d59c39ecde52a6d83a587b7bb15a6ae8128b8887f492342b258308aa98"
+    },
+    {
+      "bytes": 17629,
+      "path": "src/giclab/control/registry_validation.py",
+      "sha256": "4a455c4faf78996838e8e5081bb0872e6a10e2a8ad2bff5db0afac72317733a1"
+    },
+    {
+      "bytes": 729,
+      "path": "src/giclab/control/scenarios.py",
+      "sha256": "4cf66a4f0ec37bc8405777794af3d5dbbaf5feafbbb661d5d62c4aa5b1298a5c"
+    },
+    {
+      "bytes": 16351,
+      "path": "src/giclab/control/shadow.py",
+      "sha256": "5a91f31eda21ed6784a1a1aecc876b943e19d48ff47ae6e1e8990c62ef5e11f8"
+    },
+    {
+      "bytes": 100560,
+      "path": "src/giclab/control/shadow_effects.py",
+      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+    },
+    {
+      "bytes": 7917,
+      "path": "src/giclab/control/state_capsule.py",
+      "sha256": "3259e30ef82e0c9222d620a812ef1d369aa7836f7ac78985b51e98b1809d6906"
+    },
+    {
+      "bytes": 23710,
+      "path": "src/giclab/control/target.py",
+      "sha256": "e354aa938c3f37ac56c6cd45ca672c497014ac3c09200771c23431b057e70ca7"
+    },
+    {
+      "bytes": 13530,
+      "path": "src/giclab/control/version_lint.py",
+      "sha256": "e148b51125d085e7c2f0f6b558d24b34af07eddfb4f6c866341c2ea54fe37b49"
+    },
+    {
+      "bytes": 13269,
+      "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
+      "sha256": "6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b"
+    },
+    {
+      "bytes": 93281,
+      "path": "src/giclab/harness/lambda_l13_security.py",
+      "sha256": "1f2736ae223649f86bb18621b008f06bf9fd0d82af6d28ed904f53e8b0111fd0"
+    },
+    {
+      "bytes": 33515,
+      "path": "src/giclab/harness/lambda_l2m_checkpoints.py",
+      "sha256": "3c8ae545c4d39b633bdd9e02ae3d79a704d0eda5f0a70b0378dd3d32e6afe0f0"
+    },
+    {
+      "bytes": 320452,
+      "path": "src/giclab/harness/lambda_l2m_observer.py",
+      "sha256": "3ad5d56abd2b4d115b479c9cf7f0f5202e715d07c1b4842c82dc894fbe8bf6c9"
+    },
+    {
+      "bytes": 42587,
+      "path": "src/giclab/harness/lambda_ssh_key_fingerprint.py",
+      "sha256": "89570f118d9bd860b1b251fdaa9b3b28e80e5a4476ccffe6607763643967320a"
+    },
+    {
+      "bytes": 55897,
+      "path": "src/giclab/harness/sira_gate_a.py",
+      "sha256": "edbda143d4a4271ad49d9b888a943192d4427395b79b14775312b27f10707c3d"
+    },
+    {
+      "bytes": 55515,
+      "path": "src/giclab/harness/t09_cleanup_state.py",
+      "sha256": "97163a2508680fbb1a766d23bd542b4feb242cd0037f146ee715b0fc96d7d711"
+    },
+    {
+      "bytes": 43659,
+      "path": "src/giclab/harness/t09_model_metadata_receipt.py",
+      "sha256": "6ec6810ce5c0cad1d5a8fe7470c1f70d9d6449f56289f2e7edb8ff9813df404b"
+    },
+    {
+      "bytes": 384727,
+      "path": "src/giclab/harness/t09_pragmatic_provider.py",
+      "sha256": "f406a40a5b800dbe19335d818e9e524f7bf0533c1b421091aaf85f6b144da512"
+    },
+    {
+      "bytes": 64903,
+      "path": "src/giclab/harness/t09_provider_contracts.py",
+      "sha256": "28cb11fede0136e50a3a6893ea761c779c2207da9d863f018b17b9c1eecf0665"
+    },
+    {
+      "bytes": 155554,
+      "path": "src/giclab/harness/t09_sira_pilot.py",
+      "sha256": "7b197e0ed4b0cea214a8a27306616f0827b1e09e04ab003b73c4ee76dc390aa9"
+    },
+    {
+      "bytes": 4099,
+      "path": "src/giclab/registry.py",
+      "sha256": "b71b8c979529e8530e9157069b3e765f649ee0349d8c6233d4244b98e3f658ad"
+    },
+    {
+      "bytes": 184934,
+      "path": "src/giclab/validation.py",
+      "sha256": "d88f50ee16862b671408b6f0613472d16ba378a0e1ae09086d87238f1fe9a78b"
+    }
+  ],
+  "historical_package_changed": false,
+  "live_execution_performed": false,
+  "schema_version": "2.0.0",
+  "scientific_contract_changed": false,
+  "scope": "shared-control-plane-only",
+  "semantic_sha256": "17efbb0143b1c265ae4516ac1c8f4d33486d3cb16d903cdc4e3461e6d1f4fc26",
+  "source_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
+  "source_tree": "52aba08c58342ab714ccb548b1049cb3685c5574"
+}
