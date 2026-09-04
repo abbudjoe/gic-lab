@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-live-method-viability.schema.json",
+  "title": "T09 shared live-method viability receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "repository_commit",
+    "repository_tree",
+    "effect_protocol_version",
+    "method_map_path",
+    "method_map_bytes",
+    "method_map_file_sha256",
+    "method_map_semantic_sha256",
+    "methods",
+    "shared_phase_order",
+    "checks",
+    "unresolved_methods",
+    "findings",
+    "live_environment_required",
+    "real_effects_performed",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "repository_commit": {"$ref": "#/$defs/git"},
+    "repository_tree": {"$ref": "#/$defs/git"},
+    "effect_protocol_version": {"const": "2.0.0"},
+    "method_map_path": {"const": "control/live-method-map.json"},
+    "method_map_bytes": {"type": "integer", "minimum": 1},
+    "method_map_file_sha256": {"$ref": "#/$defs/sha256"},
+    "method_map_semantic_sha256": {"$ref": "#/$defs/sha256"},
+    "methods": {
+      "type": "array",
+      "minItems": 29,
+      "uniqueItems": true,
+      "items": {"$ref": "t09-live-method-map.schema.json#/$defs/method"}
+    },
+    "shared_phase_order": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 24,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "map_schema_valid",
+        "protocol_surface_exact",
+        "effect_protocol_exact",
+        "single_launch_mutation_seam",
+        "local_assembly_before_effects",
+        "post_entry_host_transfer",
+        "phase_specific_host_operations",
+        "full_manifest_validator",
+        "duplex_remote_admission",
+        "sole_authoritative_accountant",
+        "transcript_evidence_binding",
+        "cleanup_mapping",
+        "shared_phase_order_exact",
+        "synthetic_successor_compatible"
+      ],
+      "properties": {
+        "map_schema_valid": {"type": "boolean"},
+        "protocol_surface_exact": {"type": "boolean"},
+        "effect_protocol_exact": {"type": "boolean"},
+        "single_launch_mutation_seam": {"type": "boolean"},
+        "local_assembly_before_effects": {"type": "boolean"},
+        "post_entry_host_transfer": {"type": "boolean"},
+        "phase_specific_host_operations": {"type": "boolean"},
+        "full_manifest_validator": {"type": "boolean"},
+        "duplex_remote_admission": {"type": "boolean"},
+        "sole_authoritative_accountant": {"type": "boolean"},
+        "transcript_evidence_binding": {"type": "boolean"},
+        "cleanup_mapping": {"type": "boolean"},
+        "shared_phase_order_exact": {"type": "boolean"},
+        "synthetic_successor_compatible": {"type": "boolean"}
+      }
+    },
+    "unresolved_methods": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}
+    },
+    "findings": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "live_environment_required": {"const": false},
+    "real_effects_performed": {"const": 0},
+    "complete": {"type": "boolean"},
+    "semantic_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

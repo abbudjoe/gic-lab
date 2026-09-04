@@ -23,7 +23,7 @@
   ],
   "properties": {
     "schema_version": {"const": "1.0.0"},
-    "effect_protocol_version": {"const": "1.0.0"},
+    "effect_protocol_version": {"const": "2.0.0"},
     "authority_kind": {"enum": ["shadow-only", "live-authorized"]},
     "execution_mode": {"enum": ["deterministic-no-network", "external-live"]},
     "control_commit": {"$ref": "#/$defs/git"},
@@ -42,7 +42,7 @@
         "bytes": {"type": "integer", "minimum": 1, "maximum": 2000000},
         "sha256": {"$ref": "#/$defs/sha256"},
         "factory_entry_point": {"type": "string", "minLength": 1, "maxLength": 256},
-        "protocol_version": {"const": "1.0.0"}
+        "protocol_version": {"const": "2.0.0"}
       }
     },
     "transaction_root_identity": {"$ref": "#/$defs/sha256"},

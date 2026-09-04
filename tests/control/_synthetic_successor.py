@@ -330,7 +330,7 @@ def synthetic_contract(
             implementation_sha256=str(identities["effect_sha256"]),
             factory_entry_point=str(identities["effect_factory"]),
             authority_grant_schema_version="1.0.0",
-            effect_protocol_version="1.0.0",
+            effect_protocol_version="2.0.0",
         ),
     )
 

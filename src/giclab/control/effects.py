@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from giclab.harness.t09_provider_contracts import T09ProviderContract
 
 
-EFFECT_PROTOCOL_VERSION: Final = "1.0.0"
+EFFECT_PROTOCOL_VERSION: Final = "2.0.0"
 EFFECT_AUTHORITY_SCHEMA_VERSION: Final = "1.0.0"
 MAX_PACKAGE_EFFECT_BYTES: Final = 2_000_000
 MAX_ESSENTIAL_FAILURE_BYTES: Final = 67_108_864
@@ -1476,7 +1476,9 @@ class TrackedPackageMember:
 
 
 @dataclass(frozen=True, slots=True)
-class PackageStageRequest:
+class LocalPackageAssemblyRequest:
+    """Pure, pre-effect request for one deterministic tracked package archive."""
+
     repository: Path
     control_commit: str
     control_tree: str
@@ -1485,8 +1487,6 @@ class PackageStageRequest:
     plan_sha256: str
     command_package_sha256: str
     execution_contract_sha256: str
-    evidence_stage_id: str
-    host_run_id: str
     members: tuple[TrackedPackageMember, ...]
     max_archive_bytes: int
     max_member_bytes: int
@@ -1494,58 +1494,147 @@ class PackageStageRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class PackageStageReceipt:
+class LocalPackageAssemblyReceipt:
+    """Held local archive identity; it makes no remote-transfer claim."""
+
     provider_contract_version: str
     plan_id: str
     plan_sha256: str
     command_package_sha256: str
     execution_contract_sha256: str
-    evidence_stage_id: str
-    host_run_id: str
     archive_path: Path
     archive_sha256: str
     archive_bytes: int
     members: tuple[TrackedPackageMember, ...]
     source_commit: str
     source_tree: str
-    host_acknowledgement_sha256: str
-    host_rehash_sha256: str
-    uploaded: bool
+    source_manifest_sha256: str
+    deterministic_render_count: int
+    verification_archive_path: Path
+    verification_archive_sha256: str
     receipt_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
-class HostPreflightRequest:
-    provider_contract_version: str
-    plan_id: str
-    host_run_id: str
-    provider_handle: ProviderHandle
-    campaign_private_root: Path
-    provider_entry_receipt_path: Path
-    provider_entry_receipt_sha256: str
-    metadata_receipt_path: Path
-    metadata_receipt_sha256: str
-    stage_receipt_sha256: str
-    remote_root: str
-    requested_wall_time: float
-    requested_monotonic: float
+class HostTransferBinding:
+    """Non-circular identity shared by transfer and all later host phases."""
 
-
-@dataclass(frozen=True, slots=True)
-class HostPreflightReceipt:
     provider_contract_version: str
     plan_id: str
     host_run_id: str
     provider_handle_identity: str
     provider_launch_ordinal: int
     provider_entry_receipt_sha256: str
+    local_assembly_receipt_sha256: str
+    source_commit: str
+    source_tree: str
+    remote_root: str
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "provider_contract_version": self.provider_contract_version,
+            "plan_id": self.plan_id,
+            "host_run_id": self.host_run_id,
+            "provider_handle_identity": self.provider_handle_identity,
+            "provider_launch_ordinal": self.provider_launch_ordinal,
+            "provider_entry_receipt_sha256": self.provider_entry_receipt_sha256,
+            "local_assembly_receipt_sha256": self.local_assembly_receipt_sha256,
+            "source_commit": self.source_commit,
+            "source_tree": self.source_tree,
+            "remote_root": self.remote_root,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class HostPhaseBinding:
+    """Exact transfer identity inherited by preflight, qualification, and freeze."""
+
+    transfer: HostTransferBinding
+    host_transfer_receipt_sha256: str
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "transfer": self.transfer.to_document(),
+            "host_transfer_receipt_sha256": self.host_transfer_receipt_sha256,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class HostPackageTransferRequest:
+    """Post-entry request to transfer one held local assembly to one exact host."""
+
+    binding: HostTransferBinding
+    provider_handle: ProviderHandle
+    provider_entry_receipt_path: Path
+    local_assembly: LocalPackageAssemblyReceipt
+    requested_wall_time: float
+    requested_monotonic: float
+    transfer_deadline_monotonic: float
+
+
+@dataclass(frozen=True, slots=True)
+class HostPackageTransferReceipt:
+    """Host acknowledgement and independent rehash of one immutable assembly."""
+
+    binding: HostTransferBinding
+    remote_package_path: str
+    remote_manifest_path: str
+    remote_archive_bytes: int
+    remote_archive_sha256: str
+    remote_members: tuple[TrackedPackageMember, ...]
+    remote_member_manifest_sha256: str
+    host_acknowledgement_sha256: str
+    started_wall_time: float
+    completed_wall_time: float
+    started_monotonic: float
+    completed_monotonic: float
+    cleanup_state_sha256: str
+    phase_output_sha256s: tuple[str, ...]
+    receipt_sha256: str
+
+
+class HostPackageTransferRejected(RuntimeError):
+    """Typed post-entry transfer rejection with exact pre-empirical closeout evidence."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        disposition_path: Path,
+        source_root: Path,
+        remote_cleanup_journal: Path,
+    ) -> None:
+        super().__init__(message)
+        self.disposition_path = disposition_path
+        self.source_root = source_root
+        self.remote_cleanup_journal = remote_cleanup_journal
+
+
+@dataclass(frozen=True, slots=True)
+class HostPreflightRequest:
+    binding: HostPhaseBinding
+    provider_handle: ProviderHandle
+    campaign_private_root: Path
+    provider_entry_receipt_path: Path
+    provider_entry_receipt_sha256: str
+    metadata_receipt_path: Path
     metadata_receipt_sha256: str
-    stage_receipt_sha256: str
+    requested_wall_time: float
+    requested_monotonic: float
+
+
+@dataclass(frozen=True, slots=True)
+class HostPreflightReceipt:
+    binding: HostPhaseBinding
+    previous_phase_receipt_sha256: str
+    metadata_receipt_sha256: str
     remote_path_qualification_sha256: str
     started_wall_time: float
     completed_wall_time: float
     started_monotonic: float
     completed_monotonic: float
+    cleanup_state_sha256: str
+    phase_output_sha256s: tuple[str, ...]
     receipt_sha256: str
 
 
@@ -1568,27 +1657,21 @@ class HostPreflightRejected(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class HostQualificationRequest:
-    provider_contract_version: str
-    plan_id: str
-    host_run_id: str
+    binding: HostPhaseBinding
     provider_handle: ProviderHandle
-    provider_entry_receipt_sha256: str
-    stage_receipt_sha256: str
+    preflight_receipt_sha256: str
     replacement_image_tag: str
     image_materialization_policy: str
     active_image_qualification_id: str
     local_finalizer_qualification_id: str
+    requested_wall_time: float
+    requested_monotonic: float
 
 
 @dataclass(frozen=True, slots=True)
 class HostQualificationReceipt:
-    provider_contract_version: str
-    plan_id: str
-    host_run_id: str
-    provider_handle_identity: str
-    provider_launch_ordinal: int
-    provider_entry_receipt_sha256: str
-    stage_receipt_sha256: str
+    binding: HostPhaseBinding
+    previous_phase_receipt_sha256: str
     replacement_image_tag: str
     image_materialization_policy: str
     qualification_id: str
@@ -1612,36 +1695,47 @@ class HostQualificationReceipt:
     local_finalizer_dependency_tree_sha256: str
     local_evaluator_dependency_tree_sha256: str
     cleanup_readiness_sha256: str
+    started_wall_time: float
+    completed_wall_time: float
+    started_monotonic: float
+    completed_monotonic: float
+    phase_output_sha256s: tuple[str, ...]
     receipt_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
 class ScientificFreezeRequest:
-    provider_contract_version: str
-    plan_id: str
-    host_run_id: str
+    binding: HostPhaseBinding
+    provider_handle: ProviderHandle
     frozen_manifest_id: str
-    provider_entry_receipt_sha256: str
-    stage_receipt_sha256: str
+    preflight_receipt_sha256: str
     command_package_sha256: str
     execution_contract_sha256: str
     qualification_receipt_sha256: str
     image_digest: str
     manifest_root: Path
+    manifest_schema_version: str
+    expected_manifest_projection: Mapping[str, object]
     started_wall_time: float
     started_monotonic: float
 
 
 @dataclass(frozen=True, slots=True)
 class ScientificFreezeReceipt:
+    binding: HostPhaseBinding
+    previous_phase_receipt_sha256: str
     manifest_path: Path
     manifest_sha256: str
+    manifest_schema_version: str
+    manifest_projection_sha256: str
     postfreeze_validation_path: Path
     postfreeze_validation_sha256: str
     started_wall_time: float
     completed_wall_time: float
     started_monotonic: float
     completed_monotonic: float
+    cleanup_state_sha256: str
+    phase_output_sha256s: tuple[str, ...]
     receipt_sha256: str
 
 
@@ -1730,6 +1824,25 @@ class ConditionFailureClass(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionBridgeEvidence:
+    """Held paths for the complete shared/remote duplex evidence chain.
+
+    The paths carry no authority.  Shared production validates and holds their
+    bytes before accepting a raw or essential condition outcome.
+    """
+
+    protocol_version: str
+    session_id: str
+    shared_transcript_path: Path
+    remote_journal_path: Path
+    relay_prefix_path: Path
+    relay_transcript_path: Path
+    runtime_detachment_path: Path
+    host_terminal_receipt_path: Path
+    shared_terminal_receipt_path: Path
+
+
+@dataclass(frozen=True, slots=True)
 class ConditionFailurePreservationRequest:
     """Shared-accounted facts an effect must preserve after empirical entry."""
 
@@ -1747,6 +1860,7 @@ class ConditionFailurePreservationRequest:
     unknown_call_ids: tuple[str, ...]
     output_bytes: int
     retry_count: int
+    bridge_evidence: ConditionBridgeEvidence | None = None
     essential_failure_cap_bytes: int = MAX_ESSENTIAL_FAILURE_BYTES
     essential_failure_file_cap: int = MAX_ESSENTIAL_FAILURE_FILES
 
@@ -1784,6 +1898,7 @@ class ConditionInfrastructureFailureOutcome:
     structural_privacy_findings: tuple[str, ...]
     cleanup_ready: bool
     retry_count: int
+    bridge_evidence: ConditionBridgeEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1827,7 +1942,13 @@ T = TypeVar("T")
 class ConditionEventObserver(Protocol):
     """Sole authoritative real-time accounting observer for one condition."""
 
-    def model_call(self, event: ConditionModelCall, send: ConditionSend) -> str: ...
+    def model_call(
+        self,
+        event: ConditionModelCall,
+        send: ConditionSend,
+        *,
+        before_send: ConditionAction | None = None,
+    ) -> str: ...
 
     def browser_action(self, *, action_id: str, perform: ConditionAction) -> None: ...
 
@@ -1864,6 +1985,7 @@ class ConditionProcessOutcome:
     completion_path: Path
     process_outcome_path: Path
     retry_count: int
+    bridge_evidence: ConditionBridgeEvidence | None = None
 
 
 ConditionExecutionResult = ConditionProcessOutcome | ConditionInfrastructureFailureOutcome
@@ -2019,8 +2141,6 @@ class LowLevelEffects(Protocol):
 
     def provider_inventory(self) -> tuple[str, ...] | None: ...
 
-    def provider_launch(self, *, launch_ordinal: int) -> ProviderHandle: ...
-
     def provider_entry(self, handle: ProviderHandle) -> None: ...
 
     def provider_cost_receipt(
@@ -2055,7 +2175,15 @@ class LowLevelEffects(Protocol):
 
     def retained_image_archive(self, *, launch_ordinal: int) -> Path | None: ...
 
-    def stage_package(self, request: PackageStageRequest) -> PackageStageReceipt: ...
+    def assemble_local_package(
+        self,
+        request: LocalPackageAssemblyRequest,
+    ) -> LocalPackageAssemblyReceipt: ...
+
+    def transfer_package_to_host(
+        self,
+        request: HostPackageTransferRequest,
+    ) -> HostPackageTransferReceipt: ...
 
     def preflight_host(self, request: HostPreflightRequest) -> HostPreflightReceipt: ...
 
@@ -2384,7 +2512,6 @@ def load_registered_package_effects(
             "metadata_channel",
             "metadata_authorization_binding",
             "provider_inventory",
-            "provider_launch",
             "provider_entry",
             "provider_cost_receipt",
             "provider_terminate",
@@ -2393,7 +2520,8 @@ def load_registered_package_effects(
             "campaign_low_level_controls",
             "campaign_closeout_transport",
             "retained_image_archive",
-            "stage_package",
+            "assemble_local_package",
+            "transfer_package_to_host",
             "preflight_host",
             "qualify_host",
             "freeze_science",

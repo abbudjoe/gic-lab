@@ -88,12 +88,23 @@ LEGACY_REQUIRED_SHARED_SOURCES: Final = frozenset(
         "src/giclab/validation.py",
     }
 )
-REQUIRED_SHARED_SOURCES: Final = LEGACY_REQUIRED_SHARED_SOURCES | frozenset(
+V2_REQUIRED_SHARED_SOURCES: Final = LEGACY_REQUIRED_SHARED_SOURCES | frozenset(
     {
         "src/giclab/control/anti_shadow_lint.py",
         "src/giclab/control/effects.py",
         "src/giclab/control/live_conformance.py",
         "src/giclab/control/shadow_effects.py",
+    }
+)
+REQUIRED_SHARED_SOURCES: Final = V2_REQUIRED_SHARED_SOURCES | frozenset(
+    {
+        "containers/sira-smoke/pragmatic/t09_preflight.py",
+        "src/giclab/control/live_method_viability.py",
+        "src/giclab/control/remote_bridge.py",
+        "src/giclab/control/remote_execution_conformance.py",
+        "src/giclab/harness/sira_gate_a_runtime.py",
+        "src/giclab/harness/t09_remote_host_phases.py",
+        "src/giclab/harness/t09_runtime_admission.py",
     }
 )
 
@@ -722,7 +733,7 @@ def generate_source_binding_receipt(
             }
         )
     document: dict[str, object] = {
-        "schema_version": "2.0.0",
+        "schema_version": "3.0.0",
         "base_commit": BASE_COMMIT,
         "source_commit": source_commit,
         "source_tree": source_tree,
@@ -781,6 +792,8 @@ def generate_control_binding_document(
     incident_receipt: Path,
     anti_shadow_lint_receipt: Path,
     live_effect_conformance_receipt: Path,
+    live_method_viability_receipt: Path,
+    remote_execution_bridge_conformance_receipt: Path,
 ) -> dict[str, object]:
     """Build the exact binding document after every constituent is sealed."""
 
@@ -793,7 +806,7 @@ def generate_control_binding_document(
         raise ControlProofError("control binding failure matrix is incomplete")
     registration = selected_target.selected_contract.effect_registration
     document: dict[str, object] = {
-        "schema_version": "5.0.0",
+        "schema_version": "6.0.0",
         "repository_slug": REPOSITORY_SLUG,
         "base_commit": BASE_COMMIT,
         "control_plane_revision": {"commit": control_commit, "tree": control_tree},
@@ -835,6 +848,14 @@ def generate_control_binding_document(
                 approved,
                 live_effect_conformance_receipt,
             ),
+            "live_method_viability_receipt": _artifact_binding(
+                approved,
+                live_method_viability_receipt,
+            ),
+            "remote_execution_bridge_conformance_receipt": _artifact_binding(
+                approved,
+                remote_execution_bridge_conformance_receipt,
+            ),
         },
         "authority": {
             "live_authorization": False,
@@ -872,7 +893,7 @@ def _validate_control_receipt_set(
     _validate_schema(root, CONTROL_BINDING_SCHEMA, binding)
     binding_semantic = _semantic_sha256(binding)
     binding_version = binding.get("schema_version")
-    if binding_version not in {"4.0.0", "5.0.0"}:
+    if binding_version not in {"4.0.0", "5.0.0", "6.0.0"}:
         raise ControlProofError("control binding schema version is unsupported")
     if (
         reference.expected_repository_slug != REPOSITORY_SLUG
@@ -953,7 +974,7 @@ def _validate_control_receipt_set(
         or reference.expected_plan_id != contract.plan_id
     ):
         raise ControlProofError("binding selected another runtime target")
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         registration = contract.effect_registration
         expected_registration: dict[str, object] | None = (
             None
@@ -993,11 +1014,17 @@ def _validate_control_receipt_set(
         "source_binding_receipt",
         "incident_receipt",
     )
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         names = (
             *names,
             "anti_shadow_lint_receipt",
             "live_effect_conformance_receipt",
+        )
+    if binding_version == "6.0.0":
+        names = (
+            *names,
+            "live_method_viability_receipt",
+            "remote_execution_bridge_conformance_receipt",
         )
     documents: dict[str, dict[str, object]] = {}
     semantics: dict[str, str] = {}
@@ -1072,12 +1099,21 @@ def _validate_control_receipt_set(
         "source_binding_receipt": "schemas/t09-control-plane-source-binding.schema.json",
         "incident_receipt": "schemas/t09-incident-completeness-receipt.schema.json",
     }
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         schema_map.update(
             {
                 "anti_shadow_lint_receipt": ("schemas/t09-anti-shadow-lint-receipt.schema.json"),
                 "live_effect_conformance_receipt": (
                     "schemas/t09-live-effect-conformance-receipt.schema.json"
+                ),
+            }
+        )
+    if binding_version == "6.0.0":
+        schema_map.update(
+            {
+                "live_method_viability_receipt": ("schemas/t09-live-method-viability.schema.json"),
+                "remote_execution_bridge_conformance_receipt": (
+                    "schemas/t09-remote-execution-bridge-conformance.schema.json"
                 ),
             }
         )
@@ -1173,18 +1209,24 @@ def _validate_control_receipt_set(
         "shadow_happy_path",
         "failure_matrix_valid",
     )
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         capsule_required_fields = (
             *capsule_required_fields,
             "anti_shadow_lint_valid",
             "live_effect_conformance_valid",
+        )
+    if binding_version == "6.0.0":
+        capsule_required_fields = (
+            *capsule_required_fields,
+            "live_method_viability_valid",
+            "remote_execution_bridge_conformance_valid",
         )
     if not isinstance(capsule_control, dict) or any(
         capsule_control.get(field) is not True for field in capsule_required_fields
     ):
         raise ControlProofError("state capsule does not claim the complete bound control proof")
 
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         anti_shadow = documents["anti_shadow_lint_receipt"]
         anti_counts = anti_shadow.get("classification_counts")
         anti_topology = anti_shadow.get("public_receipt_topology_scan")
@@ -1201,7 +1243,7 @@ def _validate_control_receipt_set(
             != [f"SA-{index:02d}" for index in range(1, 13)]
         ):
             raise ControlProofError("anti-shadow source lint receipt is incomplete")
-        if anti_shadow.get("schema_version") == "3.0.0":
+        if anti_shadow.get("schema_version") in {"3.0.0", "4.0.0"}:
             expected_receipt_root = f"control/receipts/packages/{contract.version.lower()}"
             sealed_roots = (
                 anti_topology.get("sealed_roots_scanned")
@@ -1325,6 +1367,112 @@ def _validate_control_receipt_set(
             and conformance.get("actual_v17_artifacts_present") is not False
         ):
             raise ControlProofError("live-effect conformance observed an undeclared successor")
+    if binding_version == "6.0.0":
+        viability = documents["live_method_viability_receipt"]
+        viability_checks = viability.get("checks")
+        viability_methods = viability.get("methods")
+        map_bytes = _git_blob(root, commit, "control/live-method-map.json")
+        try:
+            map_document = loads_json(map_bytes)
+        except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+            raise ControlProofError("bound live-method map is not strict JSON") from exc
+        if (
+            viability.get("schema_version") != "1.0.0"
+            or viability.get("effect_protocol_version") != "2.0.0"
+            or viability.get("method_map_path") != "control/live-method-map.json"
+            or viability.get("method_map_bytes") != len(map_bytes)
+            or viability.get("method_map_file_sha256") != hashlib.sha256(map_bytes).hexdigest()
+            or viability.get("method_map_semantic_sha256") != _canonical_sha256(map_document)
+            or not isinstance(viability_checks, dict)
+            or not viability_checks
+            or any(value is not True for value in viability_checks.values())
+            or not isinstance(viability_methods, list)
+            or not viability_methods
+            or any(
+                not isinstance(method, dict) or method.get("live_mapping_complete") is not True
+                for method in viability_methods
+            )
+            or viability.get("unresolved_methods") != []
+            or viability.get("findings") != []
+            or viability.get("live_environment_required") is not False
+            or viability.get("real_effects_performed") != 0
+            or viability.get("complete") is not True
+        ):
+            raise ControlProofError("live-method viability receipt is incomplete")
+
+        bridge = documents["remote_execution_bridge_conformance_receipt"]
+        bridge_controller = bridge.get("controller_conformance")
+        bridge_host = bridge.get("host_phase_entrypoints")
+        bridge_duplex = bridge.get("duplex_condition_sessions")
+        bridge_accountant = bridge.get("sole_accountant")
+        bridge_evidence = bridge.get("evidence")
+        bridge_failures = bridge.get("failure_probes")
+        bridge_zero = bridge.get("zero_real_effects")
+        if (
+            bridge.get("schema_version") != "1.0.0"
+            or bridge.get("provider_contract_version") != selected_target.selected_contract.version
+            or bridge.get("effect_protocol_version") != "2.0.0"
+            or bridge.get("bridge_protocol_version") != "1.0.0"
+            or bridge.get("shared_controller_entry_point")
+            != "giclab.control.category3.execute_category3_transaction"
+            or bridge.get("production_assembly_entry_point")
+            != "giclab.control.production.build_production_adapter_assembly"
+            or not isinstance(bridge_controller, dict)
+            or bridge_controller.get("receipt_semantic_sha256")
+            != semantics["live_effect_conformance_receipt"]
+            or bridge_controller.get("terminal_state") != "category3-live-complete-clean"
+            or bridge_controller.get("condition_session_count") != 4
+            or bridge_controller.get("first_pair_checkpoint_retained") is not True
+            or bridge_controller.get("raw_finalizer_evaluator_chain") is not True
+            or bridge_controller.get("cleanup_to_zero") is not True
+            or bridge_controller.get("shared_controller_used") is not True
+            or bridge_controller.get("shared_production_assembly_used") is not True
+            or not isinstance(bridge_host, dict)
+            or bridge_host.get("provider_entry_precedes_transfer") is not True
+            or bridge_host.get("transfer_rehashed") is not True
+            or bridge_host.get("full_manifest_validated") is not True
+            or bridge_host.get("network_effects") != 0
+            or not isinstance(bridge_duplex, dict)
+            or bridge_duplex.get("session_count") != 4
+            or bridge_duplex.get("all_terminal_acknowledged") is not True
+            or bridge_duplex.get("all_remote_boundaries_nonauthoritative") is not True
+            or bridge_duplex.get("all_effects_admitted_before_execution") is not True
+            or bridge_duplex.get("all_processes_reaped") is not True
+            or bridge_duplex.get("all_private_endpoints_removed") is not True
+            or bridge_accountant
+            != {
+                "owner": "ConditionEventObserver",
+                "remote_boundary_authoritative": False,
+                "independent_remote_budget_boundary": False,
+                "coupling_probe_passed": True,
+            }
+            or not isinstance(bridge_evidence, dict)
+            or any(value is not True for value in bridge_evidence.values())
+            or not isinstance(bridge_failures, dict)
+            or any(value is not True for value in bridge_failures.values())
+            or not isinstance(bridge_zero, dict)
+            or any(
+                bridge_zero.get(field) != 0
+                for field in (
+                    "secret_reads",
+                    "authenticated_metadata_requests",
+                    "provider_requests",
+                    "cloud_mutations",
+                    "live_ssh",
+                    "docker",
+                    "browser",
+                    "scientific_actions",
+                    "condition_reservations",
+                )
+            )
+            or bridge_zero.get("new_cost_usd") != "0.00"
+            or bridge.get("actual_v17_artifacts_created") is not False
+            or bridge.get("live_authority_created") is not False
+            or bridge.get("scientific_interpretation_allowed") is not False
+            or bridge.get("projected_real_cost_usd") != "0.00"
+            or bridge.get("complete") is not True
+        ):
+            raise ControlProofError("remote-execution bridge conformance is incomplete")
     happy = documents["shadow_happy_path"]
     if (
         happy.get("scenario") != HAPPY_PATH
@@ -1360,7 +1508,7 @@ def _validate_control_receipt_set(
         or happy_accounting["aggregate_charged_upper_cost_usd"] <= 0
     ):
         raise ControlProofError("happy-path shadow accounting proof is incomplete")
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         conformance_package = documents["live_effect_conformance_receipt"].get("temporary_package")
         if (
             not isinstance(conformance_package, dict)
@@ -1404,11 +1552,20 @@ def _validate_control_receipt_set(
         "state_capsule": semantics["state_capsule"],
         "source_binding": semantics["source_binding_receipt"],
     }
-    if binding_version == "5.0.0":
+    if binding_version in {"5.0.0", "6.0.0"}:
         scalar_bindings.update(
             {
                 "anti_shadow_lint": semantics["anti_shadow_lint_receipt"],
                 "live_effect_conformance": semantics["live_effect_conformance_receipt"],
+            }
+        )
+    if binding_version == "6.0.0":
+        scalar_bindings.update(
+            {
+                "live_method_viability": semantics["live_method_viability_receipt"],
+                "remote_execution_bridge_conformance": semantics[
+                    "remote_execution_bridge_conformance_receipt"
+                ],
             }
         )
     for check_name, expected in scalar_bindings.items():
@@ -1470,11 +1627,17 @@ def _validate_control_receipt_set(
     expected_sources = (
         LEGACY_REQUIRED_SHARED_SOURCES
         if source.get("schema_version") == "1.0.0"
-        else REQUIRED_SHARED_SOURCES
+        else V2_REQUIRED_SHARED_SOURCES
         if source.get("schema_version") == "2.0.0"
+        else REQUIRED_SHARED_SOURCES
+        if source.get("schema_version") == "3.0.0"
         else frozenset()
     )
-    expected_source_version = "1.0.0" if binding_version == "4.0.0" else "2.0.0"
+    expected_source_version = {
+        "4.0.0": "1.0.0",
+        "5.0.0": "2.0.0",
+        "6.0.0": "3.0.0",
+    }[binding_version]
     if source.get("schema_version") != expected_source_version:
         raise ControlProofError("source-binding schema does not match the binding generation")
     if observed_sources != expected_sources:

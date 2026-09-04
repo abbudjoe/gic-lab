@@ -24,6 +24,7 @@ from giclab.control.anti_shadow_lint import validate_anti_shadow_lint
 from giclab.control.composition import compose_control_plane
 from giclab.control.incidents import validate_incidents
 from giclab.control.live_conformance import run_live_effect_conformance
+from giclab.control.live_method_viability import validate_live_method_viability
 from giclab.control.proofs import (
     BOUND_GOAL_RECORD,
     REPOSITORY_SLUG,
@@ -33,6 +34,9 @@ from giclab.control.proofs import (
     validate_current_control_receipt_set,
 )
 from giclab.control.registry_validation import validate_registry_completeness
+from giclab.control.remote_execution_conformance import (
+    run_remote_execution_bridge_conformance,
+)
 from giclab.control.scenarios import HAPPY_PATH, REQUIRED_FAILURE_SCENARIOS
 from giclab.control.shadow import run_required_shadow_matrix, run_shadow_scenario
 from giclab.control.state_capsule import generate_state_capsule
@@ -184,6 +188,11 @@ def _verified_capsule(
     shadow_valid = all(receipt.get("scenario_valid") is True for receipt in shadows.values())
     anti_shadow = validate_anti_shadow_lint(repository, target=target)
     live_conformance = run_live_effect_conformance(repository)
+    viability = validate_live_method_viability(repository)
+    remote_bridge_conformance = run_remote_execution_bridge_conformance(
+        repository,
+        live_effect_conformance_receipt=live_conformance,
+    )
     return generate_state_capsule(
         repository,
         registry_complete=registry.get("complete") is True,
@@ -195,6 +204,10 @@ def _verified_capsule(
         failure_matrix_valid=shadow_valid,
         anti_shadow_lint_valid=anti_shadow.get("complete") is True,
         live_effect_conformance_valid=live_conformance.get("complete") is True,
+        live_method_viability_valid=viability.get("complete") is True,
+        remote_execution_bridge_conformance_valid=(
+            remote_bridge_conformance.get("complete") is True
+        ),
         target=target,
         deterministic=deterministic,
     )
@@ -383,6 +396,11 @@ def _generate_receipt_tree(
     shadow_complete = all(receipt.get("scenario_valid") is True for receipt in shadows.values())
     anti_shadow = validate_anti_shadow_lint(repository, target=target)
     live_conformance = run_live_effect_conformance(repository)
+    viability = validate_live_method_viability(repository)
+    remote_bridge_conformance = run_remote_execution_bridge_conformance(
+        repository,
+        live_effect_conformance_receipt=live_conformance,
+    )
     capsule = generate_state_capsule(
         repository,
         registry_complete=registry.get("complete") is True,
@@ -394,6 +412,10 @@ def _generate_receipt_tree(
         failure_matrix_valid=shadow_complete,
         anti_shadow_lint_valid=anti_shadow.get("complete") is True,
         live_effect_conformance_valid=live_conformance.get("complete") is True,
+        live_method_viability_valid=viability.get("complete") is True,
+        remote_execution_bridge_conformance_valid=(
+            remote_bridge_conformance.get("complete") is True
+        ),
         target=target,
         deterministic=True,
     )
@@ -409,6 +431,8 @@ def _generate_receipt_tree(
         execute_incident_regressions=True,
         anti_shadow_lint_receipt=anti_shadow,
         live_effect_conformance_receipt=live_conformance,
+        live_method_viability_receipt=viability,
+        remote_execution_bridge_conformance_receipt=remote_bridge_conformance,
     )
 
     composition_name = f"{contract.version.lower()}-composition.json"
@@ -427,6 +451,12 @@ def _generate_receipt_tree(
             output,
             output / "live-effect-conformance.json",
             live_conformance,
+        ),
+        _write_json(output, output / "live-method-viability.json", viability),
+        _write_json(
+            output,
+            output / "remote-execution-bridge-conformance.json",
+            remote_bridge_conformance,
         ),
         _write_json(
             output,
@@ -462,6 +492,10 @@ def _generate_receipt_tree(
         incident_receipt=output / "incidents.json",
         anti_shadow_lint_receipt=output / "anti-shadow-lint.json",
         live_effect_conformance_receipt=output / "live-effect-conformance.json",
+        live_method_viability_receipt=output / "live-method-viability.json",
+        remote_execution_bridge_conformance_receipt=(
+            output / "remote-execution-bridge-conformance.json"
+        ),
     )
     binding_identity = _write_json(
         output,
@@ -490,6 +524,10 @@ def _generate_receipt_tree(
         failure_matrix_valid=shadow_complete,
         anti_shadow_lint_valid=True,
         live_effect_conformance_valid=live_conformance.get("complete") is True,
+        live_method_viability_valid=viability.get("complete") is True,
+        remote_execution_bridge_conformance_valid=(
+            remote_bridge_conformance.get("complete") is True
+        ),
         target=target,
         deterministic=True,
     )
@@ -499,6 +537,8 @@ def _generate_receipt_tree(
         execute_incident_regressions=True,
         anti_shadow_lint_receipt=anti_shadow,
         live_effect_conformance_receipt=live_conformance,
+        live_method_viability_receipt=viability,
+        remote_execution_bridge_conformance_receipt=remote_bridge_conformance,
     )
     replacements = {
         "anti-shadow-lint.json": _write_json(
@@ -538,6 +578,10 @@ def _generate_receipt_tree(
         incident_receipt=output / "incidents.json",
         anti_shadow_lint_receipt=output / "anti-shadow-lint.json",
         live_effect_conformance_receipt=output / "live-effect-conformance.json",
+        live_method_viability_receipt=output / "live-method-viability.json",
+        remote_execution_bridge_conformance_receipt=(
+            output / "remote-execution-bridge-conformance.json"
+        ),
     )
     binding_identity = _write_json(
         output,

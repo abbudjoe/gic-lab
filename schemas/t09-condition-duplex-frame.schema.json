@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-condition-duplex-frame.schema.json",
+  "title": "T09 canonical condition duplex frame",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "protocol_version",
+    "session_id",
+    "provider_contract_version",
+    "plan_id",
+    "host_run_id",
+    "condition_run_id",
+    "evaluator_run_id",
+    "frozen_manifest_sha256",
+    "sequence_number",
+    "previous_frame_sha256",
+    "event_id",
+    "event_type",
+    "payload",
+    "payload_sha256",
+    "frame_sha256"
+  ],
+  "properties": {
+    "protocol_version": {"const": "1.0.0"},
+    "session_id": {"$ref": "#/$defs/identity"},
+    "provider_contract_version": {"$ref": "#/$defs/identity"},
+    "plan_id": {"$ref": "#/$defs/identity"},
+    "host_run_id": {"$ref": "#/$defs/identity"},
+    "condition_run_id": {"$ref": "#/$defs/identity"},
+    "evaluator_run_id": {"$ref": "#/$defs/identity"},
+    "frozen_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "sequence_number": {"type": "integer", "minimum": 1, "maximum": 20000},
+    "previous_frame_sha256": {"$ref": "#/$defs/sha256"},
+    "event_id": {"$ref": "#/$defs/identity"},
+    "event_type": {
+      "enum": [
+        "condition-session-hello",
+        "condition-session-accepted",
+        "model-call-reserve",
+        "model-call-admitted",
+        "model-call-rejected",
+        "model-send-start",
+        "model-response",
+        "known-provider-error",
+        "known-transport-error-no-provider-acceptance",
+        "ambiguous-send",
+        "response-known-accounting-incomplete",
+        "model-call-terminal",
+        "browser-action-reserve",
+        "browser-action-admitted",
+        "browser-action-rejected",
+        "browser-action-complete",
+        "browser-action-terminal",
+        "output-bytes-update",
+        "output-bytes-admitted",
+        "output-bytes-rejected",
+        "process-exit",
+        "process-exit-accepted",
+        "completion",
+        "completion-accepted",
+        "raw-artifact-published",
+        "raw-artifact-accepted",
+        "runtime-client-complete",
+        "runtime-client-complete-accepted",
+        "condition-session-terminal",
+        "condition-session-terminal-ack"
+      ]
+    },
+    "payload": {"type": "object"},
+    "payload_sha256": {"$ref": "#/$defs/sha256"},
+    "frame_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

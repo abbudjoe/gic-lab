@@ -331,11 +331,20 @@ def test_effect_outcome_output_bytes_must_match_observed_event(
 @pytest.mark.parametrize(
     ("method_name", "field_name", "phase"),
     [
-        ("stage_package", "plan_id", Category3Phase.LOCAL_STAGING),
-        ("preflight_host", "stage_receipt_sha256", Category3Phase.HOST_PREFLIGHT),
+        (
+            "assemble_local_package",
+            "plan_id",
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
+        ),
+        (
+            "transfer_package_to_host",
+            "remote_archive_sha256",
+            Category3Phase.HOST_PACKAGE_TRANSFER,
+        ),
+        ("preflight_host", "metadata_receipt_sha256", Category3Phase.HOST_PREFLIGHT),
         (
             "qualify_host",
-            "provider_entry_receipt_sha256",
+            "image_digest",
             Category3Phase.QUALIFICATION,
         ),
         ("freeze_science", "manifest_sha256", Category3Phase.SCIENTIFIC_FREEZE),

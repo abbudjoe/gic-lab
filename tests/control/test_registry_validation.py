@@ -174,7 +174,7 @@ def test_declared_package_effect_consumer_is_exact_and_required() -> None:
             implementation_sha256=hashlib.sha256(encoded).hexdigest(),
             factory_entry_point="build_deterministic_effects",
             authority_grant_schema_version="1.0.0",
-            effect_protocol_version="1.0.0",
+            effect_protocol_version="2.0.0",
         ),
     )
     resolution = resolve_control_consumers(ROOT, contract)["package_effect_loader"]

@@ -34,7 +34,8 @@
         "INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY",
         "INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW",
         "INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY",
-        "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY"
+        "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY",
+        "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE"
       ]
     },
     "observed_package": {
@@ -94,7 +95,7 @@
       }
     },
     "status": {"enum": ["open", "resolved"]},
-    "scientific_result": {"const": "not-run"},
+    "scientific_result": {"enum": ["not-run", "none"]},
     "scientific_interpretation_allowed": {"const": false},
     "immutable_facts": {"type": "object", "minProperties": 1},
     "immutable_facts_sha256": {"$ref": "#/$defs/sha256"}
@@ -351,6 +352,51 @@
               "target-resolution"
             ]
           }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "incident_id": {
+            "const": "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_package": {
+            "properties": {
+              "version": {"const": "V16"},
+              "plan_id": {"const": "PLAN-EXP0001-PILOT-V16"},
+              "merged_package": {
+                "const": "f56dfc2c9346c9b8d8eea4380a3b2388b9668bd2"
+              }
+            }
+          },
+          "stage": {"const": "pre-mutation V17 source-to-effect viability audit"},
+          "earliest_detectable_stage": {
+            "const": "pre-mutation V17 source-to-effect viability audit"
+          },
+          "authority_consumed": {"const": "none"},
+          "cost_usd": {"const": "0.00"},
+          "affected_abstraction": {
+            "const": [
+              "shared-control/local-package-to-host-transfer",
+              "shared-control/phase-specific-host-runtime",
+              "shared-control/duplex-condition-admission",
+              "shared-control/provider-launch-mutation-seam"
+            ]
+          },
+          "repair": {"const": "phase-conformant-remote-execution-bridge"},
+          "coverage": {
+            "const": [
+              "offline-composition",
+              "shadow-execution",
+              "target-resolution"
+            ]
+          },
+          "scientific_result": {"const": "none"}
         }
       }
     }

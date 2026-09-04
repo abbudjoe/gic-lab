@@ -51,6 +51,7 @@ from giclab.harness.sira_gate_a_runtime import (
     _install_locked_llm_factory,
     _write_usage_ledger,
 )
+from giclab.harness.t09_runtime_admission import InProcessBoundaryPort
 from giclab.registry import load_yaml
 from giclab.validation import ROOT
 
@@ -414,7 +415,12 @@ def test_source_shaped_llm_factory_routes_every_completion_through_boundary(
         persist=lambda usage, unreconciled: _write_usage_ledger(ledger, usage, unreconciled),
     )
     _write_usage_ledger(ledger, boundary.condition_usage, 0)
-    _install_locked_llm_factory(runner, boundary=boundary, ledger_path=ledger)
+    _install_locked_llm_factory(
+        runner,
+        admission_port=InProcessBoundaryPort(boundary),
+        llm_timeout_seconds=condition_caps("reactive").max_wall_seconds,
+        ledger_path=ledger,
+    )
 
     role_llms = runner.make_llm(SIRA_MODEL_REVISION, "synthetic-not-a-secret")  # type: ignore[attr-defined]
     assert set(role_llms) == {role.value for role in ModelRole}
@@ -502,7 +508,12 @@ def test_runtime_rejects_nondefault_or_missing_response_service_tier(
         condition_caps=condition_caps("reactive"),
         persist=lambda usage, unreconciled: _write_usage_ledger(ledger, usage, unreconciled),
     )
-    _install_locked_llm_factory(runner, boundary=boundary, ledger_path=ledger)
+    _install_locked_llm_factory(
+        runner,
+        admission_port=InProcessBoundaryPort(boundary),
+        llm_timeout_seconds=condition_caps("reactive").max_wall_seconds,
+        ledger_path=ledger,
+    )
     role_llm = runner.make_llm(  # type: ignore[attr-defined]
         SIRA_MODEL_REVISION, "synthetic-not-a-secret"
     )[ModelRole.DEFAULT.value]

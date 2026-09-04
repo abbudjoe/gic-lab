@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-condition-session-terminal-receipt.schema.json",
+  "title": "T09 condition session terminal receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "binding",
+    "terminal_sequence",
+    "terminal_frame_sha256",
+    "transcript_sha256",
+    "shared_accounting_sha256",
+    "remote_journal_bytes",
+    "remote_journal_file_sha256",
+    "remote_journal_sha256",
+    "remote_terminal_sequence",
+    "remote_terminal_frame_sha256",
+    "remote_frame_chain_sha256",
+    "raw_manifest_sha256",
+    "raw_receipt_sha256",
+    "terminal_acknowledged",
+    "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "provider_contract_version",
+        "plan_id",
+        "host_run_id",
+        "condition_run_id",
+        "evaluator_run_id",
+        "frozen_manifest_sha256"
+      ],
+      "properties": {
+        "session_id": {"$ref": "#/$defs/identity"},
+        "provider_contract_version": {"$ref": "#/$defs/identity"},
+        "plan_id": {"$ref": "#/$defs/identity"},
+        "host_run_id": {"$ref": "#/$defs/identity"},
+        "condition_run_id": {"$ref": "#/$defs/identity"},
+        "evaluator_run_id": {"$ref": "#/$defs/identity"},
+        "frozen_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "terminal_sequence": {"type": "integer", "minimum": 1, "maximum": 20000},
+    "terminal_frame_sha256": {"$ref": "#/$defs/sha256"},
+    "transcript_sha256": {"$ref": "#/$defs/sha256"},
+    "shared_accounting_sha256": {"$ref": "#/$defs/sha256"},
+    "remote_journal_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+    "remote_journal_file_sha256": {"$ref": "#/$defs/sha256"},
+    "remote_journal_sha256": {"$ref": "#/$defs/sha256"},
+    "remote_terminal_sequence": {"type": "integer", "minimum": 1, "maximum": 20000},
+    "remote_terminal_frame_sha256": {"$ref": "#/$defs/sha256"},
+    "remote_frame_chain_sha256": {"$ref": "#/$defs/sha256"},
+    "raw_manifest_sha256": {"$ref": "#/$defs/sha256"},
+    "raw_receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "terminal_acknowledged": {"const": true},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

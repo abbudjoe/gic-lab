@@ -162,8 +162,11 @@ class ProviderTransport(Protocol):
 
 
 class HostRuntime(Protocol):
-    def stage(self) -> str:
-        """Materialize and validate the exact tracked-only package archive."""
+    def assemble_local_package(self) -> str:
+        """Materialize and hold the exact deterministic tracked-only archive."""
+
+    def transfer_package(self, handle: ProviderHandle) -> str:
+        """Transfer and remotely rehash that archive after exact provider entry."""
 
     def preflight(self, handle: ProviderHandle) -> None:
         """Validate the effect-produced host preflight receipt."""

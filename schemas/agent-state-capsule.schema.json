@@ -30,7 +30,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["3.0.0", "4.0.0"]},
+    "schema_version": {"enum": ["3.0.0", "4.0.0", "5.0.0"]},
     "generated_at_policy": {"enum": ["deterministic-fixed", "caller-supplied-or-wall-clock"]},
     "generated_at": {"type": "string", "minLength": 1},
     "repository": {
@@ -64,7 +64,8 @@
         "revision": {
           "enum": [
             "T09-control-target-selection",
-            "T09-live-capable-production-effects"
+            "T09-live-capable-production-effects",
+            "T09-remote-execution-bridge"
           ]
         },
         "status": {
@@ -72,7 +73,8 @@
             "implementation-complete-external-governance",
             "successor-package-bound-not-authorized",
             "live-capable-production-effects-repair-in-progress",
-            "live-capable-production-effects-complete-external-governance"
+            "live-capable-production-effects-complete-external-governance",
+            "remote-execution-bridge-complete-external-governance"
           ]
         },
         "registry_complete": {"type": "boolean"},
@@ -81,7 +83,9 @@
         "shadow_happy_path": {"type": "boolean"},
         "failure_matrix_valid": {"type": "boolean"},
         "anti_shadow_lint_valid": {"type": "boolean"},
-        "live_effect_conformance_valid": {"type": "boolean"}
+        "live_effect_conformance_valid": {"type": "boolean"},
+        "live_method_viability_valid": {"type": "boolean"},
+        "remote_execution_bridge_conformance_valid": {"type": "boolean"}
       }
     },
     "runtime_package": {
@@ -202,6 +206,37 @@
                   "live-capable-production-effects-repair-in-progress",
                   "live-capable-production-effects-complete-external-governance"
                 ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "5.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "control_plane": {
+            "required": [
+              "revision",
+              "status",
+              "registry_complete",
+              "composition_valid",
+              "active_version_lint_valid",
+              "shadow_happy_path",
+              "failure_matrix_valid",
+              "anti_shadow_lint_valid",
+              "live_effect_conformance_valid",
+              "live_method_viability_valid",
+              "remote_execution_bridge_conformance_valid"
+            ],
+            "properties": {
+              "revision": {"const": "T09-remote-execution-bridge"},
+              "status": {
+                "const": "remote-execution-bridge-complete-external-governance"
               }
             }
           }

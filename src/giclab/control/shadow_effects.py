@@ -51,15 +51,17 @@ from giclab.control.effects import (
     FinalizerExecutionOutcome,
     FinalizerExecutionRequest,
     HeldTransactionRoot,
+    HostPackageTransferReceipt,
+    HostPackageTransferRequest,
     HostPreflightReceipt,
     HostPreflightRejected,
     HostPreflightRequest,
     HostQualificationReceipt,
     HostQualificationRequest,
+    LocalPackageAssemblyReceipt,
+    LocalPackageAssemblyRequest,
     LowLevelEffects,
     ModelMetadataChannel,
-    PackageStageReceipt,
-    PackageStageRequest,
     ProviderCostObservationRequest,
     ProviderCostReceipt,
     ProviderHandle,
@@ -77,6 +79,7 @@ from giclab.control.production import (
     build_production_adapter_assembly,
 )
 from giclab.control.proofs import ValidatedShadowRehearsal
+from giclab.control.remote_bridge import RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION
 from giclab.harness import t09_model_metadata_receipt as metadata
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
@@ -256,7 +259,9 @@ class _QueuedProviderTransport:
         if isinstance(value, BaseException):
             raise value
         if method == "POST" and path == "/api/v1/instance-operations/launch":
-            self.launched_handle = self.effects.provider_launch(launch_ordinal=self.launch_ordinal)
+            self.launched_handle = self.effects._accept_transport_launch(
+                launch_ordinal=self.launch_ordinal
+            )
         if (
             method == "POST"
             and path == "/api/v1/instance-operations/terminate"
@@ -519,7 +524,9 @@ class DeterministicLowLevelEffects:
             return None
         return tuple(sorted(handle.opaque_identity for handle in self._active.values()))
 
-    def provider_launch(self, *, launch_ordinal: int) -> ProviderHandle:
+    def _accept_transport_launch(self, *, launch_ordinal: int) -> ProviderHandle:
+        """Record the one launch accepted by the retained campaign transport."""
+
         handle = ProviderHandle(
             opaque_identity=f"deterministic-instance-{launch_ordinal}",
             launch_ordinal=launch_ordinal,
@@ -661,20 +668,16 @@ class DeterministicLowLevelEffects:
         del launch_ordinal
         return self._image_fixture
 
-    def stage_package(self, request: PackageStageRequest) -> PackageStageReceipt:
-        if self._declared_failure("host.stage"):
-            raise AdapterFailure("deterministic package staging failure")
-        stage_root = self._root / "package-stage"
-        stage_root.mkdir(mode=0o700)
-        archive = stage_root / "tracked-package.tar"
-        with tarfile.open(archive, mode="w") as handle:
+    @staticmethod
+    def _render_local_archive(path: Path, request: LocalPackageAssemblyRequest) -> None:
+        with tarfile.open(path, mode="x") as handle:
             for member in request.members:
                 encoded = (request.repository / member.path).read_bytes()
                 if (
                     len(encoded) != member.bytes
                     or hashlib.sha256(encoded).hexdigest() != member.sha256
                 ):
-                    raise AdapterFailure("deterministic stage observed package byte drift")
+                    raise AdapterFailure("deterministic assembly observed package byte drift")
                 info = tarfile.TarInfo(member.path)
                 info.size = len(encoded)
                 info.mode = 0o600
@@ -684,14 +687,27 @@ class DeterministicLowLevelEffects:
                 info.gname = ""
                 info.mtime = 0
                 handle.addfile(info, io.BytesIO(encoded))
-        archive.chmod(0o600)
-        archive_sha = _file_sha256(archive)
-        acknowledgement = _identity(
+        path.chmod(0o600)
+
+    def assemble_local_package(
+        self,
+        request: LocalPackageAssemblyRequest,
+    ) -> LocalPackageAssemblyReceipt:
+        if self._declared_failure("host.assemble_local"):
+            raise AdapterFailure("deterministic local package assembly failure")
+        stage_root = self._root / "local-package-assembly"
+        stage_root.mkdir(mode=0o700)
+        first = stage_root / "tracked-package-render-1.tar"
+        second = stage_root / "tracked-package-render-2.tar"
+        self._render_local_archive(first, request)
+        self._render_local_archive(second, request)
+        archive_sha = _file_sha256(first)
+        verification_sha = _file_sha256(second)
+        source_manifest_sha = _identity(
             {
-                "host_run_id": request.host_run_id,
-                "evidence_stage_id": request.evidence_stage_id,
-                "archive_sha256": archive_sha,
-                "member_count": len(request.members),
+                "source_commit": request.control_commit,
+                "source_tree": request.control_tree,
+                "members": [member.to_document() for member in request.members],
             }
         )
         document = {
@@ -700,35 +716,114 @@ class DeterministicLowLevelEffects:
             "plan_sha256": request.plan_sha256,
             "command_package_sha256": request.command_package_sha256,
             "execution_contract_sha256": request.execution_contract_sha256,
-            "evidence_stage_id": request.evidence_stage_id,
-            "host_run_id": request.host_run_id,
             "archive_sha256": archive_sha,
-            "archive_bytes": archive.stat().st_size,
+            "archive_bytes": first.stat().st_size,
             "members": [member.to_document() for member in request.members],
             "source_commit": request.control_commit,
             "source_tree": request.control_tree,
-            "host_acknowledgement_sha256": acknowledgement,
-            "host_rehash_sha256": archive_sha,
-            "uploaded": False,
+            "source_manifest_sha256": source_manifest_sha,
+            "deterministic_render_count": 2,
+            "verification_archive_sha256": verification_sha,
         }
-        return PackageStageReceipt(
+        return LocalPackageAssemblyReceipt(
             provider_contract_version=request.provider_contract_version,
             plan_id=request.plan_id,
             plan_sha256=request.plan_sha256,
             command_package_sha256=request.command_package_sha256,
             execution_contract_sha256=request.execution_contract_sha256,
-            evidence_stage_id=request.evidence_stage_id,
-            host_run_id=request.host_run_id,
-            archive_path=archive,
+            archive_path=first,
             archive_sha256=archive_sha,
-            archive_bytes=archive.stat().st_size,
+            archive_bytes=first.stat().st_size,
             members=request.members,
             source_commit=request.control_commit,
             source_tree=request.control_tree,
-            host_acknowledgement_sha256=acknowledgement,
-            host_rehash_sha256=archive_sha,
-            uploaded=False,
+            source_manifest_sha256=source_manifest_sha,
+            deterministic_render_count=2,
+            verification_archive_path=second,
+            verification_archive_sha256=verification_sha,
             receipt_sha256=_identity(document),
+        )
+
+    def transfer_package_to_host(
+        self,
+        request: HostPackageTransferRequest,
+    ) -> HostPackageTransferReceipt:
+        if self._declared_failure("host.transfer"):
+            raise AdapterFailure("deterministic host package transfer failure")
+        if (
+            request.provider_handle.launch_ordinal not in self._active
+            or request.binding.provider_handle_identity != request.provider_handle.opaque_identity
+            or request.binding.provider_launch_ordinal != request.provider_handle.launch_ordinal
+            or request.binding.provider_entry_receipt_sha256
+            != _file_sha256(request.provider_entry_receipt_path)
+            or request.binding.local_assembly_receipt_sha256
+            != request.local_assembly.receipt_sha256
+        ):
+            raise AdapterFailure("deterministic host transfer lacks exact provider entry")
+        started_wall = request.requested_wall_time
+        started_mono = request.requested_monotonic
+        host_root = self._root / f"remote-host-{request.provider_handle.launch_ordinal}"
+        host_root.mkdir(mode=0o700)
+        archive = host_root / "tracked-package.tar"
+        shutil.copyfile(request.local_assembly.archive_path, archive)
+        archive.chmod(0o600)
+        members = [member.to_document() for member in request.local_assembly.members]
+        manifest = host_root / "tracked-package-members.json"
+        manifest.write_bytes(_canonical_bytes(members))
+        manifest.chmod(0o600)
+        remote_member_sha = _identity(members)
+        archive_sha = _file_sha256(archive)
+        cleanup_sha = _identity(
+            {
+                "provider_handle": request.provider_handle.opaque_identity,
+                "remote_package_private": True,
+                "cleanup_registered": True,
+            }
+        )
+        acknowledgement = _identity(
+            {
+                "binding": request.binding.to_document(),
+                "archive_sha256": archive_sha,
+                "member_manifest_sha256": remote_member_sha,
+            }
+        )
+        completed_wall = self._clock.wall_time()
+        completed_mono = self._clock.monotonic()
+        phase_hashes = (archive_sha, remote_member_sha, acknowledgement, cleanup_sha)
+        remote_package_path = f"{request.binding.remote_root}/package/tracked-package.tar"
+        remote_manifest_path = f"{request.binding.remote_root}/package/members.json"
+        values = {
+            "binding": request.binding.to_document(),
+            "remote_package_path": remote_package_path,
+            "remote_manifest_path": remote_manifest_path,
+            "remote_archive_bytes": archive.stat().st_size,
+            "remote_archive_sha256": archive_sha,
+            "remote_members": members,
+            "remote_member_manifest_sha256": remote_member_sha,
+            "host_acknowledgement_sha256": acknowledgement,
+            "started_wall_time": started_wall,
+            "completed_wall_time": completed_wall,
+            "started_monotonic": started_mono,
+            "completed_monotonic": completed_mono,
+            "cleanup_state_sha256": cleanup_sha,
+            "phase_output_sha256s": list(phase_hashes),
+        }
+        return HostPackageTransferReceipt(
+            binding=request.binding,
+            remote_package_path=remote_package_path,
+            remote_manifest_path=remote_manifest_path,
+            remote_archive_bytes=archive.stat().st_size,
+            remote_archive_sha256=archive_sha,
+            remote_members=request.local_assembly.members,
+            remote_member_manifest_sha256=remote_member_sha,
+            host_acknowledgement_sha256=acknowledgement,
+            started_wall_time=started_wall,
+            completed_wall_time=completed_wall,
+            started_monotonic=started_mono,
+            completed_monotonic=completed_mono,
+            cleanup_state_sha256=cleanup_sha,
+            phase_output_sha256s=phase_hashes,
+            receipt_sha256=_identity(values),
         )
 
     def _preflight_rejection(
@@ -799,7 +894,9 @@ class DeterministicLowLevelEffects:
             "plan_id": self.contract.plan_id,
             "host_run_id": self.contract.host_run_id,
             "package_commit": commit,
-            "provider_entry_receipt_sha256": request.provider_entry_receipt_sha256,
+            "provider_entry_receipt_sha256": (
+                request.binding.transfer.provider_entry_receipt_sha256
+            ),
             "pilot_state_sha256": provider.file_sha256(source / "pilot-state.json"),
             "host_cleanup_sha256": provider.file_sha256(source / "host-cleanup.json"),
             "preflight_failure_sha256": provider.file_sha256(source / "preflight-failure.json"),
@@ -872,43 +969,37 @@ class DeterministicLowLevelEffects:
         started_mono = request.requested_monotonic
         completed_wall = self._clock.wall_time()
         completed_mono = self._clock.monotonic()
+        cleanup_sha = _identity("deterministic-host-preflight-cleanup-state")
+        remote_path_sha = _identity(
+            {
+                "remote_root": request.binding.transfer.remote_root,
+                "host_run_id": request.binding.transfer.host_run_id,
+            }
+        )
+        phase_hashes = (remote_path_sha, cleanup_sha)
         document = {
-            "provider_contract_version": request.provider_contract_version,
-            "plan_id": request.plan_id,
-            "host_run_id": request.host_run_id,
-            "provider_handle_identity": request.provider_handle.opaque_identity,
-            "provider_launch_ordinal": request.provider_handle.launch_ordinal,
-            "provider_entry_receipt_sha256": request.provider_entry_receipt_sha256,
+            "binding": request.binding.to_document(),
+            "previous_phase_receipt_sha256": request.binding.host_transfer_receipt_sha256,
             "metadata_receipt_sha256": request.metadata_receipt_sha256,
-            "stage_receipt_sha256": request.stage_receipt_sha256,
-            "remote_path_qualification_sha256": _identity(
-                {
-                    "remote_root": request.remote_root,
-                    "host_run_id": request.host_run_id,
-                }
-            ),
+            "remote_path_qualification_sha256": remote_path_sha,
             "started_wall_time": started_wall,
             "completed_wall_time": completed_wall,
             "started_monotonic": started_mono,
             "completed_monotonic": completed_mono,
+            "cleanup_state_sha256": cleanup_sha,
+            "phase_output_sha256s": list(phase_hashes),
         }
         return HostPreflightReceipt(
-            provider_contract_version=request.provider_contract_version,
-            plan_id=request.plan_id,
-            host_run_id=request.host_run_id,
-            provider_handle_identity=request.provider_handle.opaque_identity,
-            provider_launch_ordinal=request.provider_handle.launch_ordinal,
-            provider_entry_receipt_sha256=request.provider_entry_receipt_sha256,
+            binding=request.binding,
+            previous_phase_receipt_sha256=request.binding.host_transfer_receipt_sha256,
             metadata_receipt_sha256=request.metadata_receipt_sha256,
-            stage_receipt_sha256=request.stage_receipt_sha256,
-            remote_path_qualification_sha256=cast(
-                str,
-                document["remote_path_qualification_sha256"],
-            ),
+            remote_path_qualification_sha256=remote_path_sha,
             started_wall_time=started_wall,
             completed_wall_time=completed_wall,
             started_monotonic=started_mono,
             completed_monotonic=completed_mono,
+            cleanup_state_sha256=cleanup_sha,
+            phase_output_sha256s=phase_hashes,
             receipt_sha256=_identity(document),
         )
 
@@ -949,14 +1040,13 @@ class DeterministicLowLevelEffects:
         projection_sha = _file_sha256(role_sources[host.DownstreamSourceRole.FINALIZER_PROJECTION])
         selector_sha = _file_sha256(role_sources[host.DownstreamSourceRole.SELECTOR])
         schema_sha = _file_sha256(role_sources[host.DownstreamSourceRole.REFINALIZATION_SCHEMA])
+        started_wall = request.requested_wall_time
+        started_mono = request.requested_monotonic
+        completed_wall = self._clock.wall_time()
+        completed_mono = self._clock.monotonic()
         values: dict[str, object] = {
-            "provider_contract_version": request.provider_contract_version,
-            "plan_id": request.plan_id,
-            "host_run_id": request.host_run_id,
-            "provider_handle_identity": request.provider_handle.opaque_identity,
-            "provider_launch_ordinal": request.provider_handle.launch_ordinal,
-            "provider_entry_receipt_sha256": request.provider_entry_receipt_sha256,
-            "stage_receipt_sha256": request.stage_receipt_sha256,
+            "binding": request.binding,
+            "previous_phase_receipt_sha256": request.preflight_receipt_sha256,
             "replacement_image_tag": request.replacement_image_tag,
             "image_materialization_policy": request.image_materialization_policy,
             "qualification_id": request.active_image_qualification_id,
@@ -993,10 +1083,26 @@ class DeterministicLowLevelEffects:
                 "deterministic-evaluator-dependency-tree"
             ),
             "cleanup_readiness_sha256": _identity("deterministic-cleanup-readiness"),
+            "started_wall_time": started_wall,
+            "completed_wall_time": completed_wall,
+            "started_monotonic": started_mono,
+            "completed_monotonic": completed_mono,
+        }
+        phase_hashes = (
+            cast(str, values["image_materialization_receipt_sha256"]),
+            cast(str, values["dependency_tree_sha256"]),
+            cast(str, values["browser_qualification_sha256"]),
+            cast(str, values["cleanup_readiness_sha256"]),
+        )
+        values["phase_output_sha256s"] = phase_hashes
+        identity_values = {
+            **values,
+            "binding": request.binding.to_document(),
+            "phase_output_sha256s": list(phase_hashes),
         }
         return HostQualificationReceipt(
             **values,  # type: ignore[arg-type]
-            receipt_sha256=_identity(values),
+            receipt_sha256=_identity(identity_values),
         )
 
     def freeze_science(
@@ -1009,54 +1115,106 @@ class DeterministicLowLevelEffects:
         freeze_root.mkdir(mode=0o700)
         completed_wall = self._clock.wall_time()
         completed_mono = self._clock.monotonic()
+        retained_hashes = {
+            name: _identity(f"deterministic-full-freeze:{name}")
+            for name in (
+                "runtime_preflight_sha256",
+                "offline_preflight_sha256",
+                "core_suppression_preflight_sha256",
+                "sealing_primitives_preflight_sha256",
+                "browser_preflight_sha256",
+                "evaluator_materialization_sha256",
+                "final_image_file_hashes_sha256",
+                "model_metadata_credential_scan_sha256",
+            )
+        }
+        source_receipts = {
+            name: _identity(f"deterministic-full-freeze-source:{name}")
+            for name in (
+                "materialization",
+                "build_context",
+                "image_inspect",
+                "final_image_file_hashes",
+                "evaluator_overlay",
+                "core_suppression",
+                "sealing_primitives",
+                "model_metadata_credential_scan",
+            )
+        }
         manifest = {
-            "schema_version": "1.0.0",
-            "provider_contract_version": request.provider_contract_version,
-            "plan_id": request.plan_id,
-            "host_run_id": request.host_run_id,
-            "frozen_manifest_id": request.frozen_manifest_id,
-            "provider_entry_receipt_sha256": request.provider_entry_receipt_sha256,
-            "stage_receipt_sha256": request.stage_receipt_sha256,
-            "command_package_sha256": request.command_package_sha256,
-            "execution_contract_sha256": request.execution_contract_sha256,
-            "qualification_receipt_sha256": request.qualification_receipt_sha256,
-            "image_digest": request.image_digest,
-            "frozen_at_wall_time": completed_wall,
+            **dict(request.expected_manifest_projection),
+            "schema_version": RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION,
+            "qualification_count": 1,
+            "build_count": 1,
+            "image_materialization_policy": "deterministic-retained-image-qualification",
+            "provider_preflight_started_at_epoch": request.started_wall_time,
+            "owned_lambda_started_at_epoch": request.started_wall_time,
+            "first_pair_started_at_epoch": completed_wall,
+            "launch_slot": request.provider_handle.launch_ordinal,
+            "launch_count": request.provider_handle.launch_ordinal,
+            "python_interpreter_path": "/opt/sira/.venv/bin/python",
+            "python_interpreter_sha256": _identity("deterministic-image-interpreter"),
+            **retained_hashes,
+            "pair_diffs": [{"pair": "task-a", "valid": True}, {"pair": "task-b", "valid": True}],
+            "source_receipts": source_receipts,
         }
         manifest_path = freeze_root / "frozen-run-manifest.json"
         manifest_path.write_bytes(_canonical_bytes(manifest))
         manifest_path.chmod(0o600)
         manifest_sha = _file_sha256(manifest_path)
         validation = {
-            "schema_version": "1.0.0",
-            "provider_contract_version": request.provider_contract_version,
-            "plan_id": request.plan_id,
-            "host_run_id": request.host_run_id,
-            "frozen_manifest_sha256": manifest_sha,
-            "validated_at_wall_time": completed_wall,
-            "postfreeze_valid": True,
+            "schema_version": RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION,
+            "plan_id": request.binding.transfer.plan_id,
+            "host_run_id": request.binding.transfer.host_run_id,
+            "package_commit": request.binding.transfer.source_commit,
+            "frozen_run_manifest_sha256": manifest_sha,
+            "frozen_manifest_published_before_empirical_clock": True,
+            "model_task_request_count": 0,
+            "task_browser_action_count": 0,
+            "completed_at_epoch": completed_wall,
         }
         validation_path = freeze_root / "postfreeze-validation.json"
         validation_path.write_bytes(_canonical_bytes(validation))
         validation_path.chmod(0o600)
         validation_sha = _file_sha256(validation_path)
+        cleanup_sha = _identity("deterministic-freeze-cleanup-state")
+        projection = {
+            **dict(request.expected_manifest_projection),
+            "schema_version": RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION,
+            "full_manifest_validated": True,
+            "full_field_count": len(manifest),
+        }
+        projection_sha = _identity(projection)
+        phase_hashes = (manifest_sha, validation_sha, cleanup_sha)
         receipt_document = {
+            "binding": request.binding.to_document(),
+            "previous_phase_receipt_sha256": request.qualification_receipt_sha256,
             "manifest_sha256": manifest_sha,
+            "manifest_schema_version": request.manifest_schema_version,
+            "manifest_projection_sha256": projection_sha,
             "postfreeze_validation_sha256": validation_sha,
             "started_wall_time": request.started_wall_time,
             "completed_wall_time": completed_wall,
             "started_monotonic": request.started_monotonic,
             "completed_monotonic": completed_mono,
+            "cleanup_state_sha256": cleanup_sha,
+            "phase_output_sha256s": list(phase_hashes),
         }
         return ScientificFreezeReceipt(
+            binding=request.binding,
+            previous_phase_receipt_sha256=request.qualification_receipt_sha256,
             manifest_path=manifest_path,
             manifest_sha256=manifest_sha,
+            manifest_schema_version=request.manifest_schema_version,
+            manifest_projection_sha256=projection_sha,
             postfreeze_validation_path=validation_path,
             postfreeze_validation_sha256=validation_sha,
             started_wall_time=request.started_wall_time,
             completed_wall_time=completed_wall,
             started_monotonic=request.started_monotonic,
             completed_monotonic=completed_mono,
+            cleanup_state_sha256=cleanup_sha,
+            phase_output_sha256s=phase_hashes,
             receipt_sha256=_identity(receipt_document),
         )
 
@@ -1167,6 +1325,26 @@ class DeterministicLowLevelEffects:
             else:
                 path.write_bytes(encoded)
                 path.chmod(0o400)
+        if request.bridge_evidence is not None:
+            bridge_sources = {
+                "duplex-remote-event-journal.json": (request.bridge_evidence.remote_journal_path),
+                "duplex-transcript-prefix.json": (request.bridge_evidence.relay_prefix_path),
+                "duplex-runtime-detached.json": (request.bridge_evidence.runtime_detachment_path),
+            }
+            for name, source in bridge_sources.items():
+                try:
+                    encoded = source.read_bytes()
+                except OSError as exc:
+                    raise AdapterFailure(
+                        "deterministic essential failure lacks its bridge prefix"
+                    ) from exc
+                destination = payload_root / name
+                if destination.exists():
+                    if destination.read_bytes() != encoded:
+                        raise AdapterFailure("deterministic essential bridge-prefix resume drifted")
+                else:
+                    destination.write_bytes(encoded)
+                    destination.chmod(0o400)
         if self.fault_plan.essential_target_bytes is not None:
             self._essential_envelope_targets[execution.run_id] = (
                 self.fault_plan.essential_target_bytes
@@ -1334,6 +1512,7 @@ class DeterministicLowLevelEffects:
             structural_privacy_findings=(),
             cleanup_ready=True,
             retry_count=request.retry_count,
+            bridge_evidence=request.bridge_evidence,
         )
 
     def export_condition_failure(

@@ -58,13 +58,14 @@ class Category3Phase(StrEnum):
     OFFLINE_COMPOSITION = "offline-composition"
     STATE_CAPSULE = "state-capsule-snapshot"
     SHADOW_RECEIPTS = "shadow-rehearsal-receipt-validation"
-    LOCAL_STAGING = "local-staging"
+    LOCAL_PACKAGE_ASSEMBLY = "local-package-assembly"
     SECRET_CHANNEL = "secret-channel-qualification"
     METADATA_RECEIPT = "metadata-receipt"
     PROVIDER_PREFLIGHT = "provider-read-only-preflight"
     FINAL_METADATA_FRESHNESS = "final-metadata-freshness"
     LAUNCH = "launch"
     PROVIDER_ENTRY = "provider-entry"
+    HOST_PACKAGE_TRANSFER = "host-package-transfer"
     HOST_PREFLIGHT = "host-preflight"
     QUALIFICATION = "image-finalizer-qualification"
     SCIENTIFIC_FREEZE = "scientific-freeze"
@@ -97,7 +98,7 @@ class PreparedCategory3:
     contract_version: str
     composition_sha256: str
     state_capsule_sha256: str
-    stage_sha256: str
+    local_assembly_sha256: str
     effect_authorization_context_sha256: str
     shadow_prerequisite_policy: str
     shadow_receipt_sha256s: tuple[str, ...]
@@ -350,7 +351,7 @@ def prepare_category3(
     except (ControlProofError, OSError, ValueError) as exc:
         _transition(
             transitions,
-            Category3Phase.LOCAL_STAGING,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
             "failed",
             detail=str(exc),
         )
@@ -358,15 +359,15 @@ def prepare_category3(
             None,
             composition,
             tuple(transitions),
-            Category3Phase.LOCAL_STAGING.value,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY.value,
             f"deterministic staging validation failed: {exc}",
         )
     try:
-        stage_sha256 = adapters.host_runtime.stage()
+        local_assembly_sha256 = adapters.host_runtime.assemble_local_package()
     except AdapterFailure as exc:
         _transition(
             transitions,
-            Category3Phase.LOCAL_STAGING,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
             "failed",
             detail=str(exc),
         )
@@ -374,15 +375,15 @@ def prepare_category3(
             None,
             composition,
             tuple(transitions),
-            Category3Phase.LOCAL_STAGING.value,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY.value,
             str(exc),
         )
-    _transition(transitions, Category3Phase.LOCAL_STAGING, "passed")
+    _transition(transitions, Category3Phase.LOCAL_PACKAGE_ASSEMBLY, "passed")
     prepared = object.__new__(PreparedCategory3)
     object.__setattr__(prepared, "contract_version", request.contract.version)
     object.__setattr__(prepared, "composition_sha256", str(composition["semantic_sha256"]))
     object.__setattr__(prepared, "state_capsule_sha256", state_capsule_sha256)
-    object.__setattr__(prepared, "stage_sha256", stage_sha256)
+    object.__setattr__(prepared, "local_assembly_sha256", local_assembly_sha256)
     object.__setattr__(
         prepared,
         "effect_authorization_context_sha256",
@@ -659,6 +660,33 @@ def _establish_provider(
                 "failed",
                 detail=failed_reason,
             )
+        if failed_phase is None:
+            try:
+                adapters.host_runtime.transfer_package(handle)
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PACKAGE_TRANSFER,
+                    "passed",
+                )
+            except ReplacementEligibleFailure as exc:
+                failed_phase = Category3Phase.HOST_PACKAGE_TRANSFER
+                failed_reason = str(exc)
+                replacement_eligible = True
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PACKAGE_TRANSFER,
+                    "failed",
+                    detail=failed_reason,
+                )
+            except AdapterFailure as exc:
+                failed_phase = Category3Phase.HOST_PACKAGE_TRANSFER
+                failed_reason = str(exc)
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PACKAGE_TRANSFER,
+                    "failed",
+                    detail=failed_reason,
+                )
         if failed_phase is None:
             try:
                 adapters.host_runtime.preflight(handle)

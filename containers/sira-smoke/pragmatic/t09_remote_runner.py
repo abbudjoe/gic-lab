@@ -31,6 +31,7 @@ import sys
 import tarfile
 import time
 from collections.abc import Callable, Iterable, Iterator, Mapping
+from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path, PurePosixPath
@@ -38,6 +39,14 @@ from typing import IO, Any, BinaryIO, Final, NamedTuple, cast
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from giclab.control.remote_bridge import (
+    CanonicalFrameRelay,
+    ConditionSessionBinding,
+    PrivateConditionListener,
+    RemoteBridgeError,
+    semantic_sha256,
+    strict_json_object,
+)
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_cleanup_state import (
@@ -89,6 +98,21 @@ from giclab.harness.t09_provider_contracts import (
     load_provider_plan,
     provider_contract,
     provider_contract_for_plan_id,
+)
+from giclab.harness.t09_remote_host_phases import (
+    HostPhaseError,
+    RemoteHostPhaseRequest,
+    begin_external_host_phase,
+    bind_generated_host_phase_outputs,
+    load_host_phase_request,
+    validate_condition_session_request,
+    validate_host_cleanup_phase,
+    validate_host_freeze_phase,
+    validate_host_phase_predecessor,
+    validate_host_preflight_phase,
+    validate_host_qualification_phase,
+    verify_host_transfer_phase,
+    write_phase_receipt,
 )
 from giclab.harness.t09_sira_pilot import (
     PREENTRY_RESUME_FROM_PACKAGE_COMMIT,
@@ -10613,6 +10637,192 @@ def preflight_with_deadline(args: argparse.Namespace) -> None:
         raise
 
 
+class _ConditionSessionBridge:
+    """One transparent host relay attached to the retained condition runner."""
+
+    def __init__(
+        self,
+        *,
+        request: RemoteHostPhaseRequest,
+        binding: ConditionSessionBinding,
+        transaction_root_identity: str,
+    ) -> None:
+        self.request = request
+        self.binding = binding
+        self.transaction_root_identity = transaction_root_identity
+        self.listener: PrivateConditionListener | None = None
+        self.relay: CanonicalFrameRelay | None = None
+        self.relay_future: Future[dict[str, object]] | None = None
+        self.pool: ThreadPoolExecutor | None = None
+        self.accepted_channel: object | None = None
+        self.raw_root: Path | None = None
+        self.finished = False
+
+    def prepare(self, raw_root: Path) -> None:
+        if self.listener is not None or self.finished:
+            raise T09HostError("condition bridge was prepared more than once")
+        root = raw_root.resolve(strict=True)
+        supervisor_root = condition_supervisor_root(root)
+        listener = PrivateConditionListener.create(
+            supervisor_root=supervisor_root,
+            attempt_root=root,
+            binding=self.binding,
+            transaction_root_identity=self.transaction_root_identity,
+            deadline_monotonic=self.request.deadline_monotonic,
+            remote_journal_relative_path="duplex-remote-event-journal.json",
+        )
+        self.listener = listener
+        self.raw_root = root
+        self.pool = ThreadPoolExecutor(max_workers=1)
+
+        def accept_and_relay() -> dict[str, object]:
+            assert self.listener is not None
+            channel = self.listener.accept()
+            self.accepted_channel = channel
+            relay = CanonicalFrameRelay(
+                remote_reader=channel.reader,
+                remote_writer=channel.writer,
+                shared_reader=sys.stdin.buffer,
+                shared_writer=sys.stdout.buffer,
+                binding=self.binding,
+                deadline_monotonic=self.request.deadline_monotonic,
+            )
+            self.relay = relay
+            try:
+                prefix = relay.serve(stop_after_runtime_detach=True)
+                relay.persist_transcript(root / "duplex-transcript-prefix.json")
+                return prefix
+            except BaseException:
+                with contextlib.suppress(OSError, RemoteBridgeError):
+                    relay.persist_transcript(root / "duplex-transcript-prefix.json")
+                raise
+
+        self.relay_future = self.pool.submit(accept_and_relay)
+
+    def inject_runtime_argv(self, argv: list[str]) -> list[str]:
+        if self.listener is None:
+            raise T09HostError("condition bridge listener is not prepared")
+        if argv.count("--") != 1:
+            raise T09HostError("condition command has an ambiguous upstream boundary")
+        boundary = argv.index("--")
+        injected = [
+            "--gate-admission-mode",
+            "duplex-supervisor",
+            "--gate-duplex-binding",
+            "/giclab/attempt/.giclab-supervisor/condition-admission-binding.json",
+            "--gate-duplex-session-id",
+            self.binding.session_id,
+            "--gate-duplex-frozen-manifest-sha256",
+            self.binding.frozen_manifest_sha256,
+            "--gate-duplex-transaction-root-identity",
+            self.transaction_root_identity,
+        ]
+        return [*argv[:boundary], *injected, *argv[boundary:]]
+
+    def finish(
+        self,
+        *,
+        attempt_root: Path,
+        exit_code: int,
+        completed: bool,
+        answer: str | None,
+        error: str,
+        manifest_path: Path,
+        receipt_path: Path,
+    ) -> None:
+        if self.finished:
+            raise T09HostError("condition bridge terminal evidence was replayed")
+        if self.relay_future is None or (self.relay is None and not self.relay_future.done()):
+            raise T09HostError("condition bridge did not reach its runtime relay")
+        try:
+            prefix = self.relay_future.result(
+                timeout=max(
+                    0.001,
+                    self.request.deadline_monotonic - time.monotonic(),
+                )
+            )
+            relay = self.relay
+            if relay is None:
+                raise T09HostError("condition bridge relay is unavailable")
+            raw_root = cast(Path, self.raw_root)
+            detached_path = raw_root / "duplex-runtime-detached.json"
+            remote_journal_path = raw_root / "duplex-remote-event-journal.json"
+            detached = load_object(detached_path, label="duplex runtime detachment")
+            remote_journal = load_object(
+                remote_journal_path,
+                label="duplex remote event journal",
+            )
+            if (
+                detached.get("mode") != "duplex-supervisor-client"
+                or detached.get("authoritative_accounting") is not False
+                or detached.get("host_evidence_pending") is not True
+                or remote_journal.get("side") != "remote-mirror"
+                or remote_journal.get("binding") != self.binding.to_document()
+                or detached.get("terminal_sequence") != remote_journal.get("terminal_sequence")
+                or detached.get("terminal_frame_sha256")
+                != remote_journal.get("terminal_frame_sha256")
+                or detached.get("frame_chain_sha256") != remote_journal.get("frame_chain_sha256")
+                or detached.get("remote_journal_bytes") != remote_journal_path.stat().st_size
+                or detached.get("remote_journal_file_sha256") != file_sha256(remote_journal_path)
+                or detached.get("remote_journal_sha256") != remote_journal.get("transcript_sha256")
+            ):
+                raise T09HostError("remote event journal drifted from runtime detachment")
+            final = relay.finish_host_evidence(
+                exit_code=exit_code,
+                completed=completed,
+                answer=answer,
+                error=error,
+                raw_manifest_sha256=file_sha256(manifest_path),
+                raw_receipt_sha256=file_sha256(receipt_path),
+                remote_journal_bytes=remote_journal_path.stat().st_size,
+                remote_journal_file_sha256=file_sha256(remote_journal_path),
+                remote_journal_sha256=cast(str, remote_journal["transcript_sha256"]),
+                remote_terminal_sequence=cast(int, remote_journal["terminal_sequence"]),
+                remote_terminal_frame_sha256=cast(str, remote_journal["terminal_frame_sha256"]),
+                remote_frame_chain_sha256=cast(str, remote_journal["frame_chain_sha256"]),
+            )
+            terminal_root = attempt_root.resolve(strict=True)
+            write_exclusive(terminal_root / "duplex-transcript-manifest.json", final)
+            host_terminal = {
+                "schema_version": "1.0.0",
+                "binding": self.binding.to_document(),
+                "runtime_prefix_transcript_sha256": prefix["transcript_sha256"],
+                "remote_event_journal_file_sha256": file_sha256(remote_journal_path),
+                "remote_event_journal_semantic_sha256": remote_journal["transcript_sha256"],
+                "relay_transcript_sha256": final["transcript_sha256"],
+                "terminal_sequence": final["terminal_sequence"],
+                "terminal_frame_sha256": final["terminal_frame_sha256"],
+                "raw_manifest_sha256": file_sha256(manifest_path),
+                "raw_receipt_sha256": file_sha256(receipt_path),
+                "shared_accounting_owner": "ConditionEventObserver",
+                "remote_authoritative_boundary": False,
+                "terminal_acknowledged": True,
+            }
+            host_terminal["receipt_sha256"] = semantic_sha256(host_terminal)
+            write_exclusive(
+                terminal_root / "condition-session-terminal-receipt.json",
+                host_terminal,
+            )
+            self.finished = True
+        except (OSError, TimeoutError, RemoteBridgeError) as exc:
+            raise T09HostError("condition bridge terminal evidence failed") from exc
+        finally:
+            self.close()
+
+    def close(self) -> None:
+        channel = self.accepted_channel
+        close = getattr(channel, "close", None)
+        if callable(close):
+            close()
+        if self.listener is not None:
+            self.listener.close()
+        if self.pool is not None:
+            self.pool.shutdown(wait=True, cancel_futures=True)
+        self.accepted_channel = None
+        self.listener = None
+        self.pool = None
+
+
 def container_create_argv(
     *,
     args: argparse.Namespace,
@@ -10621,6 +10831,7 @@ def container_create_argv(
     container_name: str,
     image_id: str,
     contract: T09ProviderContract,
+    condition_bridge: _ConditionSessionBridge | None = None,
 ) -> list[str]:
     repository = args.repository.resolve(strict=True)
     paths = _contract_paths_for(repository, contract)
@@ -10637,6 +10848,9 @@ def container_create_argv(
     except ValueError:
         raise T09HostError("condition raw root escaped the owned artifact root") from None
     prefix = docker_prefix()
+    condition_argv = cast(list[str], manifest["argv"])
+    if condition_bridge is not None:
+        condition_argv = condition_bridge.inject_runtime_argv(condition_argv)
     return [
         *prefix,
         "create",
@@ -10727,7 +10941,7 @@ def container_create_argv(
         "--runtime-assignment",
         "SIRA_API_KEY",
         "--",
-        *cast(list[str], manifest["argv"]),
+        *condition_argv,
     ]
 
 
@@ -11808,6 +12022,9 @@ _ESSENTIAL_FAILURE_EXACT_PATHS: Final = frozenset(
     {
         "condition.stderr",
         "condition.stdout",
+        "duplex-remote-event-journal.json",
+        "duplex-runtime-detached.json",
+        "duplex-transcript-prefix.json",
         "normalized-events.jsonl",
         "provider-budget.json",
         "provider-call-lifecycle.json",
@@ -15991,7 +16208,11 @@ def validate_postfreeze_entry_receipts(
         raise T09HostError("preflight and frozen runtime manifest drifted")
 
 
-def execute_condition(args: argparse.Namespace) -> int:
+def execute_condition(
+    args: argparse.Namespace,
+    *,
+    condition_bridge: _ConditionSessionBridge | None = None,
+) -> int:
     attempt_started = time.monotonic()
     attempt_started_epoch = time.time()
     repository = args.repository.resolve(strict=True)
@@ -16126,6 +16347,8 @@ def execute_condition(args: argparse.Namespace) -> int:
         contract=runtime_contract,
     )
     supervisor_root = condition_supervisor_root(raw_root)
+    if condition_bridge is not None:
+        condition_bridge.prepare(raw_root)
     gpu_before = gpu_snapshot()
     create_argv = container_create_argv(
         args=args,
@@ -16134,6 +16357,7 @@ def execute_condition(args: argparse.Namespace) -> int:
         container_name=name,
         image_id=image_id,
         contract=runtime_contract,
+        condition_bridge=condition_bridge,
     )
     write_exclusive(
         supervisor_root / "container-command.json",
@@ -24285,14 +24509,1285 @@ def preempirical_replacement_disposition(args: argparse.Namespace) -> dict[str, 
     }
 
 
+def _phase_completion_times(request: RemoteHostPhaseRequest) -> tuple[float, float]:
+    """Use injected clocks only for the explicit no-network test channel."""
+
+    execution_mode = getattr(request, "execution_mode", None)
+    projection = getattr(request, "expected_projection", None)
+    if execution_mode == "deterministic-no-network":
+        if not isinstance(projection, Mapping):
+            raise T09HostError("deterministic host phase lacks its injected clock")
+        wall = projection.get("test_completed_wall_time")
+        monotonic = projection.get("test_completed_monotonic")
+        if not all(
+            isinstance(value, (int, float)) and not isinstance(value, bool)
+            for value in (wall, monotonic)
+        ):
+            raise T09HostError("deterministic host phase clock is malformed")
+        return float(cast(float, wall)), float(cast(float, monotonic))
+    return time.time(), time.monotonic()
+
+
+def _load_bridge_phase(
+    args: argparse.Namespace, phase: str
+) -> tuple[T09ProviderContract, RemoteHostPhaseRequest]:
+    repository = args.repository.resolve(strict=True)
+    contract = _argument_provider_contract(args)
+    try:
+        request = load_host_phase_request(
+            repository,
+            args.phase_request.resolve(strict=True),
+            expected_phase=phase,
+            contract=contract,
+        )
+    except (OSError, HostPhaseError, ValueError) as exc:
+        raise T09HostError(f"{phase} request failed closed") from exc
+    return contract, request
+
+
+def _publish_bridge_phase(args: argparse.Namespace, receipt: Mapping[str, object]) -> None:
+    try:
+        write_phase_receipt(args.phase_receipt, receipt)
+    except (OSError, HostPhaseError, ValueError) as exc:
+        raise T09HostError("host phase receipt publication failed") from exc
+
+
+def host_transfer_verify(args: argparse.Namespace) -> None:
+    """Verify a post-entry transfer by independently rehashing every member."""
+
+    _contract, request = _load_bridge_phase(args, "host-transfer-verify")
+    wall, monotonic = _phase_completion_times(request)
+    try:
+        receipt = verify_host_transfer_phase(
+            args.repository.resolve(strict=True),
+            request,
+            completed_wall_time=wall,
+            completed_monotonic=monotonic,
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("host transfer verification failed") from exc
+    _publish_bridge_phase(args, receipt)
+
+
+def _required_phase_path(args: argparse.Namespace, name: str) -> Path:
+    value = getattr(args, name, None)
+    if not isinstance(value, Path):
+        raise T09HostError(f"phase-specific {name.replace('_', '-')} path is required")
+    return value
+
+
+def _bound_phase_input_path(
+    request: RemoteHostPhaseRequest,
+    name: str,
+    supplied: Path,
+) -> Path:
+    try:
+        binding = request.inputs[name]
+    except KeyError as exc:
+        raise T09HostError(f"external host phase omitted its {name} binding") from exc
+    try:
+        resolved = supplied.resolve(strict=True)
+        binding.read(maximum_bytes=4_194_304, label=name)
+        bound_resolved = binding.path.resolve(strict=True)
+    except (HostPhaseError, OSError) as exc:
+        raise T09HostError(f"external host phase {name} binding is unavailable") from exc
+    if resolved != bound_resolved:
+        raise T09HostError(f"external host phase {name} path was substituted")
+    return resolved
+
+
+def _require_phase_output_names(
+    request: RemoteHostPhaseRequest,
+    expected: frozenset[str],
+) -> None:
+    if set(request.output_paths) != expected or set(request.output_paths) & set(request.inputs):
+        raise T09HostError("external host phase output targets are incomplete or overlap inputs")
+    root = Path(request.binding.remote_root)
+    try:
+        resolved_root = root.resolve(strict=True)
+    except OSError as exc:
+        raise T09HostError("external host phase remote root is unavailable") from exc
+    root_metadata = resolved_root.stat(follow_symlinks=False)
+    if (
+        root.is_symlink()
+        or not stat.S_ISDIR(root_metadata.st_mode)
+        or root_metadata.st_uid != os.getuid()
+        or stat.S_IMODE(root_metadata.st_mode) & 0o022
+    ):
+        raise T09HostError("external host phase remote root is unsafe")
+    for path in request.output_paths.values():
+        try:
+            path.relative_to(root)
+        except ValueError as exc:
+            raise T09HostError("external host phase output escaped its held root") from exc
+        if os.path.lexists(path):
+            raise T09HostError("external host phase output target already exists")
+
+
+def _external_phase_request_clock(request: RemoteHostPhaseRequest) -> RemoteHostPhaseRequest:
+    try:
+        return begin_external_host_phase(
+            request,
+            started_wall_time=time.time(),
+            started_monotonic=time.monotonic(),
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("external host phase missed its clock admission") from exc
+
+
+def _validate_live_phase_provider_entry(
+    args: argparse.Namespace,
+    request: RemoteHostPhaseRequest,
+    contract: T09ProviderContract,
+    *,
+    require_initial_cleanup_version: bool,
+) -> tuple[dict[str, object], EarlyCleanupJournal]:
+    repository = args.repository.resolve(strict=True)
+    dynamic_path = _bound_phase_input_path(
+        request,
+        "provider_entry_receipt",
+        _required_phase_path(args, "dynamic_receipt"),
+    )
+    source_root = _required_phase_path(args, "dynamic_source_root").resolve(strict=True)
+    dynamic = validate_dynamic_receipt(
+        dynamic_path,
+        expected_package_commit=args.package_commit,
+        repository_root=repository,
+        source_root=source_root,
+    )
+    dynamic_contract = _provider_contract_from_document(dynamic, label="provider entry receipt")
+    if (
+        dynamic_contract is not contract
+        or request.binding.source_commit != args.package_commit
+        or output(["git", "-C", str(repository), "rev-parse", "HEAD"])
+        != request.binding.source_commit
+        or output(["git", "-C", str(repository), "rev-parse", "HEAD^{tree}"])
+        != request.binding.source_tree
+        or file_sha256(dynamic_path) != request.binding.provider_entry_receipt_sha256
+        or dynamic.get("host_run_id") != request.binding.host_run_id
+        or dynamic.get("owned_instance_identity_sha256") != request.binding.provider_handle_identity
+        or dynamic.get("launch_slot") != request.binding.provider_launch_ordinal
+    ):
+        raise T09HostError("phase-specific provider entry binding drifted")
+    cleanup_journal = early_cleanup_journal(args)
+    cleanup_state = cleanup_journal.load()
+    initial_sequence = dynamic.get("early_cleanup_journal_sequence")
+    if not isinstance(initial_sequence, int) or isinstance(initial_sequence, bool):
+        raise T09HostError("provider entry cleanup sequence is malformed")
+    try:
+        initial_state, initial_version_sha = cleanup_journal.version_state_and_sha256(
+            initial_sequence
+        )
+    except EarlyCleanupStateError as exc:
+        raise T09HostError("provider entry cleanup version is not retained") from exc
+    if (
+        cleanup_state.plan_id != contract.plan_id
+        or cleanup_state.host_run_id != contract.host_run_id
+        or cleanup_state.provider_instance_identity_sha256
+        != request.binding.provider_handle_identity
+        or cleanup_state.launch_slot != request.binding.provider_launch_ordinal
+        or initial_state.journal_id != dynamic.get("early_cleanup_journal_id")
+        or initial_version_sha != dynamic.get("early_cleanup_journal_version_sha256")
+        or (
+            require_initial_cleanup_version
+            and (
+                cleanup_state.sequence != initial_sequence
+                or cleanup_journal.latest_version_sha256() != initial_version_sha
+            )
+        )
+    ):
+        raise T09HostError("phase-specific cleanup authority drifted from provider entry")
+    return dynamic, cleanup_journal
+
+
+def _publish_cleanup_phase_snapshot(path: Path, journal: EarlyCleanupJournal) -> None:
+    state = journal.load()
+    document = {
+        "schema_version": "1.0.0",
+        "journal_id": state.journal_id,
+        "sequence": state.sequence,
+        "journal_version_sha256": journal.latest_version_sha256(),
+        "plan_id": state.plan_id,
+        "host_run_id": state.host_run_id,
+        "provider_instance_identity_sha256": state.provider_instance_identity_sha256,
+        "lifecycle_stage": state.lifecycle_stage.value,
+        "empirical_entry_status": state.empirical_entry_status.value,
+        "terminal_cleanup_disposition": state.terminal_cleanup_disposition.value,
+    }
+    write_exclusive(path, document)
+
+
+def _live_host_preflight(
+    args: argparse.Namespace,
+    contract: T09ProviderContract,
+    request: RemoteHostPhaseRequest,
+) -> Mapping[str, object]:
+    """Run only retained source/path/cleanup readiness before image qualification."""
+
+    repository = args.repository.resolve(strict=True)
+    try:
+        validate_host_phase_predecessor(
+            repository,
+            request,
+            expected_phase="host-transfer-verify",
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("host preflight predecessor failed before effects") from exc
+    _require_phase_output_names(
+        request,
+        frozenset({"remote_path_qualification", "cleanup_state"}),
+    )
+    request = _external_phase_request_clock(request)
+    dynamic, cleanup_journal = _validate_live_phase_provider_entry(
+        args,
+        request,
+        contract,
+        require_initial_cleanup_version=True,
+    )
+    secret_path = _required_phase_path(args, "secret_file").resolve(strict=True)
+    validate_secret_metadata(secret_path)
+    command_document = verify_package(repository, args.package_commit, contract=contract)
+    if not command_document:
+        raise T09HostError("phase-specific package verification returned no command package")
+    artifact_root = args.artifact_root.resolve(strict=True)
+    if artifact_root != Path(request.binding.remote_root).resolve(strict=True):
+        raise T09HostError("host preflight artifact root differs from its transfer root")
+    control_root = _pilot_root(artifact_root, contract)
+    if os.path.lexists(control_root):
+        raise T09HostError("host preflight requires fresh empirical control state")
+    prefix = docker_prefix()
+    if _owned_containers_for(prefix, contract):
+        raise T09HostError("owned pilot containers already exist")
+    recover_atomic_publications(artifact_root)
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.SOURCE_STAGING)
+    remote_credential_path = secret_path.as_posix()
+    cleanup_journal.register_target(
+        target_id="temporary-remote-secret",
+        kind=CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        locator=remote_credential_path,
+        ownership_sha256=cleanup_locator_identity(
+            CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+            remote_credential_path,
+        ),
+        public_alias="temporary-remote-secret",
+    )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.SECRET_MATERIALIZATION)
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.ARTIFACT_ROOT_MUTATION)
+    execution_sha = file_sha256(_contract_paths_for(repository, contract)["execution"])
+    launch_slot = cast(int, dynamic["launch_slot"])
+    initialize_state(
+        artifact_root,
+        execution_sha,
+        contract=contract,
+        lambda_started_at_epoch=float(cast(float, dynamic["provider_preflight_started_at_epoch"])),
+        owned_lambda_started_at_epoch=float(cast(float, dynamic["owned_lambda_started_at_epoch"])),
+        prior_lambda_duration_seconds=float(
+            cast(float, dynamic["prior_campaign_lambda_duration_seconds"])
+        ),
+        prior_lambda_cost_usd=float(cast(float, dynamic["prior_campaign_lambda_cost_usd"])),
+        launch_slot=launch_slot,
+        replacement_eligibility_sha256=cast(
+            str | None,
+            dynamic.get("replacement_eligibility_sha256"),
+        ),
+        replacement_eligibility_preempirical_source_manifest_sha256=cast(
+            str | None,
+            dynamic.get("replacement_eligibility_preempirical_source_manifest_sha256"),
+        ),
+        normalized_slot2_authority_tree_manifest_sha256=cast(
+            str | None,
+            dynamic.get("normalized_slot2_authority_tree_manifest_sha256"),
+        ),
+    )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.CAMPAIGN_INITIALIZATION)
+    write_exclusive(
+        control_root / "provider-entry.json",
+        sanitized_dynamic_receipt(_required_phase_path(args, "dynamic_receipt"), dynamic),
+    )
+    if launch_slot == 1:
+        if getattr(args, "slot2_authority_root", None) is not None:
+            raise T09HostError("first launch received slot-2 authority")
+    else:
+        slot2_root = getattr(args, "slot2_authority_root", None)
+        if not isinstance(slot2_root, Path):
+            raise T09HostError("replacement launch lacks its retained authority root")
+        retained_authority_root = control_root / "slot2-authority"
+        retain_slot2_authority(slot2_root.resolve(strict=True), retained_authority_root)
+        slot2 = slot2_authority_binding(retained_authority_root)
+        if any(
+            slot2.get(name) != dynamic.get(name)
+            for name in (
+                "replacement_eligibility_sha256",
+                "replacement_eligibility_preempirical_source_manifest_sha256",
+                "normalized_slot2_authority_tree_manifest_sha256",
+            )
+        ):
+            raise T09HostError("retained slot-2 authority does not match provider entry")
+    path_receipt = {
+        "schema_version": "1.0.0",
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "provider_handle_identity": request.binding.provider_handle_identity,
+        "remote_root": request.binding.remote_root,
+        "source_commit": request.binding.source_commit,
+        "source_tree": request.binding.source_tree,
+        "package_verified": True,
+        "filesystem_admitted": True,
+        "secret_channel_structure_valid": True,
+        "core_suppression_ready": True,
+        "container_control_ready": True,
+        "cleanup_initialized": True,
+        "empirical_state_absent": True,
+        "image_qualification_performed": False,
+        "scientific_freeze_performed": False,
+        "condition_entry_performed": False,
+        "authenticated_metadata_requests": 0,
+    }
+    path_output = request.output_paths["remote_path_qualification"]
+    cleanup_output = request.output_paths["cleanup_state"]
+    write_exclusive(path_output, path_receipt)
+    _publish_cleanup_phase_snapshot(cleanup_output, cleanup_journal)
+    try:
+        bound = bind_generated_host_phase_outputs(
+            request,
+            {
+                "remote_path_qualification": path_output,
+                "cleanup_state": cleanup_output,
+            },
+        )
+        wall, monotonic = _phase_completion_times(bound)
+        return validate_host_preflight_phase(
+            repository,
+            bound,
+            completed_wall_time=wall,
+            completed_monotonic=monotonic,
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("retained host preflight output failed validation") from exc
+
+
+def host_preflight(args: argparse.Namespace) -> None:
+    """Run one preflight-only phase; it cannot qualify or freeze."""
+
+    contract, request = _load_bridge_phase(args, "host-preflight")
+    if request.deterministic_fixture:
+        wall, monotonic = _phase_completion_times(request)
+        try:
+            receipt = validate_host_preflight_phase(
+                args.repository.resolve(strict=True),
+                request,
+                completed_wall_time=wall,
+                completed_monotonic=monotonic,
+            )
+        except HostPhaseError as exc:
+            raise T09HostError("phase-specific host preflight failed") from exc
+    else:
+        receipt = _live_host_preflight(args, contract, request)
+    _publish_bridge_phase(args, receipt)
+
+
+def _live_host_qualification(
+    args: argparse.Namespace,
+    contract: T09ProviderContract,
+    request: RemoteHostPhaseRequest,
+) -> Mapping[str, object]:
+    """Run the retained image/runtime closure without metadata or science freeze."""
+
+    repository = args.repository.resolve(strict=True)
+    try:
+        validate_host_phase_predecessor(
+            repository,
+            request,
+            expected_phase="host-preflight",
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("host qualification predecessor failed before effects") from exc
+    _require_phase_output_names(
+        request,
+        frozenset({"qualification", "qualification_context", "cleanup_state"}),
+    )
+    request = _external_phase_request_clock(request)
+    dynamic, cleanup_journal = _validate_live_phase_provider_entry(
+        args,
+        request,
+        contract,
+        require_initial_cleanup_version=False,
+    )
+    artifact_root = args.artifact_root.resolve(strict=True)
+    if artifact_root != Path(request.binding.remote_root).resolve(strict=True):
+        raise T09HostError("host qualification artifact root differs from its transfer root")
+    control_root = _pilot_root(artifact_root, contract)
+    state = _runtime_budget_state(artifact_root, contract=contract)
+    if (
+        state.get("empirical_attempts_entered") != []
+        or state.get("first_pair_started_at_epoch") is not None
+        or (control_root / "frozen-run-manifest.json").exists()
+    ):
+        raise T09HostError("host qualification cannot follow freeze or condition entry")
+    command_document = verify_package(repository, args.package_commit, contract=contract)
+    prefix = docker_prefix()
+    if _owned_containers_for(prefix, contract):
+        raise T09HostError("owned condition containers exist before qualification")
+    paths = _contract_paths_for(repository, contract)
+    execution_sha = file_sha256(paths["execution"])
+    real_evidence_regression = validate_real_evidence_regression(
+        repository,
+        contract=contract,
+        expected_finalizer_source_sha256=HISTORICAL_REAL_EVIDENCE_FINALIZER_SHA256,
+    )
+    local_finalizer_qualification = validate_local_finalizer_qualification(
+        _required_phase_path(args, "local_finalizer_qualification"),
+        repository=repository,
+        package_commit=args.package_commit,
+        require_local_runtime=False,
+        contract=contract,
+    )
+    write_exclusive(
+        control_root / "local-finalizer-qualification.json",
+        local_finalizer_qualification,
+    )
+    launch_slot = cast(int, dynamic["launch_slot"])
+    materialization_policy = (
+        SLOT1_IMAGE_MATERIALIZATION_POLICY
+        if launch_slot == 1
+        else SLOT2_IMAGE_MATERIALIZATION_POLICY
+    )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.IMAGE_TRANSFER)
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.IMAGE_LOAD_OR_BUILD)
+    image_materialization = materialize_retained_or_build_image(
+        repository=repository,
+        package_commit=args.package_commit,
+        artifact_root=artifact_root,
+        image_archive=_required_phase_path(args, "replacement_image_archive"),
+        prefix=prefix,
+        materialization_policy=materialization_policy,
+        contract=contract,
+    )
+    image_id = image_materialization.get("image_id")
+    if not isinstance(image_id, str):
+        raise T09HostError("replacement image qualification lacks its immutable identity")
+    credential_channel = secret_channel_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        secret_file=_required_phase_path(args, "secret_file").resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    evaluator_path = _required_phase_path(args, "evaluator_overlay")
+    evaluator = evaluator_overlay(
+        repository=repository,
+        artifact_root=artifact_root,
+        overlay=evaluator_path.resolve(strict=False),
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    image_files = final_image_file_hashes(
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    final_runtime = final_image_runtime_preflight(
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+        command_document=command_document,
+        cleanup_journal=cleanup_journal,
+        expected_run_ids=contract.run_ids,
+        contract=contract,
+    )
+    provider_accounting = provider_accounting_container_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    offline = offline_runtime_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        overlay=evaluator_path.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    archive_staging = stage_verified_archive(
+        _required_phase_path(args, "real_evidence_archive"),
+        PRIVATE_REGRESSION_ARCHIVE_PATH,
+        PRIVATE_REGRESSION_ARCHIVE_BYTES,
+        PRIVATE_REGRESSION_ARCHIVE_SHA256,
+    )
+    archive_staging_root = control_root / "regression-archive-staging"
+    archive_staging_root.mkdir(mode=0o700, exist_ok=True)
+    write_exclusive(archive_staging_root / "receipt.json", archive_staging)
+    qualified_real_regression = qualified_real_evidence_regression(
+        repository=repository,
+        artifact_root=artifact_root,
+        archive=PRIVATE_REGRESSION_ARCHIVE_PATH,
+        overlay=evaluator_path.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        image_files=image_files,
+        static_receipt=real_evidence_regression,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    core_suppression = core_suppression_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.BROWSER_STARTUP)
+    browser = browser_lifecycle_preflight(
+        artifact_root=artifact_root,
+        prefix=prefix,
+        image_id=image_id,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    sealing_primitives = sealing_primitives_preflight(
+        repository=repository,
+        artifact_root=artifact_root,
+        command_document=command_document,
+        package_commit=args.package_commit,
+        execution_contract_sha256=execution_sha,
+        provider_contract=contract,
+        expected_run_ids=contract.run_ids,
+    )
+    evaluator_overlay_verified = validate_evaluator_overlay_binding(
+        artifact_root=artifact_root,
+        repository=repository,
+        overlay=evaluator_path.resolve(strict=True),
+        prefix=prefix,
+        image_id=image_id,
+        frozen_manifest={
+            "evaluator_overlay_manifest_sha256": evaluator["overlay_manifest_sha256"],
+            "evaluator_overlay_entries_sha256": evaluator["overlay_entries_sha256"],
+            "evaluator_overlay_packages_sha256": evaluator["overlay_package_manifest_sha256"],
+        },
+        verify_packages=True,
+        cleanup_journal=cleanup_journal,
+        contract=contract,
+    )
+    adjudication = image_equivalence_adjudication(
+        repository=repository,
+        artifact_root=artifact_root,
+        image_id=image_id,
+        contract=contract,
+    )
+    gpu = gpu_snapshot()
+    if (control_root / "frozen-run-manifest.json").exists():
+        raise T09HostError("host qualification unexpectedly published a frozen manifest")
+    context = {
+        "schema_version": "1.0.0",
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "provider_handle_identity": request.binding.provider_handle_identity,
+        "image_materialization": image_materialization,
+        "credential_channel": credential_channel,
+        "evaluator": evaluator,
+        "image_files": image_files,
+        "final_runtime": final_runtime,
+        "provider_accounting": provider_accounting,
+        "offline": offline,
+        "archive_staging": archive_staging,
+        "qualified_real_regression": qualified_real_regression,
+        "core_suppression": core_suppression,
+        "browser": browser,
+        "sealing_primitives": sealing_primitives,
+        "evaluator_overlay_verified": evaluator_overlay_verified,
+        "adjudication": adjudication,
+        "gpu": gpu,
+        "real_evidence_regression": real_evidence_regression,
+        "local_finalizer_qualification": local_finalizer_qualification,
+        "execution_contract_sha256": execution_sha,
+        "model_request_count": 0,
+        "task_browser_action_count": 0,
+        "dynamic_manifest_published": False,
+        "condition_entry_performed": False,
+    }
+    qualification = {
+        "schema_version": "1.0.0",
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "provider_handle_identity": request.binding.provider_handle_identity,
+        "image_materialization_receipt_sha256": canonical_sha256(image_materialization),
+        "image_digest": image_id,
+        "python_version": final_runtime.get("python_version"),
+        "python_interpreter_sha256": image_files.get("/opt/sira/.venv/bin/python"),
+        "dependency_manifest_sha256": EXPECTED_PACKAGE_MANIFEST_SHA256,
+        "dependency_tree_sha256": canonical_sha256({"runtime": final_runtime, "offline": offline}),
+        "browser_qualification_sha256": canonical_sha256(browser),
+        "evaluator_qualification_sha256": canonical_sha256(evaluator),
+        "finalizer_sources_sha256": canonical_sha256(
+            cast(dict[str, object], local_finalizer_qualification["source_sha256s"])
+        ),
+        "cleanup_readiness_sha256": cleanup_journal.latest_version_sha256(),
+        "dynamic_manifest_published": False,
+        "condition_entry_performed": False,
+        "model_request_count": 0,
+        "browser_action_count": 0,
+    }
+    qualification_path = request.output_paths["qualification"]
+    context_path = request.output_paths["qualification_context"]
+    cleanup_path = request.output_paths["cleanup_state"]
+    write_exclusive(qualification_path, qualification)
+    write_exclusive(context_path, context)
+    _publish_cleanup_phase_snapshot(cleanup_path, cleanup_journal)
+    try:
+        bound = bind_generated_host_phase_outputs(
+            request,
+            {
+                "qualification": qualification_path,
+                "qualification_context": context_path,
+                "cleanup_state": cleanup_path,
+            },
+        )
+        wall, monotonic = _phase_completion_times(bound)
+        return validate_host_qualification_phase(
+            repository,
+            bound,
+            completed_wall_time=wall,
+            completed_monotonic=monotonic,
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("retained host qualification output failed validation") from exc
+
+
+def host_qualify(args: argparse.Namespace) -> None:
+    """Run retained qualification outputs without publishing a freeze."""
+
+    contract, request = _load_bridge_phase(args, "host-qualify")
+    if request.deterministic_fixture:
+        wall, monotonic = _phase_completion_times(request)
+        try:
+            receipt = validate_host_qualification_phase(
+                args.repository.resolve(strict=True),
+                request,
+                completed_wall_time=wall,
+                completed_monotonic=monotonic,
+            )
+        except HostPhaseError as exc:
+            raise T09HostError("phase-specific host qualification failed") from exc
+    else:
+        receipt = _live_host_qualification(args, contract, request)
+    _publish_bridge_phase(args, receipt)
+
+
+_QUALIFICATION_CONTEXT_KEYS: Final = frozenset(
+    {
+        "schema_version",
+        "provider_contract_version",
+        "plan_id",
+        "host_run_id",
+        "provider_handle_identity",
+        "image_materialization",
+        "credential_channel",
+        "evaluator",
+        "image_files",
+        "final_runtime",
+        "provider_accounting",
+        "offline",
+        "archive_staging",
+        "qualified_real_regression",
+        "core_suppression",
+        "browser",
+        "sealing_primitives",
+        "evaluator_overlay_verified",
+        "adjudication",
+        "gpu",
+        "real_evidence_regression",
+        "local_finalizer_qualification",
+        "execution_contract_sha256",
+        "model_request_count",
+        "task_browser_action_count",
+        "dynamic_manifest_published",
+        "condition_entry_performed",
+    }
+)
+
+
+def _load_live_qualification_context(
+    request: RemoteHostPhaseRequest,
+) -> dict[str, Any]:
+    try:
+        binding = request.inputs["qualification_context"]
+        encoded = binding.read(
+            maximum_bytes=4_194_304,
+            label="qualification_context",
+        )
+        context = strict_json_object(encoded, label="qualification context")
+    except (KeyError, HostPhaseError, ValueError) as exc:
+        raise T09HostError("host freeze qualification context is unavailable") from exc
+    if (
+        set(context) != _QUALIFICATION_CONTEXT_KEYS
+        or context.get("schema_version") != "1.0.0"
+        or context.get("provider_contract_version") != request.binding.provider_contract_version
+        or context.get("plan_id") != request.binding.plan_id
+        or context.get("host_run_id") != request.binding.host_run_id
+        or context.get("provider_handle_identity") != request.binding.provider_handle_identity
+        or context.get("model_request_count") != 0
+        or context.get("task_browser_action_count") != 0
+        or context.get("dynamic_manifest_published") is not False
+        or context.get("condition_entry_performed") is not False
+    ):
+        raise T09HostError("host freeze qualification context drifted")
+    return cast(dict[str, Any], context)
+
+
+def _live_host_freeze(
+    args: argparse.Namespace,
+    contract: T09ProviderContract,
+    request: RemoteHostPhaseRequest,
+) -> tuple[Mapping[str, object], float]:
+    """Publish and revalidate the retained full manifest without condition entry."""
+
+    repository = args.repository.resolve(strict=True)
+    try:
+        previous = validate_host_phase_predecessor(
+            repository,
+            request,
+            expected_phase="host-qualify",
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("host freeze predecessor failed before effects") from exc
+    _require_phase_output_names(
+        request,
+        frozenset(
+            {
+                "full_frozen_manifest",
+                "postfreeze_validation",
+                "compatibility_preflight_receipt",
+                "cleanup_state",
+            }
+        ),
+    )
+    request = _external_phase_request_clock(request)
+    dynamic, cleanup_journal = _validate_live_phase_provider_entry(
+        args,
+        request,
+        contract,
+        require_initial_cleanup_version=False,
+    )
+    previous_outputs = previous.get("phase_outputs")
+    context = _load_live_qualification_context(request)
+    if (
+        not isinstance(previous_outputs, dict)
+        or previous_outputs.get("qualification_context_sha256")
+        != request.inputs["qualification_context"].sha256
+    ):
+        raise T09HostError("host freeze context is not bound by qualification")
+    artifact_root = args.artifact_root.resolve(strict=True)
+    control_root = _pilot_root(artifact_root, contract)
+    if artifact_root != Path(request.binding.remote_root).resolve(strict=True):
+        raise T09HostError("host freeze artifact root differs from its transfer root")
+    expected_manifest_path = control_root / "frozen-run-manifest.json"
+    expected_postfreeze_path = control_root / "postfreeze-validation.json"
+    expected_preflight_path = control_root / "preflight.json"
+    if (
+        request.output_paths["full_frozen_manifest"] != expected_manifest_path
+        or request.output_paths["postfreeze_validation"] != expected_postfreeze_path
+        or request.output_paths["compatibility_preflight_receipt"] != expected_preflight_path
+    ):
+        raise T09HostError("host freeze output path differs from the retained runtime")
+    command_document = verify_package(repository, args.package_commit, contract=contract)
+    state = _runtime_budget_state(artifact_root, contract=contract)
+    if (
+        state.get("empirical_attempts_entered") != []
+        or state.get("nonempirical_infrastructure_attempts_consumed") != []
+        or state.get("first_pair_started_at_epoch") is not None
+    ):
+        raise T09HostError("host freeze cannot follow a prior freeze or attempt")
+    metadata_source = _required_phase_path(args, "dynamic_source_root").resolve(strict=True)
+    explicit_metadata = _bound_phase_input_path(
+        request,
+        "model_metadata_receipt",
+        _required_phase_path(args, "model_metadata_receipt"),
+    )
+    retained_metadata = _resolve_model_metadata_receipt(
+        explicit_path=explicit_metadata,
+        source_root=metadata_source,
+        provider_entry=dynamic,
+        contract=contract,
+    )
+    model_metadata = validate_model_metadata_receipt_offline(
+        receipt_path=retained_metadata,
+        repository=repository,
+        package_commit=args.package_commit,
+        provider_entry=dynamic,
+        artifact_root=artifact_root,
+        contract=contract,
+    )
+    preflight_remaining = preflight_seconds_remaining(artifact_root)
+    provider_remaining = provider_seconds_remaining(artifact_root)
+    if preflight_remaining < 120.0 or provider_remaining < MAX_TOTAL_WALL_SECONDS:
+        raise T09HostError("host freeze lacks the retained campaign headroom")
+    secret_path = _required_phase_path(args, "secret_file").resolve(strict=True)
+    pre_metadata_core_gate = complete_preflight_core_gate(
+        artifact_root=artifact_root,
+        secret_file=secret_path,
+        scope="before-model-metadata",
+    )
+    post_metadata_core_gate = complete_preflight_core_gate(
+        artifact_root=artifact_root,
+        secret_file=secret_path,
+        scope="after-model-metadata",
+    )
+    model_credential_scan = record_preflight_credential_scan(
+        artifact_root=artifact_root,
+        secret_file=secret_path,
+        execution_contract_sha256=cast(str, context["execution_contract_sha256"]),
+    )
+    empirical_start = schedule_empirical_campaign_start(
+        artifact_root,
+        execution_contract_sha256=cast(str, context["execution_contract_sha256"]),
+        delay_seconds=120.0,
+    )
+    slot2_authority: dict[str, object] | None = None
+    if dynamic.get("launch_slot") != 1:
+        slot2_authority = slot2_authority_binding(control_root / "slot2-authority")
+    frozen_path, frozen_manifest = write_frozen_run_manifest(
+        repository=repository,
+        artifact_root=artifact_root,
+        package_commit=args.package_commit,
+        dynamic=dynamic,
+        image_materialization=cast(dict[str, object], context["image_materialization"]),
+        command_document=command_document,
+        runtime_receipt=cast(dict[str, Any], context["final_runtime"]),
+        offline_receipt=cast(dict[str, Any], context["offline"]),
+        core_receipt=cast(dict[str, object], context["core_suppression"]),
+        pre_metadata_core_gate_receipt=pre_metadata_core_gate,
+        post_metadata_core_gate_receipt=post_metadata_core_gate,
+        browser_receipt=cast(dict[str, object], context["browser"]),
+        evaluator_receipt=cast(dict[str, object], context["evaluator"]),
+        file_hashes=cast(dict[str, str], context["image_files"]),
+        model_receipt=model_metadata,
+        model_credential_scan_receipt=model_credential_scan,
+        adjudication=cast(dict[str, object], context["adjudication"]),
+        static_real_evidence_regression=cast(
+            dict[str, Any],
+            context["real_evidence_regression"],
+        ),
+        qualified_real_evidence_regression_receipt=cast(
+            dict[str, Any],
+            context["qualified_real_regression"],
+        ),
+        regression_archive_staging_receipt=cast(
+            dict[str, object],
+            context["archive_staging"],
+        ),
+        local_finalizer_qualification_receipt=cast(
+            dict[str, Any],
+            context["local_finalizer_qualification"],
+        ),
+        sealing_primitives_receipt=cast(
+            dict[str, object],
+            context["sealing_primitives"],
+        ),
+        slot2_authority=slot2_authority,
+    )
+    published_at = time.time()
+    if frozen_path != expected_manifest_path or published_at > empirical_start:
+        raise T09HostError("full frozen manifest missed its exact path or clock")
+    loaded_manifest, loaded_sha = load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+        require_image=True,
+    )
+    if loaded_manifest != frozen_manifest or loaded_sha != file_sha256(frozen_path):
+        raise T09HostError("full frozen manifest changed during post-freeze revalidation")
+    admitted_seconds = admit_scheduled_first_attempt_before_empirical_origin(
+        artifact_root,
+        scheduled_empirical_start=empirical_start,
+    )
+    postfreeze = {
+        "schema_version": "0.1.0",
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "package_commit": args.package_commit,
+        "frozen_run_manifest_sha256": loaded_sha,
+        "replacement_image_id": frozen_manifest["replacement_image_id"],
+        "image_materialization_policy": frozen_manifest["image_materialization_policy"],
+        "replacement_eligibility_sha256": dynamic.get("replacement_eligibility_sha256"),
+        "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
+        "empirical_campaign_started_at_epoch": empirical_start,
+        "frozen_manifest_published_before_empirical_clock": True,
+        "frozen_manifest_published_at_epoch": published_at,
+        "model_metadata_request_count": 1,
+        "model_metadata_network_requests": 0,
+        "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
+        "model_metadata_credential_scan_sha256": file_sha256(
+            control_root / "model-metadata-credential-scan.json"
+        ),
+        "actual_credential_exposure_detected": False,
+        "model_task_request_count": 0,
+        "task_browser_action_count": 0,
+        "core_suppression_preflight_sha256": file_sha256(
+            control_root / "core-suppression-preflight/host-core-suppression.json"
+        ),
+        "core_limit_contract": CORE_LIMIT_CONTRACT,
+        POSTFREEZE_ADMISSION_FIELD: True,
+        "active_provider_seconds_available_before_metadata_get": provider_remaining,
+        "completed_at_epoch": time.time(),
+    }
+    write_exclusive(expected_postfreeze_path, postfreeze)
+    preflight = {
+        "schema_version": "0.2.0",
+        "phase_model": "transfer-preflight-qualification-freeze",
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "completed_at": utc_now(),
+        "completed_at_epoch": time.time(),
+        "clean_package_commit": args.package_commit,
+        "execution_contract_sha256": context["execution_contract_sha256"],
+        "command_manifests_sha256": file_sha256(
+            _contract_paths_for(repository, contract)["commands"]
+        ),
+        "dynamic_receipt_sha256": file_sha256(_required_phase_path(args, "dynamic_receipt")),
+        "image_materialization": context["image_materialization"],
+        "replacement_image_id": frozen_manifest["replacement_image_id"],
+        "frozen_run_manifest_sha256": loaded_sha,
+        "frozen_run_manifest_id": frozen_manifest["manifest_id"],
+        "postfreeze_validation_sha256": file_sha256(expected_postfreeze_path),
+        "first_pair_started_at_epoch": frozen_manifest["first_pair_started_at_epoch"],
+        "image_equivalence_adjudication": context["adjudication"],
+        "final_image_file_hashes": context["image_files"],
+        "final_image_runtime_preflight": context["final_runtime"],
+        "provider_call_accounting": context["provider_accounting"],
+        "raw_attempt_sealing": context["sealing_primitives"],
+        "privacy_safe_essential_failure_sealing": context["sealing_primitives"],
+        "core_suppression": context["core_suppression"],
+        "browser_startup_screenshot_cleanup": context["browser"],
+        "local_post_termination_finalizer": context["local_finalizer_qualification"],
+        "evaluator_overlay_revalidation": context["evaluator_overlay_verified"],
+        "model_metadata": model_metadata,
+        "model_metadata_credential_scan": model_credential_scan,
+        "model_metadata_request_count": 1,
+        "model_metadata_network_requests": 0,
+        "model_metadata_receipt_sha256": dynamic.get("model_metadata_receipt_sha256"),
+        "model_task_request_count": 0,
+        "credential_channel": context["credential_channel"],
+        "zero_prior_lambda_instances": True,
+        "gpu_accounting": context["gpu"],
+        "empirical_entry_crossed": False,
+        "seconds_available_after_attempt_reserves": admitted_seconds,
+        "required_condition_seconds": MAX_CONDITION_WALL_SECONDS,
+        "required_evidence_export_reserve_seconds": ATTEMPT_EVIDENCE_EXPORT_RESERVE_SECONDS,
+        "required_provider_termination_handoff_seconds": PROVIDER_TERMINATION_HANDOFF_SECONDS,
+        "required_cleanup_reserve_seconds": PROVIDER_CLOSEOUT_RESERVE_SECONDS,
+        "required_total_headroom_seconds": NEXT_ATTEMPT_ENVELOPE_SECONDS,
+        "host_phase_receipts": {
+            "qualification": request.previous_phase_receipt_sha256,
+            "qualification_context": request.inputs["qualification_context"].sha256,
+        },
+    }
+    if time.time() > empirical_start:
+        raise T09HostError("freeze completion crossed the retained empirical origin")
+    write_exclusive(expected_preflight_path, preflight)
+    retained_postfreeze = load_object(
+        expected_postfreeze_path,
+        label="published post-freeze validation",
+    )
+    retained_preflight = load_object(expected_preflight_path, label="published exact preflight")
+    validate_postfreeze_entry_receipts(
+        preflight_receipt=retained_preflight,
+        postfreeze=retained_postfreeze,
+        frozen_manifest=loaded_manifest,
+        frozen_manifest_sha256=loaded_sha,
+        replacement_image_id=cast(str, frozen_manifest["replacement_image_id"]),
+        postfreeze_sha256=file_sha256(expected_postfreeze_path),
+        model_metadata_credential_scan_sha256=file_sha256(
+            control_root / "model-metadata-credential-scan.json"
+        ),
+    )
+    cleanup_path = request.output_paths["cleanup_state"]
+    _publish_cleanup_phase_snapshot(cleanup_path, cleanup_journal)
+    try:
+        bound = bind_generated_host_phase_outputs(
+            request,
+            {
+                "full_frozen_manifest": expected_manifest_path,
+                "postfreeze_validation": expected_postfreeze_path,
+                "compatibility_preflight_receipt": expected_preflight_path,
+                "cleanup_state": cleanup_path,
+            },
+        )
+        wall, monotonic = _phase_completion_times(bound)
+        receipt = validate_host_freeze_phase(
+            repository,
+            bound,
+            contract=contract,
+            completed_wall_time=wall,
+            completed_monotonic=monotonic,
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("retained host freeze output failed validation") from exc
+    return receipt, empirical_start
+
+
+def host_freeze(args: argparse.Namespace) -> None:
+    """Publish and validate the full retained manifest and post-freeze receipt."""
+
+    contract, request = _load_bridge_phase(args, "host-freeze")
+    if request.deterministic_fixture:
+        wall, monotonic = _phase_completion_times(request)
+        try:
+            receipt = validate_host_freeze_phase(
+                args.repository.resolve(strict=True),
+                request,
+                contract=contract,
+                completed_wall_time=wall,
+                completed_monotonic=monotonic,
+            )
+        except HostPhaseError as exc:
+            raise T09HostError("phase-specific host freeze failed") from exc
+        _publish_bridge_phase(args, receipt)
+        return
+    receipt, empirical_start = _live_host_freeze(args, contract, request)
+    _publish_bridge_phase(args, receipt)
+    time.sleep(max(0.0, empirical_start - time.time()))
+
+
+def condition_session(args: argparse.Namespace) -> None:
+    """Run one retained condition behind the transparent shared-admission relay."""
+
+    contract, request = _load_bridge_phase(args, "condition-session")
+    repository = args.repository.resolve(strict=True)
+    artifact_root = args.artifact_root.resolve(strict=True)
+    if args.run_id not in contract.run_ids:
+        raise T09HostError("condition session run identity is not selected")
+    evaluator_run_id = contract.evaluator_run_ids[contract.run_ids.index(args.run_id)]
+    paths = _contract_paths_for(repository, contract)
+    commands = load_object(paths["commands"], label="condition-session commands")
+    manifest = _manifest_for_contract(commands, args.run_id, contract)
+    _frozen, frozen_sha = load_frozen_run_manifest(
+        artifact_root,
+        repository=repository,
+        package_commit=args.package_commit,
+    )
+    condition_path = repository / cast(str, manifest["condition_plan_path"])
+    try:
+        validate_condition_session_request(
+            repository,
+            request,
+            contract=contract,
+            condition_run_id=args.run_id,
+            evaluator_run_id=evaluator_run_id,
+            frozen_manifest_sha256=frozen_sha,
+            command_package_sha256=file_sha256(paths["commands"]),
+            command_argv_sha256=cast(str, manifest["argv_sha256"]),
+            condition_plan_sha256=file_sha256(condition_path),
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("condition session failed its frozen predecessor admission") from exc
+    # The supervisor and the retained host do not share a monotonic epoch.  Keep
+    # the supervisor's signed duration cap, but translate it only after every
+    # source/freeze binding above has passed.  No recovery or runtime mutation is
+    # permitted before that admission boundary.
+    if not request.deterministic_fixture:
+        request = _external_phase_request_clock(request)
+    recover_atomic_publications(artifact_root)
+    transaction_identity = request.expected_projection.get("transaction_root_identity")
+    session_id = request.expected_projection.get("session_id")
+    if (
+        not isinstance(transaction_identity, str)
+        or _HEX64.fullmatch(transaction_identity) is None
+        or not isinstance(session_id, str)
+    ):
+        raise T09HostError("condition session private transaction identity is malformed")
+    bridge = _ConditionSessionBridge(
+        request=request,
+        binding=ConditionSessionBinding(
+            session_id=session_id,
+            provider_contract_version=contract.version,
+            plan_id=contract.plan_id,
+            host_run_id=contract.host_run_id,
+            condition_run_id=args.run_id,
+            evaluator_run_id=evaluator_run_id,
+            frozen_manifest_sha256=frozen_sha,
+        ),
+        transaction_root_identity=transaction_identity,
+    )
+    attempt_root = artifact_root / manifest_output_root(manifest)
+    try:
+        returncode = execute_condition(args, condition_bridge=bridge)
+    except BaseException as exc:
+        essential_manifest = attempt_root / "essential-failure-manifest.json"
+        essential_receipt = attempt_root / "essential-failure-complete.json"
+        try:
+            if essential_manifest.is_file() and essential_receipt.is_file():
+                bridge.finish(
+                    attempt_root=attempt_root,
+                    exit_code=1,
+                    completed=False,
+                    answer=None,
+                    error="infrastructure-invalid",
+                    manifest_path=essential_manifest,
+                    receipt_path=essential_receipt,
+                )
+        finally:
+            bridge.close()
+        raise T09HostError("condition session ended infrastructure-invalid") from exc
+    raw_manifest = attempt_root / "raw-attempt-manifest.json"
+    raw_receipt = attempt_root / "raw-attempt-complete.json"
+    if not raw_manifest.is_file() or not raw_receipt.is_file():
+        bridge.close()
+        raise T09HostError("condition session completed without an exact raw seal")
+    answer_identity = f"raw-session-sha256:{file_sha256(raw_manifest)}"
+    bridge.finish(
+        attempt_root=attempt_root,
+        exit_code=returncode,
+        completed=returncode == 0,
+        answer=answer_identity if returncode == 0 else None,
+        error="" if returncode == 0 else "condition-process-nonzero",
+        manifest_path=raw_manifest,
+        receipt_path=raw_receipt,
+    )
+
+
+def _live_host_cleanup(
+    args: argparse.Namespace,
+    contract: T09ProviderContract,
+    request: RemoteHostPhaseRequest,
+) -> Mapping[str, object]:
+    """Run retained exact-owned cleanup after validating the full phase chain."""
+
+    repository = args.repository.resolve(strict=True)
+    try:
+        validate_host_phase_predecessor(
+            repository,
+            request,
+            expected_phase="host-freeze",
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("host cleanup predecessor failed before effects") from exc
+    _require_phase_output_names(
+        request,
+        frozenset({"cleanup_terminal", "cleanup_state"}),
+    )
+    request = _external_phase_request_clock(request)
+    _dynamic, cleanup_journal = _validate_live_phase_provider_entry(
+        args,
+        request,
+        contract,
+        require_initial_cleanup_version=False,
+    )
+    artifact_root = args.artifact_root.resolve(strict=True)
+    if artifact_root != Path(request.binding.remote_root).resolve(strict=True):
+        raise T09HostError("host cleanup artifact root differs from its transfer root")
+    recover_atomic_publications(artifact_root)
+    cleanup(args)
+    retained_path = _pilot_root(artifact_root, contract) / "host-cleanup.json"
+    retained = load_object(retained_path, label="retained host cleanup")
+    if (
+        retained.get("plan_id") != contract.plan_id
+        or retained.get("host_run_id") != contract.host_run_id
+        or retained.get("remote_secret_removed") is not True
+        or retained.get("owned_container_residue") != []
+        or retained.get("owned_container_removal_errors") != []
+        or retained.get("owned_container_enumeration_errors") != []
+        or retained.get("structural_privacy_scan_passed") is not True
+        or retained.get("structural_privacy_violations") != []
+    ):
+        raise T09HostError("retained host cleanup did not establish exact remote zero")
+    commands = load_object(
+        _contract_paths_for(repository, contract)["commands"],
+        label="host cleanup command package",
+    )
+    remaining_private_channels: list[str] = []
+    for run_id in contract.run_ids:
+        manifest = _manifest_for_contract(commands, run_id, contract)
+        supervisor = (
+            artifact_root / manifest_output_root(manifest) / "raw" / CONDITION_SUPERVISOR_DIRNAME
+        )
+        for name in ("condition-admission.sock", "condition-admission-binding.json"):
+            if os.path.lexists(supervisor / name):
+                remaining_private_channels.append(f"{run_id}:{name}")
+    if remaining_private_channels:
+        raise T09HostError("retained host cleanup left a private condition channel")
+    state = cleanup_journal.load()
+    terminal = {
+        "schema_version": "1.0.0",
+        "provider_contract_version": contract.version,
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "provider_handle_identity": request.binding.provider_handle_identity,
+        "retained_cleanup_sha256": file_sha256(retained_path),
+        "cleanup_journal_version_sha256": cleanup_journal.latest_version_sha256(),
+        "cleanup_journal_disposition": state.terminal_cleanup_disposition.value,
+        "owned_roots_only": True,
+        "private_ipc_removed": True,
+        "temporary_credentials_removed": True,
+        "terminal_or_honestly_unresolved": True,
+    }
+    terminal_path = request.output_paths["cleanup_terminal"]
+    cleanup_path = request.output_paths["cleanup_state"]
+    write_exclusive(terminal_path, terminal)
+    _publish_cleanup_phase_snapshot(cleanup_path, cleanup_journal)
+    try:
+        bound = bind_generated_host_phase_outputs(
+            request,
+            {
+                "cleanup_terminal": terminal_path,
+                "cleanup_state": cleanup_path,
+            },
+        )
+        wall, monotonic = _phase_completion_times(bound)
+        return validate_host_cleanup_phase(
+            repository,
+            bound,
+            completed_wall_time=wall,
+            completed_monotonic=monotonic,
+        )
+    except HostPhaseError as exc:
+        raise T09HostError("retained host cleanup output failed validation") from exc
+
+
+def host_cleanup(args: argparse.Namespace) -> None:
+    """Run or validate exact-owned terminal host cleanup for one phase chain."""
+
+    contract, request = _load_bridge_phase(args, "host-cleanup")
+    if request.deterministic_fixture:
+        wall, monotonic = _phase_completion_times(request)
+        try:
+            receipt = validate_host_cleanup_phase(
+                args.repository.resolve(strict=True),
+                request,
+                completed_wall_time=wall,
+                completed_monotonic=monotonic,
+            )
+        except HostPhaseError as exc:
+            raise T09HostError("phase-specific host cleanup failed") from exc
+    else:
+        receipt = _live_host_cleanup(args, contract, request)
+    _publish_bridge_phase(args, receipt)
+
+
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     result.add_argument("--provider-contract", required=True)
     result.add_argument("--repository", type=Path, required=True)
     result.add_argument("--artifact-root", type=Path, required=True)
-    result.add_argument("--early-cleanup-journal", type=Path, required=True)
-    result.add_argument("--secret-file", type=Path, required=True)
-    result.add_argument("--evaluator-overlay", type=Path, required=True)
+    # Historical commands may continue to pass these before the subcommand.  New
+    # phase-specific commands validate only the arguments their phase consumes.
+    result.add_argument("--early-cleanup-journal", type=Path)
+    result.add_argument("--secret-file", type=Path)
+    result.add_argument("--evaluator-overlay", type=Path)
     result.add_argument("--package-commit", required=True)
     operations = result.add_subparsers(dest="operation", required=True)
     preflight_parser = operations.add_parser("preflight")
@@ -24303,6 +25798,52 @@ def parser() -> argparse.ArgumentParser:
     preflight_parser.add_argument("--replacement-image-archive", type=Path, required=True)
     preflight_parser.add_argument("--model-metadata-receipt", type=Path)
     preflight_parser.add_argument("--slot2-authority-root", type=Path)
+    transfer_parser = operations.add_parser("host-transfer-verify")
+    transfer_parser.add_argument("--phase-request", type=Path, required=True)
+    transfer_parser.add_argument("--phase-receipt", type=Path, required=True)
+    host_preflight_parser = operations.add_parser("host-preflight")
+    host_preflight_parser.add_argument("--phase-request", type=Path, required=True)
+    host_preflight_parser.add_argument("--phase-receipt", type=Path, required=True)
+    host_preflight_parser.add_argument("--dynamic-receipt", type=Path)
+    host_preflight_parser.add_argument("--dynamic-source-root", type=Path)
+    host_preflight_parser.add_argument(
+        "--early-cleanup-journal", type=Path, default=argparse.SUPPRESS
+    )
+    host_preflight_parser.add_argument("--secret-file", type=Path, default=argparse.SUPPRESS)
+    host_preflight_parser.add_argument("--slot2-authority-root", type=Path)
+    host_qualify_parser = operations.add_parser("host-qualify")
+    host_qualify_parser.add_argument("--phase-request", type=Path, required=True)
+    host_qualify_parser.add_argument("--phase-receipt", type=Path, required=True)
+    host_qualify_parser.add_argument("--dynamic-receipt", type=Path)
+    host_qualify_parser.add_argument("--dynamic-source-root", type=Path)
+    host_qualify_parser.add_argument(
+        "--early-cleanup-journal", type=Path, default=argparse.SUPPRESS
+    )
+    host_qualify_parser.add_argument("--secret-file", type=Path, default=argparse.SUPPRESS)
+    host_qualify_parser.add_argument("--evaluator-overlay", type=Path, default=argparse.SUPPRESS)
+    host_qualify_parser.add_argument("--real-evidence-archive", type=Path)
+    host_qualify_parser.add_argument("--local-finalizer-qualification", type=Path)
+    host_qualify_parser.add_argument("--replacement-image-archive", type=Path)
+    host_freeze_parser = operations.add_parser("host-freeze")
+    host_freeze_parser.add_argument("--phase-request", type=Path, required=True)
+    host_freeze_parser.add_argument("--phase-receipt", type=Path, required=True)
+    host_freeze_parser.add_argument("--dynamic-receipt", type=Path)
+    host_freeze_parser.add_argument("--dynamic-source-root", type=Path)
+    host_freeze_parser.add_argument("--early-cleanup-journal", type=Path, default=argparse.SUPPRESS)
+    host_freeze_parser.add_argument("--secret-file", type=Path, default=argparse.SUPPRESS)
+    host_freeze_parser.add_argument("--model-metadata-receipt", type=Path)
+    condition_session_parser = operations.add_parser("condition-session")
+    condition_session_parser.add_argument("--run-id", choices=AUTONOMOUS_RUN_IDS, required=True)
+    condition_session_parser.add_argument("--phase-request", type=Path, required=True)
+    host_cleanup_parser = operations.add_parser("host-cleanup")
+    host_cleanup_parser.add_argument("--phase-request", type=Path, required=True)
+    host_cleanup_parser.add_argument("--phase-receipt", type=Path, required=True)
+    host_cleanup_parser.add_argument("--dynamic-receipt", type=Path)
+    host_cleanup_parser.add_argument("--dynamic-source-root", type=Path)
+    host_cleanup_parser.add_argument(
+        "--early-cleanup-journal", type=Path, default=argparse.SUPPRESS
+    )
+    host_cleanup_parser.add_argument("--secret-file", type=Path, default=argparse.SUPPRESS)
     condition_export = operations.add_parser("condition-export")
     condition_export.add_argument("--run-id", choices=AUTONOMOUS_RUN_IDS, required=True)
     seal_recovery = operations.add_parser("recover-attempt-seal")
@@ -24360,11 +25901,30 @@ def main() -> int:
     enforce_host_core_limit()
     args = parser().parse_args()
     _argument_provider_contract(args)
-    recover_atomic_publications(args.artifact_root)
     if args.operation == "preflight":
+        recover_atomic_publications(args.artifact_root)
         preflight_with_deadline(args)
         return 0
+    if args.operation == "host-transfer-verify":
+        host_transfer_verify(args)
+        return 0
+    if args.operation == "host-preflight":
+        host_preflight(args)
+        return 0
+    if args.operation == "host-qualify":
+        host_qualify(args)
+        return 0
+    if args.operation == "host-freeze":
+        host_freeze(args)
+        return 0
+    if args.operation == "condition-session":
+        condition_session(args)
+        return 0
+    if args.operation == "host-cleanup":
+        host_cleanup(args)
+        return 0
     if args.operation == "condition-export":
+        recover_atomic_publications(args.artifact_root)
         try:
             execute_condition(args)
         except T09HostError as exc:
@@ -24393,42 +25953,55 @@ def main() -> int:
         export_attempt(args, sys.stdout.buffer)
         return 0
     if args.operation == "recover-attempt-seal":
+        recover_atomic_publications(args.artifact_root)
         print(json.dumps(recover_attempt_seal(args), sort_keys=True))
         return 0
     if args.operation == "finalize-attempt":
+        recover_atomic_publications(args.artifact_root)
         print(json.dumps(finalize_attempt(args), sort_keys=True))
         return 0
     if args.operation == "first-pair-checkpoint":
+        recover_atomic_publications(args.artifact_root)
         print(json.dumps(first_pair_checkpoint(args), sort_keys=True))
         return 0
     if args.operation == "campaign-disposition":
+        recover_atomic_publications(args.artifact_root)
         print(json.dumps(campaign_evidence_disposition(args), sort_keys=True))
         return 0
     if args.operation == "export-only":
+        recover_atomic_publications(args.artifact_root)
         export_attempt(args, sys.stdout.buffer)
         return 0
     if args.operation == "acknowledge-attempt-export":
+        recover_atomic_publications(args.artifact_root)
         acknowledge_attempt_export(args)
         return 0
     if args.operation == "export-image":
+        recover_atomic_publications(args.artifact_root)
         export_image(args)
         return 0
     if args.operation == "stage":
+        recover_atomic_publications(args.artifact_root)
         stage(args)
         return 0
     if args.operation == "verify-inbound":
+        recover_atomic_publications(args.artifact_root)
         verify_inbound(args)
         return 0
     if args.operation == "verify-attempt-export":
+        recover_atomic_publications(args.artifact_root)
         verify_attempt_export(args)
         return 0
     if args.operation == "package":
+        recover_atomic_publications(args.artifact_root)
         package(args)
         return 0
     if args.operation == "cleanup":
+        recover_atomic_publications(args.artifact_root)
         cleanup(args)
         return 0
     if args.operation == "preempirical-replacement-disposition":
+        recover_atomic_publications(args.artifact_root)
         print(json.dumps(preempirical_replacement_disposition(args), sort_keys=True))
         return 0
     raise T09HostError("unknown operation")

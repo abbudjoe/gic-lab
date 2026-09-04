@@ -61,6 +61,7 @@ from giclab.control.effects import (
     CleanupExecutionRequest,
     ConditionAction,
     ConditionAmbiguousSend,
+    ConditionBridgeEvidence,
     ConditionEventObserver,
     ConditionExecutionRequest,
     ConditionFailureClass,
@@ -87,15 +88,20 @@ from giclab.control.effects import (
     HeldArtifact,
     HeldEffectSource,
     HeldTransactionRoot,
+    HostPackageTransferReceipt,
+    HostPackageTransferRejected,
+    HostPackageTransferRequest,
+    HostPhaseBinding,
     HostPreflightReceipt,
     HostPreflightRejected,
     HostPreflightRequest,
     HostQualificationReceipt,
     HostQualificationRequest,
+    HostTransferBinding,
+    LocalPackageAssemblyReceipt,
+    LocalPackageAssemblyRequest,
     LowLevelEffects,
     PackageRuntimeBudget,
-    PackageStageReceipt,
-    PackageStageRequest,
     ProviderCostObservationRequest,
     ProviderCostReceipt,
     ProviderHandle,
@@ -111,6 +117,15 @@ from giclab.control.effects import (
     hold_sealed_artifact,
 )
 from giclab.control.registry_validation import resolve_registered_command_package
+from giclab.control.remote_bridge import (
+    RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION,
+    ConditionSessionBinding,
+    RemoteBridgeError,
+    expected_condition_bridge_evidence,
+    validate_condition_bridge_evidence,
+    validate_full_dynamic_frozen_manifest,
+    validate_postfreeze_receipt,
+)
 from giclab.harness import t09_model_metadata_receipt as metadata
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
@@ -410,7 +425,8 @@ def probe_production_adapter_assembly(
             "runtime_clock",
             "metadata_channel",
             "campaign_transport",
-            "stage_package",
+            "assemble_local_package",
+            "transfer_package_to_host",
             "preflight_host",
             "qualify_host",
             "freeze_science",
@@ -478,7 +494,13 @@ class _AccountingObserver(ConditionEventObserver):
             return ProviderFailureDisposition.OUTCOME_UNKNOWN
         return ProviderFailureDisposition.OUTCOME_UNKNOWN
 
-    def model_call(self, event: ConditionModelCall, send: ConditionSend) -> str:
+    def model_call(
+        self,
+        event: ConditionModelCall,
+        send: ConditionSend,
+        *,
+        before_send: ConditionAction | None = None,
+    ) -> str:
         self._assert_campaign_open()
         if (
             event.call_id in self.call_ids
@@ -509,6 +531,7 @@ class _AccountingObserver(ConditionEventObserver):
         return self.boundary.invoke(
             event.request,
             invoke,
+            before_send=before_send,
             call_id=event.call_id,
             logical_call_id=event.logical_call_id,
             classify_failure=self._disposition,
@@ -532,9 +555,14 @@ class _AccountingObserver(ConditionEventObserver):
 
     def output_bytes(self, *, total_bytes: int) -> None:
         self._assert_campaign_open()
-        if self.output_total_bytes is not None or type(total_bytes) is not int or total_bytes < 0:
-            raise AdapterFailure("condition output-byte event is duplicate or malformed")
-        self.boundary.record_output_bytes(total_bytes)
+        if (
+            type(total_bytes) is not int
+            or total_bytes < 0
+            or (self.output_total_bytes is not None and total_bytes < self.output_total_bytes)
+        ):
+            raise AdapterFailure("condition output-byte total is malformed or moved backward")
+        prior = self.output_total_bytes or 0
+        self.boundary.record_output_bytes(total_bytes - prior)
         self.output_total_bytes = total_bytes
 
     def process_exit(self, *, exit_code: int) -> None:
@@ -624,7 +652,11 @@ class ProductionCategory3World:
         self._command_package_sha256: str | None = None
         self._runtime_budget: PackageRuntimeBudget | None = None
         self._metadata_document: dict[str, object] | None = None
-        self._stage_receipt: PackageStageReceipt | None = None
+        self._local_assembly: LocalPackageAssemblyReceipt | None = None
+        self._local_assembly_artifact: HeldArtifact | None = None
+        self._local_assembly_verification_artifact: HeldArtifact | None = None
+        self._host_transfers: dict[int, HostPackageTransferReceipt] = {}
+        self._host_preflights: dict[int, HostPreflightReceipt] = {}
         self._qualification: HostQualificationReceipt | None = None
         self._freeze: ScientificFreezeReceipt | None = None
         self._condition_outcomes: dict[str, ConditionProcessOutcome] = {}
@@ -637,6 +669,8 @@ class ProductionCategory3World:
         self._essential_failure_roots: set[str] = set()
         self._raw_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
         self._raw_artifact_bindings: dict[str, str] = {}
+        self._condition_bridge_bindings: dict[str, str] = {}
+        self._condition_bridge_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
         self._finalizations: dict[str, FinalizerExecutionOutcome] = {}
         self._finalized_artifacts: dict[str, tuple[HeldArtifact, ...]] = {}
         self._finalized_artifact_bindings: dict[str, str] = {}
@@ -654,7 +688,7 @@ class ProductionCategory3World:
         self._cleanup_calls = 0
         self._cleanup_started_after_campaign_deadline = False
         self._authority_launch_consumed = False
-        self._stage_evidence: dict[str, object] | None = None
+        self._package_assembly_evidence: dict[str, object] | None = None
         self._condition_started_wall: dict[str, float] = {}
         self._condition_started_monotonic: dict[str, float] = {}
         self._entered_run_ids: list[str] = []
@@ -704,7 +738,8 @@ class ProductionCategory3World:
             "provider.launch": launches,
             "provider.enter": launches,
             "provider.terminate": launches + 1,
-            "host.stage": 1,
+            "host.assemble_local": 1,
+            "host.transfer": launches,
             "host.preflight": launches,
             "host.qualify": 1,
             "host.freeze": 1,
@@ -1514,7 +1549,7 @@ class ProductionCategory3World:
         return tuple(members), source
 
     @staticmethod
-    def _stage_receipt_identity(receipt: PackageStageReceipt) -> str:
+    def _local_assembly_receipt_identity(receipt: LocalPackageAssemblyReceipt) -> str:
         return _identity(
             {
                 "provider_contract_version": receipt.provider_contract_version,
@@ -1522,22 +1557,20 @@ class ProductionCategory3World:
                 "plan_sha256": receipt.plan_sha256,
                 "command_package_sha256": receipt.command_package_sha256,
                 "execution_contract_sha256": receipt.execution_contract_sha256,
-                "evidence_stage_id": receipt.evidence_stage_id,
-                "host_run_id": receipt.host_run_id,
                 "archive_sha256": receipt.archive_sha256,
                 "archive_bytes": receipt.archive_bytes,
                 "members": [member.to_document() for member in receipt.members],
                 "source_commit": receipt.source_commit,
                 "source_tree": receipt.source_tree,
-                "host_acknowledgement_sha256": receipt.host_acknowledgement_sha256,
-                "host_rehash_sha256": receipt.host_rehash_sha256,
-                "uploaded": receipt.uploaded,
+                "source_manifest_sha256": receipt.source_manifest_sha256,
+                "deterministic_render_count": receipt.deterministic_render_count,
+                "verification_archive_sha256": receipt.verification_archive_sha256,
             }
         )
 
     def _validate_archive(
         self,
-        receipt: PackageStageReceipt,
+        receipt: LocalPackageAssemblyReceipt,
         expected: tuple[TrackedPackageMember, ...],
     ) -> None:
         archive = _safe_existing_file(
@@ -1545,16 +1578,24 @@ class ProductionCategory3World:
             receipt.archive_path,
             label="staged package archive",
         )
+        verification = _safe_existing_file(
+            self.root,
+            receipt.verification_archive_path,
+            label="verification package archive",
+        )
         if (
             archive.stat().st_size != receipt.archive_bytes
             or receipt.archive_bytes > _MAX_STAGE_ARCHIVE_BYTES
             or _file_sha256(archive) != receipt.archive_sha256
-            or receipt.host_rehash_sha256 != receipt.archive_sha256
             or receipt.members != expected
-            or receipt.receipt_sha256 != self._stage_receipt_identity(receipt)
+            or receipt.deterministic_render_count != 2
+            or receipt.verification_archive_sha256 != receipt.archive_sha256
+            or verification.stat().st_size != receipt.archive_bytes
+            or _file_sha256(verification) != receipt.verification_archive_sha256
+            or archive.read_bytes() != verification.read_bytes()
+            or receipt.receipt_sha256 != self._local_assembly_receipt_identity(receipt)
         ):
-            raise AdapterFailure("staged package receipt identity drifted")
-        _require_sha(receipt.host_acknowledgement_sha256, label="host stage acknowledgement")
+            raise AdapterFailure("local package assembly receipt identity drifted")
         observed: list[TrackedPackageMember] = []
         try:
             with tarfile.open(archive, mode="r:*") as handle:
@@ -1585,16 +1626,16 @@ class ProductionCategory3World:
         except (tarfile.TarError, OSError) as exc:
             raise AdapterFailure("staged package archive is invalid") from exc
         if tuple(observed) != expected:
-            raise AdapterFailure("staged archive bytes differ from tracked package closure")
+            raise AdapterFailure("assembled archive bytes differ from tracked package closure")
 
-    def stage(self) -> str:
-        operation = "host.stage"
+    def assemble_local_package(self) -> str:
+        operation = "host.assemble_local"
         self._begin(operation, "tracked-package-archive")
         try:
             members, source = self._load_runtime_package()
             assert self._runtime_budget is not None
             commit, tree = _git_identity(self.repository)
-            request = PackageStageRequest(
+            request = LocalPackageAssemblyRequest(
                 repository=self.repository,
                 control_commit=commit,
                 control_tree=tree,
@@ -1603,48 +1644,50 @@ class ProductionCategory3World:
                 plan_sha256=self.contract.expected_plan_sha256,
                 command_package_sha256=self._runtime_budget.command_package_sha256,
                 execution_contract_sha256=self._runtime_budget.execution_contract_sha256,
-                evidence_stage_id=self.contract.evidence_stage_id,
-                host_run_id=self.contract.host_run_id,
                 members=members,
                 max_archive_bytes=_MAX_STAGE_ARCHIVE_BYTES,
                 max_member_bytes=_MAX_STAGE_MEMBER_BYTES,
                 max_members=_MAX_STAGE_MEMBERS,
             )
-            receipt = self.low_level_effects.stage_package(request)
+            source_manifest_sha = _identity(
+                {
+                    "source_commit": commit,
+                    "source_tree": tree,
+                    "members": [member.to_document() for member in members],
+                }
+            )
+            receipt = self.low_level_effects.assemble_local_package(request)
             if (
                 receipt.provider_contract_version != request.provider_contract_version
                 or receipt.plan_id != request.plan_id
                 or receipt.plan_sha256 != request.plan_sha256
                 or receipt.command_package_sha256 != request.command_package_sha256
                 or receipt.execution_contract_sha256 != request.execution_contract_sha256
-                or receipt.evidence_stage_id != request.evidence_stage_id
-                or receipt.host_run_id != request.host_run_id
                 or receipt.source_commit != commit
                 or receipt.source_tree != tree
-                or receipt.archive_sha256 != receipt.host_rehash_sha256
+                or receipt.source_manifest_sha256 != source_manifest_sha
             ):
-                raise AdapterFailure("staged package source or host rehash drifted")
+                raise AdapterFailure("local package assembly source identity drifted")
             self._validate_archive(receipt, members)
-            accepted = self.private_root / "accepted-package.tar"
-            host = _host_module(self.repository)
-            staged = host.stage_verified_archive(
+            self._local_assembly_artifact = hold_sealed_artifact(
+                self.held_transaction_root,
                 receipt.archive_path,
-                accepted,
-                receipt.archive_bytes,
-                receipt.archive_sha256,
+                max_bytes=_MAX_STAGE_ARCHIVE_BYTES,
             )
-            if (
-                staged.get("sha256") != receipt.archive_sha256
-                or _file_sha256(accepted) != receipt.archive_sha256
-            ):
-                raise AdapterFailure("accepted staged archive changed bytes")
+            self._local_assembly_verification_artifact = hold_sealed_artifact(
+                self.held_transaction_root,
+                receipt.verification_archive_path,
+                max_bytes=_MAX_STAGE_ARCHIVE_BYTES,
+            )
+            self._local_assembly_artifact.revalidate()
+            self._local_assembly_verification_artifact.revalidate()
         except BaseException as exc:
             self._record(operation, "tracked-package-archive", "failed")
             if isinstance(exc, AdapterFailure):
                 raise
-            raise AdapterFailure(f"tracked package staging failed: {exc}") from exc
-        self._stage_receipt = receipt
-        self._stage_evidence = {
+            raise AdapterFailure(f"tracked package assembly failed: {exc}") from exc
+        self._local_assembly = receipt
+        self._package_assembly_evidence = {
             "command_package_sha256": self._runtime_budget.command_package_sha256,
             "execution_contract_sha256": self._runtime_budget.execution_contract_sha256,
             "plan_sha256": self._runtime_budget.plan_sha256,
@@ -1652,41 +1695,184 @@ class ProductionCategory3World:
             "archive_sha256": receipt.archive_sha256,
             "archive_bytes": receipt.archive_bytes,
             "archive_member_count": len(receipt.members),
-            "host_acknowledgement_sha256": receipt.host_acknowledgement_sha256,
-            "host_rehash_sha256": receipt.host_rehash_sha256,
+            "source_manifest_sha256": receipt.source_manifest_sha256,
+            "deterministic_render_count": receipt.deterministic_render_count,
+            "verification_archive_sha256": receipt.verification_archive_sha256,
+            "contains_provider_handle": False,
+            "contains_remote_path": False,
+            "uploaded": False,
             "tracked_only": True,
         }
         self._primitive("resolve_registered_command_package")
         self._primitive("load_execution_contract")
-        self._primitive("stage_verified_archive")
+        self._primitive("assemble_local_package:two-byte-identical-renders")
         self._primitive("validate_tracked_package_archive")
         self._record(operation, "tracked-package-archive", "passed")
+        return receipt.receipt_sha256
+
+    @staticmethod
+    def _transfer_receipt_identity(receipt: HostPackageTransferReceipt) -> str:
+        return _identity(
+            {
+                "binding": receipt.binding.to_document(),
+                "remote_package_path": receipt.remote_package_path,
+                "remote_manifest_path": receipt.remote_manifest_path,
+                "remote_archive_bytes": receipt.remote_archive_bytes,
+                "remote_archive_sha256": receipt.remote_archive_sha256,
+                "remote_members": [member.to_document() for member in receipt.remote_members],
+                "remote_member_manifest_sha256": receipt.remote_member_manifest_sha256,
+                "host_acknowledgement_sha256": receipt.host_acknowledgement_sha256,
+                "started_wall_time": receipt.started_wall_time,
+                "completed_wall_time": receipt.completed_wall_time,
+                "started_monotonic": receipt.started_monotonic,
+                "completed_monotonic": receipt.completed_monotonic,
+                "cleanup_state_sha256": receipt.cleanup_state_sha256,
+                "phase_output_sha256s": list(receipt.phase_output_sha256s),
+            }
+        )
+
+    def transfer_package(self, handle: ProviderHandle) -> str:
+        """Transfer the held assembly only after the exact provider entry exists."""
+
+        operation = "host.transfer"
+        self._begin(operation, handle.opaque_identity)
+        assembly = self._local_assembly
+        held = self._local_assembly_artifact
+        entry_path = self._entry_receipts.get(handle.launch_ordinal)
+        campaign_root = self._campaign_roots.get(handle.launch_ordinal)
+        if assembly is None or held is None:
+            raise AdapterFailure("host transfer lacks the deterministic local assembly")
+        if entry_path is None or campaign_root is None:
+            raise AdapterFailure("host transfer cannot precede exact provider entry")
+        try:
+            held.revalidate()
+            commit, tree = _git_identity(self.repository)
+            entry_sha = _file_sha256(entry_path)
+            binding = HostTransferBinding(
+                provider_contract_version=self.contract.version,
+                plan_id=self.contract.plan_id,
+                host_run_id=self.contract.host_run_id,
+                provider_handle_identity=handle.opaque_identity,
+                provider_launch_ordinal=handle.launch_ordinal,
+                provider_entry_receipt_sha256=entry_sha,
+                local_assembly_receipt_sha256=assembly.receipt_sha256,
+                source_commit=commit,
+                source_tree=tree,
+                remote_root=self.contract.remote_root,
+            )
+            started_wall = self.clock.wall_time()
+            started_mono = self.clock.monotonic()
+            assert self._execution_contract is not None
+            request = HostPackageTransferRequest(
+                binding=binding,
+                provider_handle=handle,
+                provider_entry_receipt_path=entry_path,
+                local_assembly=assembly,
+                requested_wall_time=started_wall,
+                requested_monotonic=started_mono,
+                transfer_deadline_monotonic=checked_deadline(
+                    started_mono,
+                    self._execution_contract.campaign.preflight_iteration_wall_seconds,
+                    label="host package transfer",
+                ),
+            )
+            try:
+                receipt = self.low_level_effects.transfer_package_to_host(request)
+            except HostPackageTransferRejected as exc:
+                self._close_rejected_host_phase(handle, exc)
+                raise ReplacementEligibleFailure(str(exc)) from exc
+            returned_wall = self.clock.wall_time()
+            returned_mono = self.clock.monotonic()
+            for remote_value, label in (
+                (receipt.remote_package_path, "remote package path"),
+                (receipt.remote_manifest_path, "remote manifest path"),
+            ):
+                remote_path = PurePosixPath(remote_value)
+                remote_root = PurePosixPath(self.contract.remote_root)
+                if not remote_path.is_absolute() or not remote_root.is_absolute():
+                    raise AdapterFailure(f"{label} is not absolute")
+                try:
+                    remote_path.relative_to(remote_root)
+                except ValueError as exc:
+                    raise AdapterFailure(f"{label} escaped the selected remote root") from exc
+            start_wall = finite_time(receipt.started_wall_time, label="host transfer start wall")
+            end_wall = finite_time(
+                receipt.completed_wall_time,
+                label="host transfer completion wall",
+            )
+            start_mono = finite_time(
+                receipt.started_monotonic,
+                label="host transfer start monotonic",
+            )
+            end_mono = finite_time(
+                receipt.completed_monotonic,
+                label="host transfer completion monotonic",
+            )
+            if (
+                receipt.binding != binding
+                or receipt.remote_archive_bytes != assembly.archive_bytes
+                or receipt.remote_archive_sha256 != assembly.archive_sha256
+                or receipt.remote_members != assembly.members
+                or start_wall < started_wall
+                or start_mono < started_mono
+                or end_wall < start_wall
+                or end_mono < start_mono
+                or end_wall > returned_wall
+                or end_mono > returned_mono
+                or end_mono > request.transfer_deadline_monotonic
+                or len(receipt.phase_output_sha256s) < 4
+                or any(_HEX64.fullmatch(value) is None for value in receipt.phase_output_sha256s)
+                or any(
+                    _HEX64.fullmatch(value) is None
+                    for value in (
+                        receipt.remote_member_manifest_sha256,
+                        receipt.host_acknowledgement_sha256,
+                        receipt.cleanup_state_sha256,
+                    )
+                )
+                or receipt.receipt_sha256 != self._transfer_receipt_identity(receipt)
+            ):
+                raise AdapterFailure("host package transfer receipt identity drifted")
+            expected_member_manifest = _identity(
+                [member.to_document() for member in assembly.members]
+            )
+            if receipt.remote_member_manifest_sha256 != expected_member_manifest:
+                raise AdapterFailure("remote package member rehash differs from local assembly")
+            held.revalidate()
+        except ReplacementEligibleFailure:
+            self._record(operation, handle.opaque_identity, "failed")
+            raise
+        except BaseException as exc:
+            self._record(operation, handle.opaque_identity, "failed")
+            if isinstance(exc, AdapterFailure):
+                raise
+            raise AdapterFailure(f"host package transfer failed: {exc}") from exc
+        self._host_transfers[handle.launch_ordinal] = receipt
+        self._primitive("host-transfer-verify")
+        self._record(operation, handle.opaque_identity, "passed")
         return receipt.receipt_sha256
 
     @staticmethod
     def _preflight_receipt_identity(receipt: HostPreflightReceipt) -> str:
         return _identity(
             {
-                "provider_contract_version": receipt.provider_contract_version,
-                "plan_id": receipt.plan_id,
-                "host_run_id": receipt.host_run_id,
-                "provider_handle_identity": receipt.provider_handle_identity,
-                "provider_launch_ordinal": receipt.provider_launch_ordinal,
-                "provider_entry_receipt_sha256": receipt.provider_entry_receipt_sha256,
+                "binding": receipt.binding.to_document(),
+                "previous_phase_receipt_sha256": receipt.previous_phase_receipt_sha256,
                 "metadata_receipt_sha256": receipt.metadata_receipt_sha256,
-                "stage_receipt_sha256": receipt.stage_receipt_sha256,
                 "remote_path_qualification_sha256": (receipt.remote_path_qualification_sha256),
                 "started_wall_time": receipt.started_wall_time,
                 "completed_wall_time": receipt.completed_wall_time,
                 "started_monotonic": receipt.started_monotonic,
                 "completed_monotonic": receipt.completed_monotonic,
+                "cleanup_state_sha256": receipt.cleanup_state_sha256,
+                "phase_output_sha256s": list(receipt.phase_output_sha256s),
             }
         )
 
-    def _close_rejected_preflight(
+    def _close_rejected_host_phase(
         self,
         handle: ProviderHandle,
-        rejection: HostPreflightRejected,
+        rejection: HostPreflightRejected | HostPackageTransferRejected,
     ) -> None:
         private_root = self._campaign_roots[handle.launch_ordinal]
         disposition = _safe_existing_file(
@@ -1736,29 +1922,32 @@ class ProductionCategory3World:
         self._begin(operation, handle.opaque_identity)
         if (
             self._metadata_document is None
-            or self._stage_receipt is None
+            or self._local_assembly is None
             or self._execution_contract is None
         ):
-            raise AdapterFailure("host preflight lacks staged package and metadata authority")
+            raise AdapterFailure("host preflight lacks assembled package and metadata authority")
         entry_path = self._entry_receipts.get(handle.launch_ordinal)
+        transfer = self._host_transfers.get(handle.launch_ordinal)
         if entry_path is None:
             raise AdapterFailure("host preflight lacks the retained provider-entry receipt")
+        if transfer is None:
+            raise AdapterFailure("host preflight cannot precede acknowledged package transfer")
         entry_sha = _file_sha256(entry_path)
         metadata_sha = metadata.model_metadata_receipt_sha256(self._metadata_receipt)
         requested_wall = self.clock.wall_time()
         requested_mono = self.clock.monotonic()
+        binding = HostPhaseBinding(
+            transfer=transfer.binding,
+            host_transfer_receipt_sha256=transfer.receipt_sha256,
+        )
         request = HostPreflightRequest(
-            provider_contract_version=self.contract.version,
-            plan_id=self.contract.plan_id,
-            host_run_id=self.contract.host_run_id,
+            binding=binding,
             provider_handle=handle,
             campaign_private_root=self._campaign_roots[handle.launch_ordinal],
             provider_entry_receipt_path=entry_path,
             provider_entry_receipt_sha256=entry_sha,
             metadata_receipt_path=self._metadata_receipt,
             metadata_receipt_sha256=metadata_sha,
-            stage_receipt_sha256=self._stage_receipt.receipt_sha256,
-            remote_root=self.contract.remote_root,
             requested_wall_time=requested_wall,
             requested_monotonic=requested_mono,
         )
@@ -1766,7 +1955,7 @@ class ProductionCategory3World:
             receipt = self.low_level_effects.preflight_host(request)
         except HostPreflightRejected as exc:
             try:
-                self._close_rejected_preflight(handle, exc)
+                self._close_rejected_host_phase(handle, exc)
             except BaseException as closeout_exc:
                 self._record(operation, handle.opaque_identity, "failed")
                 raise AdapterFailure(
@@ -1791,14 +1980,9 @@ class ProductionCategory3World:
                 receipt.completed_monotonic, label="host preflight completion monotonic"
             )
             if (
-                receipt.provider_contract_version != request.provider_contract_version
-                or receipt.plan_id != request.plan_id
-                or receipt.host_run_id != request.host_run_id
-                or receipt.provider_handle_identity != handle.opaque_identity
-                or receipt.provider_launch_ordinal != handle.launch_ordinal
-                or receipt.provider_entry_receipt_sha256 != entry_sha
+                receipt.binding != binding
+                or receipt.previous_phase_receipt_sha256 != transfer.receipt_sha256
                 or receipt.metadata_receipt_sha256 != metadata_sha
-                or receipt.stage_receipt_sha256 != self._stage_receipt.receipt_sha256
                 or start_wall < requested_wall
                 or start_mono < requested_mono
                 or end_wall > returned_wall
@@ -1807,6 +1991,9 @@ class ProductionCategory3World:
                 or end_mono < start_mono
                 or end_mono - start_mono
                 > self._execution_contract.campaign.preflight_iteration_wall_seconds
+                or len(receipt.phase_output_sha256s) < 2
+                or any(_HEX64.fullmatch(value) is None for value in receipt.phase_output_sha256s)
+                or _HEX64.fullmatch(receipt.cleanup_state_sha256) is None
                 or receipt.receipt_sha256 != self._preflight_receipt_identity(receipt)
             ):
                 raise AdapterFailure("host preflight receipt identity or timing drifted")
@@ -1841,6 +2028,7 @@ class ProductionCategory3World:
             raise AdapterFailure(f"host preflight receipt validation failed: {exc}") from exc
         self._primitive("validate_model_metadata_receipt_offline")
         self._primitive("validate_host_preflight_receipt")
+        self._host_preflights[handle.launch_ordinal] = receipt
         self._record(operation, handle.opaque_identity, "passed")
 
     @staticmethod
@@ -1852,11 +2040,15 @@ class ProductionCategory3World:
     def qualify(self, handle: ProviderHandle) -> str:
         operation = "host.qualify"
         self._begin(operation, handle.opaque_identity)
-        if self._stage_receipt is None:
-            raise AdapterFailure("host qualification lacks its staged package")
+        if self._local_assembly is None:
+            raise AdapterFailure("host qualification lacks its assembled package")
         entry_path = self._entry_receipts.get(handle.launch_ordinal)
+        transfer = self._host_transfers.get(handle.launch_ordinal)
+        preflight = self._host_preflights.get(handle.launch_ordinal)
         if entry_path is None:
             raise AdapterFailure("host qualification lacks provider-entry evidence")
+        if transfer is None or preflight is None:
+            raise AdapterFailure("host qualification cannot precede transfer and preflight")
         if (
             self.contract.replacement_image_tag is None
             or self.contract.image_materialization_policy is None
@@ -1864,20 +2056,27 @@ class ProductionCategory3World:
             or self.contract.local_finalizer_qualification_id is None
         ):
             raise AdapterFailure("selected package lacks host qualification identities")
+        requested_wall = self.clock.wall_time()
+        requested_mono = self.clock.monotonic()
+        binding = HostPhaseBinding(
+            transfer=transfer.binding,
+            host_transfer_receipt_sha256=transfer.receipt_sha256,
+        )
         request = HostQualificationRequest(
-            provider_contract_version=self.contract.version,
-            plan_id=self.contract.plan_id,
-            host_run_id=self.contract.host_run_id,
+            binding=binding,
             provider_handle=handle,
-            provider_entry_receipt_sha256=_file_sha256(entry_path),
-            stage_receipt_sha256=self._stage_receipt.receipt_sha256,
+            preflight_receipt_sha256=preflight.receipt_sha256,
             replacement_image_tag=self.contract.replacement_image_tag,
             image_materialization_policy=self.contract.image_materialization_policy,
             active_image_qualification_id=self.contract.active_image_qualification_id,
             local_finalizer_qualification_id=(self.contract.local_finalizer_qualification_id),
+            requested_wall_time=requested_wall,
+            requested_monotonic=requested_mono,
         )
         try:
             receipt = self.low_level_effects.qualify_host(request)
+            returned_wall = self.clock.wall_time()
+            returned_mono = self.clock.monotonic()
             commit, _tree = _git_identity(self.repository)
             host = _host_module(self.repository)
             source_bindings = host.validate_finalizer_source(
@@ -1905,15 +2104,11 @@ class ProductionCategory3World:
                 receipt.local_finalizer_dependency_tree_sha256,
                 receipt.local_evaluator_dependency_tree_sha256,
                 receipt.cleanup_readiness_sha256,
+                *receipt.phase_output_sha256s,
             )
             if (
-                receipt.provider_contract_version != request.provider_contract_version
-                or receipt.plan_id != request.plan_id
-                or receipt.host_run_id != request.host_run_id
-                or receipt.provider_handle_identity != handle.opaque_identity
-                or receipt.provider_launch_ordinal != handle.launch_ordinal
-                or receipt.provider_entry_receipt_sha256 != request.provider_entry_receipt_sha256
-                or receipt.stage_receipt_sha256 != request.stage_receipt_sha256
+                receipt.binding != binding
+                or receipt.previous_phase_receipt_sha256 != preflight.receipt_sha256
                 or receipt.replacement_image_tag != request.replacement_image_tag
                 or receipt.image_materialization_policy != request.image_materialization_policy
                 or receipt.qualification_id != self.contract.active_image_qualification_id
@@ -1928,6 +2123,13 @@ class ProductionCategory3World:
                 or receipt.finalizer_selector_sha256 != selector_sha
                 or receipt.finalizer_schema_sha256 != schema_sha
                 or receipt.downstream_source_roles_sha256 != _identity(source_bindings[5])
+                or receipt.started_wall_time < requested_wall
+                or receipt.started_monotonic < requested_mono
+                or receipt.completed_wall_time < receipt.started_wall_time
+                or receipt.completed_monotonic < receipt.started_monotonic
+                or receipt.completed_wall_time > returned_wall
+                or receipt.completed_monotonic > returned_mono
+                or len(receipt.phase_output_sha256s) < 4
                 or receipt.receipt_sha256 != self._qualification_receipt_identity(receipt)
             ):
                 raise AdapterFailure("host qualification receipt identity drifted")
@@ -1946,12 +2148,18 @@ class ProductionCategory3World:
     def _freeze_receipt_identity(receipt: ScientificFreezeReceipt) -> str:
         return _identity(
             {
+                "binding": receipt.binding.to_document(),
+                "previous_phase_receipt_sha256": receipt.previous_phase_receipt_sha256,
                 "manifest_sha256": receipt.manifest_sha256,
+                "manifest_schema_version": receipt.manifest_schema_version,
+                "manifest_projection_sha256": receipt.manifest_projection_sha256,
                 "postfreeze_validation_sha256": receipt.postfreeze_validation_sha256,
                 "started_wall_time": receipt.started_wall_time,
                 "completed_wall_time": receipt.completed_wall_time,
                 "started_monotonic": receipt.started_monotonic,
                 "completed_monotonic": receipt.completed_monotonic,
+                "cleanup_state_sha256": receipt.cleanup_state_sha256,
+                "phase_output_sha256s": list(receipt.phase_output_sha256s),
             }
         )
 
@@ -1960,29 +2168,90 @@ class ProductionCategory3World:
         self._begin(operation, handle.opaque_identity)
         if (
             self._execution_contract is None
-            or self._stage_receipt is None
+            or self._local_assembly is None
             or self._qualification is None
             or self._command_package_sha256 is None
+            or self._command_document is None
             or self.contract.frozen_run_manifest_id is None
         ):
             raise AdapterFailure("scientific freeze lacks its exact qualified package")
         entry = self._entry_receipts.get(handle.launch_ordinal)
-        if entry is None:
+        transfer = self._host_transfers.get(handle.launch_ordinal)
+        preflight = self._host_preflights.get(handle.launch_ordinal)
+        if entry is None or transfer is None or preflight is None:
             raise AdapterFailure("scientific freeze lacks provider-entry evidence")
+        entry_document = load_json(entry)
+        command_manifests = self._command_document.get("manifests")
+        if not isinstance(command_manifests, list):
+            raise AdapterFailure("scientific freeze lacks canonical command manifests")
+        command_argv_sha256s = [
+            item.get("argv_sha256") for item in command_manifests if isinstance(item, dict)
+        ]
+        if len(command_argv_sha256s) != len(self.contract.run_ids) or any(
+            not isinstance(value, str) for value in command_argv_sha256s
+        ):
+            raise AdapterFailure("scientific freeze command identities are incomplete")
+        metadata_sha = metadata.model_metadata_receipt_sha256(self._metadata_receipt)
+        commit, _tree = _git_identity(self.repository)
+        binding = HostPhaseBinding(
+            transfer=transfer.binding,
+            host_transfer_receipt_sha256=transfer.receipt_sha256,
+        )
+        expected_projection: dict[str, object] = {
+            "manifest_id": self.contract.frozen_run_manifest_id,
+            "plan_id": self.contract.plan_id,
+            "host_run_id": self.contract.host_run_id,
+            "qualification_id": self.contract.active_image_qualification_id,
+            "source_contract_sha256": entry_document.get("authorization_source_sha256"),
+            "clean_package_commit": commit,
+            "plan_sha256": self.contract.expected_plan_sha256,
+            "execution_contract_sha256": self._execution_contract.sha256,
+            "runtime_contract_sha256": self.contract.expected_provider_profile_sha256,
+            "command_manifests_sha256": self._command_package_sha256,
+            "provider_entry_receipt_sha256": _file_sha256(entry),
+            "owned_instance_identity_sha256": handle.opaque_identity,
+            "replacement_image_id": self._qualification.image_digest,
+            "model_metadata_receipt_sha256": metadata_sha,
+            "model_metadata_request_count": 1,
+            "model_task_request_count": 0,
+            "task_browser_action_count": 0,
+            "actual_credential_exposure_detected": False,
+            "credential_safety_stop_detected": False,
+            "core_safety_stop_detected": False,
+            "local_finalizer_qualification_sha256": (
+                self._qualification.local_finalizer_qualification_sha256
+            ),
+            "local_finalizer_interpreter_sha256": (
+                self._qualification.local_finalizer_interpreter_sha256
+            ),
+            "local_finalizer_interpreter_dependency_manifest_sha256": (
+                self._qualification.local_finalizer_dependency_manifest_sha256
+            ),
+            "local_finalizer_interpreter_dependency_tree_sha256": (
+                self._qualification.local_finalizer_dependency_tree_sha256
+            ),
+            "local_finalizer_evaluator_dependency_tree_sha256": (
+                self._qualification.local_evaluator_dependency_tree_sha256
+            ),
+            "command_argv_sha256s": command_argv_sha256s,
+            "attempt_order": list(self.contract.run_ids),
+            "empirical_entry_crossed": False,
+            "post_entry_code_science_image_freeze": True,
+        }
         started_wall = self.clock.wall_time()
         started_mono = self.clock.monotonic()
         request = ScientificFreezeRequest(
-            provider_contract_version=self.contract.version,
-            plan_id=self.contract.plan_id,
-            host_run_id=self.contract.host_run_id,
+            binding=binding,
+            provider_handle=handle,
             frozen_manifest_id=self.contract.frozen_run_manifest_id,
-            provider_entry_receipt_sha256=_file_sha256(entry),
-            stage_receipt_sha256=self._stage_receipt.receipt_sha256,
+            preflight_receipt_sha256=preflight.receipt_sha256,
             command_package_sha256=self._command_package_sha256,
             execution_contract_sha256=self._execution_contract.sha256,
             qualification_receipt_sha256=self._qualification.receipt_sha256,
             image_digest=self._qualification.image_digest,
             manifest_root=self.root,
+            manifest_schema_version=RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION,
+            expected_manifest_projection=MappingProxyType(expected_projection),
             started_wall_time=started_wall,
             started_monotonic=started_mono,
         )
@@ -2000,48 +2269,38 @@ class ProductionCategory3World:
                 receipt.postfreeze_validation_path,
                 label="postfreeze validation",
             )
-            manifest = load_json(manifest_path)
-            validation = load_json(validation_path)
+            validated_manifest = validate_full_dynamic_frozen_manifest(
+                self.repository,
+                manifest_path,
+                contract=self.contract,
+                expected_projection=request.expected_manifest_projection,
+            )
+            validate_postfreeze_receipt(
+                validation_path,
+                contract=self.contract,
+                manifest_sha256=receipt.manifest_sha256,
+            )
             end_wall = finite_time(receipt.completed_wall_time, label="freeze completion wall")
             end_mono = finite_time(receipt.completed_monotonic, label="freeze completion monotonic")
-            expected_manifest = {
-                "schema_version": "1.0.0",
-                "provider_contract_version": self.contract.version,
-                "plan_id": self.contract.plan_id,
-                "host_run_id": self.contract.host_run_id,
-                "frozen_manifest_id": self.contract.frozen_run_manifest_id,
-                "provider_entry_receipt_sha256": _file_sha256(entry),
-                "stage_receipt_sha256": self._stage_receipt.receipt_sha256,
-                "command_package_sha256": self._command_package_sha256,
-                "execution_contract_sha256": self._execution_contract.sha256,
-                "qualification_receipt_sha256": self._qualification.receipt_sha256,
-                "image_digest": self._qualification.image_digest,
-                "frozen_at_wall_time": receipt.completed_wall_time,
-            }
-            expected_validation = {
-                "schema_version": "1.0.0",
-                "provider_contract_version": self.contract.version,
-                "plan_id": self.contract.plan_id,
-                "host_run_id": self.contract.host_run_id,
-                "frozen_manifest_sha256": receipt.manifest_sha256,
-                "validated_at_wall_time": receipt.completed_wall_time,
-                "postfreeze_valid": True,
-            }
             if (
-                receipt.started_wall_time != started_wall
+                receipt.binding != binding
+                or receipt.previous_phase_receipt_sha256 != self._qualification.receipt_sha256
+                or receipt.started_wall_time != started_wall
                 or receipt.started_monotonic != started_mono
                 or end_wall < started_wall
                 or end_mono < started_mono
                 or end_wall > returned_wall
                 or end_mono > returned_mono
-                or manifest != expected_manifest
-                or validation != expected_validation
+                or receipt.manifest_schema_version != request.manifest_schema_version
+                or receipt.manifest_projection_sha256 != validated_manifest.projection_sha256
                 or _file_sha256(manifest_path) != receipt.manifest_sha256
                 or _file_sha256(validation_path) != receipt.postfreeze_validation_sha256
+                or len(receipt.phase_output_sha256s) < 3
+                or any(_HEX64.fullmatch(value) is None for value in receipt.phase_output_sha256s)
+                or _HEX64.fullmatch(receipt.cleanup_state_sha256) is None
                 or receipt.receipt_sha256 != self._freeze_receipt_identity(receipt)
             ):
                 raise AdapterFailure("scientific freeze receipts drifted")
-            entry_document = load_json(entry)
             owned_started = finite_time(
                 entry_document.get("owned_lambda_started_at_epoch"),
                 label="owned provider start",
@@ -2468,6 +2727,71 @@ class ProductionCategory3World:
             ):
                 raise AdapterFailure("condition browser ledger contradicts shared accounting")
 
+    def _validate_condition_bridge(
+        self,
+        *,
+        request: ConditionExecutionRequest,
+        observer: _AccountingObserver,
+        raw_root: Path,
+        raw_manifest_sha256: str,
+        raw_receipt_sha256: str,
+        evidence: ConditionBridgeEvidence | None,
+        artifacts: tuple[HeldArtifact, ...],
+    ) -> str | None:
+        """Require and hold the complete duplex chain for every external-live session."""
+
+        if evidence is None:
+            if self.authorization_context.execution_mode is EffectExecutionMode.EXTERNAL_LIVE:
+                raise AdapterFailure(
+                    "external-live condition lacks its complete remote bridge evidence"
+                )
+            return None
+        expected_evidence = expected_condition_bridge_evidence(
+            transaction_root=self.root,
+            raw_root=raw_root,
+            run_id=request.run_id,
+        )
+        if evidence != expected_evidence:
+            raise AdapterFailure("condition bridge evidence paths or selector drifted")
+        expected_binding = ConditionSessionBinding(
+            session_id=evidence.session_id,
+            provider_contract_version=request.provider_contract_version,
+            plan_id=request.plan_id,
+            host_run_id=self.contract.host_run_id,
+            condition_run_id=request.run_id,
+            evaluator_run_id=request.evaluator_run_id,
+            frozen_manifest_sha256=request.frozen_manifest_sha256,
+        )
+        by_path = {artifact.path: artifact for artifact in artifacts}
+        bridge_paths = tuple(
+            value
+            for value in (
+                evidence.shared_transcript_path,
+                evidence.remote_journal_path,
+                evidence.relay_prefix_path,
+                evidence.relay_transcript_path,
+                evidence.runtime_detachment_path,
+                evidence.host_terminal_receipt_path,
+                evidence.shared_terminal_receipt_path,
+            )
+        )
+        if any(path not in by_path for path in bridge_paths):
+            raise AdapterFailure("condition bridge evidence lacks one held artifact")
+        try:
+            validated = validate_condition_bridge_evidence(
+                self.repository,
+                evidence,
+                expected_binding=expected_binding,
+                raw_manifest_sha256=raw_manifest_sha256,
+                raw_receipt_sha256=raw_receipt_sha256,
+                shared_accounting=observer.boundary.accounting_document(),
+                reader=lambda path: by_path[path].read_bytes(),
+            )
+        except (KeyError, RemoteBridgeError, ValueError) as exc:
+            raise AdapterFailure("condition bridge evidence failed shared validation") from exc
+        self._revalidate_artifacts(tuple(by_path[path] for path in bridge_paths))
+        return validated.evidence_binding_sha256
+
     @staticmethod
     def _condition_failure_class(exc: BaseException) -> ConditionFailureClass:
         if isinstance(exc, ConditionKnownProviderError):
@@ -2531,6 +2855,11 @@ class ProductionCategory3World:
             unknown_call_ids=unknown_call_ids,
             output_bytes=observer.output_total_bytes or 0,
             retry_count=0,
+            bridge_evidence=(
+                self._condition_outcomes[request.run_id].bridge_evidence
+                if request.run_id in self._condition_outcomes
+                else None
+            ),
         )
         outcome = (
             existing
@@ -2572,9 +2901,43 @@ class ProductionCategory3World:
             role_paths += (
                 _safe_existing_file(payload_root, outcome.stderr_path, label="essential stderr"),
             )
+        bridge_copy_paths: tuple[Path, ...] = ()
+        bridge_paths: tuple[Path, ...] = ()
+        if outcome.bridge_evidence is not None:
+            bridge_copy_paths = tuple(
+                _safe_existing_file(
+                    payload_root,
+                    payload_root / name,
+                    label="essential bridge transcript prefix",
+                )
+                for name in (
+                    "duplex-remote-event-journal.json",
+                    "duplex-transcript-prefix.json",
+                    "duplex-runtime-detached.json",
+                )
+            )
+            bridge_paths = tuple(
+                _safe_existing_file(
+                    self.root,
+                    path,
+                    label="condition failure bridge evidence",
+                )
+                for path in (
+                    outcome.bridge_evidence.shared_transcript_path,
+                    outcome.bridge_evidence.remote_journal_path,
+                    outcome.bridge_evidence.relay_prefix_path,
+                    outcome.bridge_evidence.relay_transcript_path,
+                    outcome.bridge_evidence.runtime_detachment_path,
+                    outcome.bridge_evidence.host_terminal_receipt_path,
+                    outcome.bridge_evidence.shared_terminal_receipt_path,
+                )
+            )
+        elif self.authorization_context.execution_mode is EffectExecutionMode.EXTERNAL_LIVE:
+            raise AdapterFailure("external-live essential failure lacks its duplex bridge evidence")
         evidence_paths = self._enumerate_essential_envelope(root)
         host = _host_module(self.repository)
         held_failure: tuple[HeldArtifact, ...] = ()
+        held_bridge: tuple[HeldArtifact, ...] = ()
         try:
             held_failure = self._hold_artifact_set(
                 evidence_paths,
@@ -2582,6 +2945,13 @@ class ProductionCategory3World:
                 max_json_member_bytes=MAX_ESSENTIAL_FAILURE_JSON_MEMBER_BYTES,
                 max_files=preservation.essential_failure_file_cap,
                 max_total_bytes=preservation.essential_failure_cap_bytes,
+            )
+            held_bridge = self._hold_artifact_set(
+                bridge_paths,
+                max_member_bytes=MAX_ESSENTIAL_FAILURE_BYTES,
+                max_json_member_bytes=MAX_ESSENTIAL_FAILURE_BYTES,
+                max_files=7,
+                max_total_bytes=7 * MAX_ESSENTIAL_FAILURE_BYTES,
             )
             if any(
                 self._privacy_findings_for_bytes(
@@ -2596,7 +2966,13 @@ class ProductionCategory3World:
                 )
             by_path = {artifact.path: artifact for artifact in held_failure}
             if len(by_path) != len(held_failure) or any(
-                path not in by_path for path in (manifest_path, receipt_path, *role_paths)
+                path not in by_path
+                for path in (
+                    manifest_path,
+                    receipt_path,
+                    *role_paths,
+                    *bridge_copy_paths,
+                )
             ):
                 raise AdapterFailure("essential failure roles lack one held artifact identity")
             preexport_artifacts = tuple(
@@ -2655,8 +3031,54 @@ class ProductionCategory3World:
             )
             manifest_sha = manifest_artifact.sha256
             receipt_sha = receipt_artifact.sha256
+            bridge_binding: str | None = None
+            if outcome.bridge_evidence is not None:
+                original_by_path = {artifact.path: artifact for artifact in held_bridge}
+                prefix_pairs = (
+                    (
+                        bridge_copy_paths[0],
+                        outcome.bridge_evidence.remote_journal_path,
+                    ),
+                    (
+                        bridge_copy_paths[1],
+                        outcome.bridge_evidence.relay_prefix_path,
+                    ),
+                    (
+                        bridge_copy_paths[2],
+                        outcome.bridge_evidence.runtime_detachment_path,
+                    ),
+                )
+                if any(
+                    by_path[copied].read_bytes() != original_by_path[source].read_bytes()
+                    for copied, source in prefix_pairs
+                ):
+                    raise AdapterFailure(
+                        "essential failure bridge prefix differs from its held source"
+                    )
+                if existing is not None:
+                    terminal_manifest_sha = manifest_sha
+                    terminal_receipt_sha = receipt_sha
+                else:
+                    accepted = self._condition_outcomes.get(request.run_id)
+                    accepted_artifacts = self._raw_artifacts.get(request.run_id)
+                    if accepted is None or accepted_artifacts is None:
+                        raise AdapterFailure(
+                            "downstream essential failure lost its accepted bridge source"
+                        )
+                    accepted_by_path = {artifact.path: artifact for artifact in accepted_artifacts}
+                    terminal_manifest_sha = accepted_by_path[accepted.raw_manifest_path].sha256
+                    terminal_receipt_sha = accepted_by_path[accepted.raw_receipt_path].sha256
+                bridge_binding = self._validate_condition_bridge(
+                    request=request,
+                    observer=observer,
+                    raw_root=partial_raw_root,
+                    raw_manifest_sha256=terminal_manifest_sha,
+                    raw_receipt_sha256=terminal_receipt_sha,
+                    evidence=outcome.bridge_evidence,
+                    artifacts=held_bridge,
+                )
         except BaseException:
-            for artifact in held_failure:
+            for artifact in (*held_failure, *held_bridge):
                 artifact.close()
             raise
         complete_held: tuple[HeldArtifact, ...] = ()
@@ -3006,6 +3428,10 @@ class ProductionCategory3World:
             self._essential_failure_artifact_bindings[request.run_id] = self._artifact_binding(
                 complete_held
             )
+            if bridge_binding is not None:
+                self._condition_bridge_bindings[request.run_id] = bridge_binding
+                self._condition_bridge_artifacts[request.run_id] = held_bridge
+                held_bridge = ()
             retained = True
             self._primitive("mark_essential_failure_sealed")
             self._primitive("validate_essential_failure_bundle")
@@ -3030,12 +3456,13 @@ class ProductionCategory3World:
                             self._essential_failure_artifact_bindings[request.run_id]
                         ),
                         "accounting": accounting,
+                        "condition_bridge_evidence_binding_sha256": bridge_binding,
                     }
                 ),
             )
         finally:
             if not retained:
-                for artifact in (*held_failure, *complete_held):
+                for artifact in (*held_failure, *held_bridge, *complete_held):
                     artifact.close()
 
     def _seal_accepted_condition_failure(
@@ -3311,14 +3738,72 @@ class ProductionCategory3World:
                 or raw_receipt.get("condition_retry_permitted") is not False
             ):
                 raise AdapterFailure("condition raw publication is incomplete")
+            bridge_paths: tuple[Path, ...] = ()
+            if outcome.bridge_evidence is not None:
+                bridge_paths = tuple(
+                    _safe_existing_file(
+                        self.root,
+                        path,
+                        label="condition bridge evidence",
+                    )
+                    for path in (
+                        outcome.bridge_evidence.shared_transcript_path,
+                        outcome.bridge_evidence.remote_journal_path,
+                        outcome.bridge_evidence.relay_prefix_path,
+                        outcome.bridge_evidence.relay_transcript_path,
+                        outcome.bridge_evidence.runtime_detachment_path,
+                        outcome.bridge_evidence.host_terminal_receipt_path,
+                        outcome.bridge_evidence.shared_terminal_receipt_path,
+                    )
+                )
+            bridge_set = set(bridge_paths)
             raw_paths = (
                 manifest_path,
                 receipt_path,
-                *tuple(path for path in raw_root.rglob("*") if not path.is_dir()),
+                *tuple(
+                    path
+                    for path in raw_root.rglob("*")
+                    if not path.is_dir() and path not in bridge_set
+                ),
             )
-            held_raw = self._hold_artifact_set(raw_paths)
-            self._raw_artifacts[run_id] = held_raw
-            self._raw_artifact_bindings[run_id] = self._artifact_binding(held_raw)
+            held_bridge: tuple[HeldArtifact, ...] = ()
+            held_raw: tuple[HeldArtifact, ...] = ()
+            retained_raw = False
+            try:
+                held_bridge = self._hold_artifact_set(
+                    bridge_paths,
+                    max_member_bytes=67_108_864,
+                    max_json_member_bytes=67_108_864,
+                    max_files=7,
+                    max_total_bytes=7 * 67_108_864,
+                )
+                held_raw = self._hold_artifact_set(raw_paths)
+                complete_held = tuple(
+                    sorted(
+                        (*held_raw, *held_bridge),
+                        key=lambda artifact: artifact.relative_path,
+                    )
+                )
+                if len({(item.device, item.inode) for item in complete_held}) != len(complete_held):
+                    raise AdapterFailure("condition evidence roles share one file identity")
+                bridge_binding = self._validate_condition_bridge(
+                    request=request,
+                    observer=observer,
+                    raw_root=raw_root,
+                    raw_manifest_sha256=manifest_sha,
+                    raw_receipt_sha256=receipt_sha,
+                    evidence=outcome.bridge_evidence,
+                    artifacts=complete_held,
+                )
+                self._raw_artifacts[run_id] = complete_held
+                self._raw_artifact_bindings[run_id] = self._artifact_binding(complete_held)
+                if bridge_binding is not None:
+                    self._condition_bridge_bindings[run_id] = bridge_binding
+                retained_raw = True
+            finally:
+                if not retained_raw:
+                    for artifact in (*held_raw, *held_bridge):
+                        artifact.close()
         except ConsumedConditionFailure:
             self._record_boundary_state(run_id, observer)
             self._primitive("ProviderBudgetBoundary.invoke")
@@ -3363,6 +3848,8 @@ class ProductionCategory3World:
         self._primitive("ProviderBudgetBoundary.record_browser_action")
         self._primitive("ProviderBudgetBoundary.record_output_bytes")
         self._primitive("execute_typed_condition_session")
+        if run_id in self._condition_bridge_bindings:
+            self._primitive("validate_condition_bridge_evidence")
         self._record(operation, run_id, "passed")
         return _identity(
             {
@@ -4997,6 +5484,7 @@ class ProductionCategory3World:
             self._raw_artifacts,
             self._finalized_artifacts,
             self._essential_failure_artifacts,
+            self._condition_bridge_artifacts,
         ):
             for artifacts in groups.values():
                 for artifact in artifacts:
@@ -5218,9 +5706,19 @@ class ProductionCategory3World:
                 "raw": dict(self._raw_artifact_bindings),
                 "finalized": dict(self._finalized_artifact_bindings),
                 "essential_failure": dict(self._essential_failure_artifact_bindings),
+                "condition_bridge": dict(self._condition_bridge_bindings),
                 "revalidated_across_consumers": True,
             },
-            "package_staging": self._stage_evidence,
+            "package_assembly": self._package_assembly_evidence,
+            "host_transfers": {
+                str(ordinal): {
+                    "receipt_sha256": receipt.receipt_sha256,
+                    "archive_sha256": receipt.remote_archive_sha256,
+                    "member_manifest_sha256": receipt.remote_member_manifest_sha256,
+                    "host_acknowledgement_sha256": receipt.host_acknowledgement_sha256,
+                }
+                for ordinal, receipt in sorted(self._host_transfers.items())
+            },
             "host_receipts": {
                 "qualification": (
                     self._qualification.receipt_sha256 if self._qualification is not None else None
@@ -5264,6 +5762,7 @@ class ProductionCategory3World:
             self._raw_artifacts,
             self._finalized_artifacts,
             self._essential_failure_artifacts,
+            self._condition_bridge_artifacts,
         )
         for groups in artifact_groups:
             for artifacts in groups.values():
@@ -5280,6 +5779,16 @@ class ProductionCategory3World:
         if self.held_effect_source is not None:
             try:
                 self.held_effect_source.close()
+            except BaseException as exc:
+                failures.append(exc)
+        if self._local_assembly_artifact is not None:
+            try:
+                self._local_assembly_artifact.close()
+            except BaseException as exc:
+                failures.append(exc)
+        if self._local_assembly_verification_artifact is not None:
+            try:
+                self._local_assembly_verification_artifact.close()
             except BaseException as exc:
                 failures.append(exc)
         try:

@@ -69,8 +69,13 @@ def validate_incident_document(
         or not {"offline-composition", "shadow-execution"}.intersection(coverage)
     ):
         errors.append("offline incident lacks composition/shadow coverage")
+    expected_scientific_result = (
+        "none"
+        if document.get("incident_id") == "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE"
+        else "not-run"
+    )
     if (
-        document.get("scientific_result") != "not-run"
+        document.get("scientific_result") != expected_scientific_result
         or document.get("scientific_interpretation_allowed") is not False
     ):
         errors.append("incident claims a scientific result")

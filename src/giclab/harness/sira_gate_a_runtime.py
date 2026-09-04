@@ -23,6 +23,7 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+from giclab.control.remote_bridge import ConditionSessionBinding
 from giclab.harness import t09_sira_pilot as t09_pilot
 from giclab.harness.safety import CredentialExposureError, ExactCredentialScrubber
 from giclab.harness.sira_gate_a import (
@@ -46,6 +47,11 @@ from giclab.harness.sira_gate_a import (
     validate_sira_secret_names,
 )
 from giclab.harness.t09_provider_contracts import provider_contract
+from giclab.harness.t09_runtime_admission import (
+    InProcessBoundaryPort,
+    RuntimeAdmissionPort,
+    build_private_socket_supervisor_port,
+)
 from giclab.harness.t09_sira_pilot import (
     EventWriter,
     PilotExecutionContract,
@@ -88,6 +94,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--gate-condition-plan", type=Path)
     parser.add_argument("--gate-aggregate-ledger", type=Path)
     parser.add_argument("--gate-pilot-state", type=Path)
+    parser.add_argument(
+        "--gate-admission-mode",
+        choices=("historical-in-process", "duplex-supervisor"),
+        default="historical-in-process",
+    )
+    parser.add_argument("--gate-duplex-binding", type=Path)
+    parser.add_argument("--gate-duplex-session-id")
+    parser.add_argument("--gate-duplex-frozen-manifest-sha256")
+    parser.add_argument("--gate-duplex-transaction-root-identity")
     parser.add_argument("upstream_argv", nargs=argparse.REMAINDER)
     return parser
 
@@ -498,10 +513,13 @@ def _remove_runtime_core_artifacts(
 
 def _reconcile_browser_actions(
     upstream_argv: Sequence[str],
-    boundary: ProviderBudgetBoundary,
+    admission_port: RuntimeAdmissionPort,
 ) -> None:
-    for _ in _session_history(upstream_argv):
-        boundary.record_browser_action()
+    for index, _ in enumerate(_session_history(upstream_argv), start=1):
+        admission_port.browser_action(
+            action_id=f"HISTORICAL-ACTION-{index:08d}",
+            perform=lambda: None,
+        )
 
 
 def _load_module(path: Path, name: str) -> ModuleType:
@@ -517,7 +535,8 @@ def _load_module(path: Path, name: str) -> ModuleType:
 def _install_locked_llm_factory(
     runner: ModuleType,
     *,
-    boundary: ProviderBudgetBoundary,
+    admission_port: RuntimeAdmissionPort,
+    llm_timeout_seconds: int,
     ledger_path: Path,
     pilot_events: EventWriter | None = None,
     pilot_lineage: _PilotLineage | None = None,
@@ -525,6 +544,7 @@ def _install_locked_llm_factory(
     resource_guard: ResourceGuard | None = None,
     observe_credential: Callable[[str], None] | None = None,
 ) -> None:
+    del ledger_path
     upstream_llm_module = importlib.import_module("sira.web.utils.llm")
     upstream_llm = upstream_llm_module.LLM
     call_identity_lock = threading.Lock()
@@ -545,7 +565,7 @@ def _install_locked_llm_factory(
                 base_url=SIRA_API_BASE_URL,
                 custom_llm_provider="openai",
                 num_retries=0,
-                llm_timeout=boundary.condition_caps.max_wall_seconds,
+                llm_timeout=llm_timeout_seconds,
                 **credential_option,
             )
             self_any: Any = self
@@ -596,7 +616,7 @@ def _install_locked_llm_factory(
                     return response, observed_usage
 
                 try:
-                    result = boundary.invoke(
+                    result = admission_port.model_call(
                         request,
                         send,
                         before_send=before_empirical_operation,
@@ -605,7 +625,7 @@ def _install_locked_llm_factory(
                         classify_failure=_classify_provider_failure,
                     )
                 except Exception as exc:
-                    record = next(item for item in boundary.call_records if item.call_id == call_id)
+                    record = admission_port.terminal_call_state(call_id)
                     if pilot_events is not None:
                         pilot_events.append(
                             "provider-call-failed",
@@ -615,21 +635,17 @@ def _install_locked_llm_factory(
                                 "model": self.model_name,
                                 "requested_service_tier": SIRA_SERVICE_TIER,
                                 "exception_type": type(exc).__name__,
-                                "terminal_accounting_state": (
-                                    record.terminal_state.value
-                                    if record.terminal_state is not None
-                                    else None
-                                ),
+                                "terminal_accounting_state": (record.terminal_state),
                                 "retry": "forbidden",
                             },
                             parent_event_id=parent,
                         )
                     raise
-                record = next(item for item in boundary.call_records if item.call_id == call_id)
+                record = admission_port.terminal_call_state(call_id)
                 observed_usage = record.actual_usage
                 if (
                     observed_usage is None
-                    or record.terminal_state is not ProviderCallTerminalState.RESPONSE_RECONCILED
+                    or record.terminal_state != ProviderCallTerminalState.RESPONSE_RECONCILED.value
                 ):
                     raise GateAContractError("provider response lacks terminal accounting")
                 if pilot_events is not None:
@@ -662,7 +678,7 @@ def _install_locked_llm_factory(
                                         observed_usage.input_tokens + observed_usage.output_tokens
                                     ),
                                 },
-                                "terminal_accounting_state": record.terminal_state.value,
+                                "terminal_accounting_state": record.terminal_state,
                                 "retry": "none",
                             },
                             parent_event_id=parent,
@@ -709,6 +725,21 @@ def run(argv: Sequence[str] | None = None) -> int:
     ):
         raise GateAContractError("T09 pilot runtime arguments must be supplied together")
     pilot_enabled = all(value is not None for value in pilot_values)
+    duplex_values = (
+        args.gate_duplex_binding,
+        args.gate_duplex_session_id,
+        args.gate_duplex_frozen_manifest_sha256,
+        args.gate_duplex_transaction_root_identity,
+    )
+    if args.gate_admission_mode == "duplex-supervisor":
+        if not pilot_enabled or not all(value is not None for value in duplex_values):
+            raise GateAContractError(
+                "duplex admission requires the complete pilot and private bridge binding"
+            )
+    elif any(value is not None for value in duplex_values):
+        raise GateAContractError(
+            "historical in-process admission rejects duplex-only runtime inputs"
+        )
     runner_path = args.gate_upstream_runner.resolve(strict=True)
     attempt_root = args.gate_attempt_root.resolve(strict=True)
     pilot_contract: PilotExecutionContract | None = None
@@ -719,6 +750,7 @@ def run(argv: Sequence[str] | None = None) -> int:
     pilot_events: EventWriter | None = None
     pilot_lineage: _PilotLineage | None = None
     empirical_entered = False
+    attempt: t09_pilot.AttemptBinding | None = None
     if pilot_enabled:
         assert isinstance(args.gate_pilot_contract, Path)
         assert isinstance(args.gate_pilot_contract_sha256, str)
@@ -820,6 +852,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         resource_guard.check()
         pilot_events = EventWriter(attempt_root / "normalized-events.jsonl")
         pilot_lineage = _PilotLineage()
+        assert attempt is not None
         pilot_events.append(
             "regulation-decision-assignment",
             {
@@ -870,17 +903,49 @@ def run(argv: Sequence[str] | None = None) -> int:
             unknown_outcomes=unknown,
         )
 
-    boundary = ProviderBudgetBoundary(
-        routing=routing,
-        aggregate_caps=aggregate_budget_caps,
-        condition_caps=condition_budget_caps,
-        persist=lambda usage, unreconciled: _write_usage_ledger(ledger_path, usage, unreconciled),
-        initial_aggregate_usage=initial_aggregate_usage,
-        initial_aggregate_observed_usage=initial_aggregate_observed_usage,
-        persist_accounting=persist_complete_accounting,
+    if args.gate_admission_mode == "historical-in-process":
+        boundary = ProviderBudgetBoundary(
+            routing=routing,
+            aggregate_caps=aggregate_budget_caps,
+            condition_caps=condition_budget_caps,
+            persist=lambda usage, unreconciled: _write_usage_ledger(
+                ledger_path, usage, unreconciled
+            ),
+            initial_aggregate_usage=initial_aggregate_usage,
+            initial_aggregate_observed_usage=initial_aggregate_observed_usage,
+            persist_accounting=persist_complete_accounting,
+        )
+        admission_port: RuntimeAdmissionPort = InProcessBoundaryPort(boundary)
+    else:
+        assert pilot_contract is not None
+        assert attempt is not None
+        assert isinstance(args.gate_duplex_binding, Path)
+        assert isinstance(args.gate_duplex_session_id, str)
+        assert isinstance(args.gate_duplex_frozen_manifest_sha256, str)
+        assert isinstance(args.gate_duplex_transaction_root_identity, str)
+        selected_contract = provider_contract(pilot_contract.provider_contract_version)
+        attempt_index = selected_contract.run_ids.index(attempt.run_id)
+        expected_binding = ConditionSessionBinding(
+            session_id=args.gate_duplex_session_id,
+            provider_contract_version=selected_contract.version,
+            plan_id=pilot_contract.plan_id,
+            host_run_id=selected_contract.host_run_id,
+            condition_run_id=attempt.run_id,
+            evaluator_run_id=selected_contract.evaluator_run_ids[attempt_index],
+            frozen_manifest_sha256=args.gate_duplex_frozen_manifest_sha256,
+        )
+        admission_port = build_private_socket_supervisor_port(
+            manifest_path=args.gate_duplex_binding,
+            attempt_root=attempt_root,
+            expected_binding=expected_binding,
+            expected_transaction_root_identity=(args.gate_duplex_transaction_root_identity),
+        )
+    _write_usage_ledger(
+        ledger_path,
+        admission_port.condition_usage,
+        admission_port.unreconciled_provider_attempts,
     )
-    _write_ledger(ledger_path, boundary)
-    _write_json_evidence(lifecycle_path, boundary.accounting_document())
+    _write_json_evidence(lifecycle_path, admission_port.accounting_document())
     (attempt_root / "runtime-environment.json").write_text(
         json.dumps(
             {
@@ -896,6 +961,12 @@ def run(argv: Sequence[str] | None = None) -> int:
                     pilot_contract.sha256 if pilot_contract is not None else None
                 ),
                 "pilot_attempt_id": args.gate_pilot_attempt_id,
+                "admission_mode": args.gate_admission_mode,
+                "authoritative_accounting_location": (
+                    "condition-process"
+                    if args.gate_admission_mode == "historical-in-process"
+                    else "shared-controller"
+                ),
                 "core_soft_limit": core_limits[0],
                 "core_hard_limit": core_limits[1],
                 "gpu_accounting": {
@@ -935,7 +1006,8 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     _install_locked_llm_factory(
         runner,
-        boundary=boundary,
+        admission_port=admission_port,
+        llm_timeout_seconds=condition_budget_caps.max_wall_seconds,
         ledger_path=ledger_path,
         pilot_events=pilot_events,
         pilot_lineage=pilot_lineage,
@@ -1005,15 +1077,22 @@ def run(argv: Sequence[str] | None = None) -> int:
             def instrumented_environment_step(action: str) -> Any:
                 if resource_guard is not None:
                     resource_guard.check()
-                boundary.record_browser_action(before_action=before_empirical_operation)
                 action_event_id = pilot_lineage.action_event_id
                 if action_event_id is None:
                     action_event_id = pilot_events.append(
                         "requested-browser-action",
                         {"requested_action": action, "agent_step_info": None},
                     )
+
+                def perform_browser_action() -> Any:
+                    before_empirical_operation()
+                    return original_environment_step(action)
+
                 try:
-                    result = original_environment_step(action)
+                    result = admission_port.browser_action(
+                        action_id=action_event_id,
+                        perform=perform_browser_action,
+                    )
                 except Exception as exc:
                     pilot_events.append(
                         "post-action-result",
@@ -1075,12 +1154,13 @@ def run(argv: Sequence[str] | None = None) -> int:
         "core_detection_receipt_sha256": None,
     }
     runner_succeeded = False
+    runtime_terminalized = False
     try:
         runner.main()
         runner_succeeded = True
     finally:
         try:
-            boundary.close_in_flight(grace_seconds=5.0)
+            admission_port.close_in_flight(grace_seconds=5.0, sleeper=time.sleep)
         except Exception as exc:
             close_errors.append(type(exc).__name__)
         for environment in opened_environments:
@@ -1165,7 +1245,7 @@ def run(argv: Sequence[str] | None = None) -> int:
         try:
             if runner_succeeded:
                 if pilot_contract is None:
-                    _reconcile_browser_actions(args.upstream_argv[1:], boundary)
+                    _reconcile_browser_actions(args.upstream_argv[1:], admission_port)
                 else:
                     if not empirical_entered:
                         raise T09PilotError(
@@ -1174,13 +1254,13 @@ def run(argv: Sequence[str] | None = None) -> int:
                     if close_errors:
                         raise T09PilotError("pilot browser cleanup did not complete")
                     history = _session_history(args.upstream_argv[1:])
-                    if len(history) != boundary.condition_usage.browser_actions:
+                    if len(history) != admission_port.condition_usage.browser_actions:
                         raise T09PilotError(
                             "pre-action browser counter and retained session history disagree"
                         )
                     assert resource_guard is not None
                     snapshot = resource_guard.check()
-                    boundary.record_output_bytes(snapshot.attempt_output_bytes)
+                    admission_port.output_bytes(total_bytes=snapshot.attempt_output_bytes)
                     if pilot_events is not None:
                         pilot_events.append(
                             "cleanup-receipt",
@@ -1193,7 +1273,29 @@ def run(argv: Sequence[str] | None = None) -> int:
                             },
                         )
         finally:
-            _write_ledger(ledger_path, boundary)
+            _write_usage_ledger(
+                ledger_path,
+                admission_port.condition_usage,
+                admission_port.unreconciled_provider_attempts,
+            )
+            _write_json_evidence(lifecycle_path, admission_port.accounting_document())
+            if args.gate_admission_mode == "duplex-supervisor":
+                try:
+                    # Process outcome, final answer, and raw seal identities are
+                    # host-derived. The container detaches after its last runtime
+                    # event; the transparent host relay appends that exact evidence
+                    # before the sole shared terminal acknowledgement.
+                    _write_json_evidence(
+                        attempt_root / "duplex-runtime-detached.json",
+                        admission_port.detach_runtime(),
+                    )
+                    runtime_terminalized = True
+                finally:
+                    admission_port.close()
+            else:
+                admission_port.close()
+    if args.gate_admission_mode == "duplex-supervisor" and not runtime_terminalized:
+        raise GateAContractError("duplex runtime session did not terminalize")
     return 0
 
 
