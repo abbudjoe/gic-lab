@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-from _synthetic_successor import commit_repository, copy_working_repository
+from _synthetic_successor import copy_working_repository
 from jsonschema import Draft202012Validator, RefResolver
 
 from giclab.control.effects import EFFECT_PROTOCOL_VERSION, LowLevelEffects
@@ -52,7 +52,6 @@ def test_live_method_viability_has_one_launch_seam_and_zero_gaps() -> None:
 def test_viability_fails_when_one_live_method_mapping_is_removed(tmp_path: Path) -> None:
     repository = tmp_path / "repository"
     copy_working_repository(ROOT, repository)
-    commit_repository(repository)
     map_path = repository / "control/live-method-map.json"
     method_map = load_json(map_path)
     methods = method_map["methods"]
