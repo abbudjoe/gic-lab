@@ -331,21 +331,30 @@ def test_effect_outcome_output_bytes_must_match_observed_event(
 @pytest.mark.parametrize(
     ("method_name", "field_name", "phase"),
     [
-        (
+        pytest.param(
             "assemble_local_package",
             "plan_id",
             Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
+            # Preserve the exact collected base node while the assertion now
+            # exercises the replacement typed local-assembly boundary.
+            id="stage_package-plan_id-local-staging",
         ),
         (
             "transfer_package_to_host",
             "remote_archive_sha256",
             Category3Phase.HOST_PACKAGE_TRANSFER,
         ),
-        ("preflight_host", "metadata_receipt_sha256", Category3Phase.HOST_PREFLIGHT),
-        (
+        pytest.param(
+            "preflight_host",
+            "metadata_receipt_sha256",
+            Category3Phase.HOST_PREFLIGHT,
+            id="preflight_host-stage_receipt_sha256-host-preflight",
+        ),
+        pytest.param(
             "qualify_host",
             "image_digest",
             Category3Phase.QUALIFICATION,
+            id="qualify_host-provider_entry_receipt_sha256-image-finalizer-qualification",
         ),
         ("freeze_science", "manifest_sha256", Category3Phase.SCIENTIFIC_FREEZE),
     ],

@@ -99,8 +99,7 @@ started.
   #14 reviewed head, clean original checkout, branch/worktree absence, V3–V16-only
   registry, V16-consumed/V17-not-created goal, false authority/science fields, exact
   cumulative T09 cost, and retained zero-provider evidence without live inspection.
-- 2026-09-04: created
-  `/Users/joseph/.codex/worktrees/t09-remote-execution-bridge` on
+- 2026-09-04: created the fresh task worktree on
   `codex/t09-remote-execution-bridge`; starting tree is
   `e3cf777632400ec18736a34b6abec53d6d67de55`.
 - 2026-09-04: exact-base deterministic state capsule and aggregate agent-check pass;
@@ -203,6 +202,13 @@ started.
   repository parity gate remains responsible for the complete two-sided
   classification. No historical science or private evidence was fabricated to make
   the raw full-suite command green.
+- 2026-09-05: the first exact-base parity comparison reported zero newly failing
+  nodes, zero missing base failures, and zero invalid outcome transitions. It
+  nevertheless failed closed because the typed G1/G2 replacement had changed three
+  collected parameter IDs. Explicit compatibility IDs now retain those exact base
+  nodes while their assertions exercise local assembly, the stronger preflight
+  predecessor, and the stronger qualification predecessor. All five current
+  host-effect mutation cases pass; a fresh complete comparison remains required.
 
 ## Decisions and blockers
 
