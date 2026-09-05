@@ -42,7 +42,7 @@ def test_v16_incident_validates_and_named_regressions_pass() -> None:
         len(incidents["INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY"]["regression_nodes"])
         >= 12
     )
-    assert len(incidents["INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE"]["regression_nodes"]) == 5
+    assert len(incidents["INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE"]["regression_nodes"]) == 6
 
 
 def test_resolved_incident_with_missing_regression_fails() -> None:
