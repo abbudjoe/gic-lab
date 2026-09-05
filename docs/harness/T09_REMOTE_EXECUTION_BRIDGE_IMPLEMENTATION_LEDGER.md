@@ -153,7 +153,7 @@ started.
   The root remains recoverable in descendant `8c8a2789ed1f5e52e18a358893c2b4819afd1e7d`.
 - 2026-09-04: regenerated through the same normal command without a selector so the
   sealed target source is the successor-driven `goal-record`, matching the base
-  convention and default consumer. The final receipt control ancestor is
+  convention and default consumer. That intermediate receipt control ancestor is
   `63f3306631d909e9bd161d473275c8621b3487d4`, tree
   `1e10b9a085a8121f32cb3d6709987546f0e9c827`; aggregate binding file SHA-256 is
   `77bd98899e51eb88422450c3c9d6c9b3007d6fe9decb75ba5b7f4850f2babd5d`.
@@ -173,8 +173,20 @@ started.
   `1.0.0` through `3.0.0`, while top-level repository validation independently
   handled only `1.0.0` and `2.0.0`. The shared exact-version resolver now owns all
   three mappings, both consumers use it, unknown versions fail without a latest
-  fallback, and an exact three-generation regression covers the contract. A final
-  receipt rebind is required because the validator and proof source bytes changed.
+  fallback, and an exact three-generation regression covers the contract.
+- 2026-09-05: the unchanged normal generator completed the final goal-selected V16
+  rebind against immutable source commit
+  `aeff713e46a75d513dd9ccbcb53586e3151fdfd6`, tree
+  `a6a650de2c7d2611bb042789e8a359293f5ccd83`. It atomically published 29 receipts;
+  aggregate binding file SHA-256 is
+  `a5a3eaef846e2086d78b325fd764a74c76e62cd2f4425092c7d74300a68b802c`
+  and aggregate binding semantic SHA-256 is
+  `f6ce105a60df816a9311656db1d22124096f855334b79baab3fdf209e8af4aea`.
+  Receipt descendant `410ada3e687e727410a063c6f1ddd444990122cc`, tree
+  `67802e6836dde226807d734696937e1e2be277b3`, passes the default deterministic
+  state capsule and full repository validation. The capsule selects V16 from the
+  goal, reports bridge and viability conformance valid, keeps V17 not-created, and
+  keeps authority and scientific interpretation false.
 
 ## Decisions and blockers
 
