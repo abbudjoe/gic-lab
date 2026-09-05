@@ -187,6 +187,22 @@ started.
   state capsule and full repository validation. The capsule selects V16 from the
   goal, reports bridge and viability conformance valid, keeps V17 not-created, and
   keeps authority and scientific interpretation false.
+- 2026-09-05: final local formatting left all 226 files unchanged; Ruff, strict
+  mypy across 91 source files, repository validation, aggregate agent-check,
+  sequential state-capsule, registry-check, version-lint, all-registered
+  composition, all-required shadow, and incident-check pass. Portable Quarto
+  `1.9.38` renders all 16 pages and site validation passes. The aggregate agent
+  check reports 14/14 registered contracts, 16/16 required shadow scenarios, 31
+  live methods with zero gaps, 24 ordered phases, complete remote-bridge
+  conformance, and zero real effects.
+- 2026-09-05: `make test` completed naturally with 2,354 passed, 23 failed, and 5
+  skipped in 3,718.51 seconds. The failures are inherited historical protocol and
+  unavailable ignored-private-evidence nodes, not bridge regressions. A temporary
+  archive of exact base `f56dfc2c9346c9b8d8eea4380a3b2388b9668bd2` reproduced
+  the six public EXP-0001 protocol failures byte-for-byte and was destroyed; the
+  repository parity gate remains responsible for the complete two-sided
+  classification. No historical science or private evidence was fabricated to make
+  the raw full-suite command green.
 
 ## Decisions and blockers
 
