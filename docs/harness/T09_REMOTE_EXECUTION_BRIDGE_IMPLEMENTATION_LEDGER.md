@@ -133,6 +133,10 @@ started.
   unselectable as aliases, and requires exact-file selection for those historical
   schemas. Strict Ruff/mypy and the viability, duplex, host-phase, failure-envelope,
   and repository-validation regressions pass; no partial V16 root was published.
+- 2026-09-04: an exact-name disposable generator candidate with executable incident
+  repetitions disabled passed all remaining generation, topology, schema, and
+  aggregate-binding gates with 29 receipts, then was destroyed. The final tracked
+  root still requires the unchanged normal command with all incident regressions.
 
 ## Decisions and blockers
 
