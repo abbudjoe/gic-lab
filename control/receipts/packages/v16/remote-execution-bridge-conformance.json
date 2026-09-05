@@ -2,14 +2,14 @@
   "actual_v17_artifacts_created": false,
   "bridge_protocol_version": "1.0.0",
   "complete": true,
-  "control_implementation_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
-  "control_implementation_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
+  "control_implementation_commit": "63f3306631d909e9bd161d473275c8621b3487d4",
+  "control_implementation_tree": "1e10b9a085a8121f32cb3d6709987546f0e9c827",
   "controller_conformance": {
     "cleanup_to_zero": true,
     "condition_session_count": 4,
     "first_pair_checkpoint_retained": true,
     "raw_finalizer_evaluator_chain": true,
-    "receipt_semantic_sha256": "bcceaece264c8ddf1cd166201b55a6dc94ff96c744a5b71f68149778c18e0ed1",
+    "receipt_semantic_sha256": "96d77f4b57e88280e98e89ece83e8fdc121a2cd50bd7c5b4a28d2b4f950634cc",
     "shared_controller_used": true,
     "shared_production_assembly_used": true,
     "terminal_state": "category3-live-complete-clean"
@@ -102,7 +102,7 @@
   "runtime_admission_entry_point": "giclab.harness.sira_gate_a_runtime._install_locked_llm_factory",
   "schema_version": "1.0.0",
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "7bece5fee48d0e800c7da117b255167f9211cd458851e5ee5d8ade72d8d4be73",
+  "semantic_sha256": "88bd6b832a80b170a1d6a4f6ae2d8991b0b29c10032ad117014a9eaaa661afc7",
   "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
   "sole_accountant": {
     "coupling_probe_passed": true,

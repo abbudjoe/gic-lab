@@ -114,12 +114,12 @@
   ],
   "findings": [],
   "historical_module_allowlist": [],
-  "repository_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
-  "repository_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
+  "repository_commit": "63f3306631d909e9bd161d473275c8621b3487d4",
+  "repository_tree": "1e10b9a085a8121f32cb3d6709987546f0e9c827",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "d81d8bd79eaa50cd34f7c811e08eda9822a3099dd09e7901f51465372e15ff85"
+  "semantic_sha256": "55ea4e0df43af10a566ef56100444ff488c4aeb1cfffe7d92b3795cd80b89ee2"
 }

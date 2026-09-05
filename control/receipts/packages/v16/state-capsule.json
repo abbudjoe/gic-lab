@@ -63,8 +63,8 @@
   ],
   "recommended_action": "complete independent exact-head review and explicit merge authorization; only after the reviewed merge generate the package-only V17 successor",
   "repository": {
-    "commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
-    "tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de"
+    "commit": "63f3306631d909e9bd161d473275c8621b3487d4",
+    "tree": "1e10b9a085a8121f32cb3d6709987546f0e9c827"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -99,12 +99,12 @@
     "selected_package_status": "consumed-prelaunch-failure",
     "selected_plan_id": "PLAN-EXP0001-PILOT-V16",
     "selected_provider_contract_version": "V16",
-    "semantic_sha256": "400d919e498852dea270c1646469be4239ad9b63469310b4cfb39e0672aa82d8",
-    "source": "explicit-provider-contract",
+    "semantic_sha256": "d5e0993a483fee7fe889c3dc293a753eb3cb84529851e6ce6e6f5db550807783",
+    "source": "goal-record",
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "81d1ad0021ad562e1eff21423cd2c4891e421d6e7f4cb4a2899c4336bfc32f4d",
+  "semantic_sha256": "7a560c719c83102ad53fc7ee35f4c721237d7a828a1b7ab4cee65228791d8e79",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",
