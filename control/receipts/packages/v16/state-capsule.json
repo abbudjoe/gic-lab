@@ -8,7 +8,7 @@
   "available_actions": [
     "inspect-public-repository-state",
     "run-local-control-gates",
-    "review-live-capable-production-effects-pr"
+    "review-remote-execution-bridge-pr"
   ],
   "blocking_incident": null,
   "control_plane": {
@@ -17,17 +17,19 @@
     "composition_valid": true,
     "failure_matrix_valid": true,
     "live_effect_conformance_valid": true,
+    "live_method_viability_valid": true,
     "registry_complete": true,
-    "revision": "T09-live-capable-production-effects",
+    "remote_execution_bridge_conformance_valid": true,
+    "revision": "T09-remote-execution-bridge",
     "shadow_happy_path": true,
-    "status": "live-capable-production-effects-complete-external-governance"
+    "status": "remote-execution-bridge-complete-external-governance"
   },
   "cost": {
     "cumulative_t09_usd": "36.36170860803283125",
     "stabilization_openai_usd": "0.00",
     "stabilization_provider_usd": "0.00"
   },
-  "current_subgoal": "complete independent exact-head review and explicit merge authorization for the live-capable shared production effects before package-only V17 generation",
+  "current_subgoal": "advance the completed remote-execution bridge through independent exact-head review and explicit merge authorization",
   "evidence": {
     "science_unchanged": true,
     "shadow_classification": "non-scientific-control-output",
@@ -48,6 +50,7 @@
   "next_technical_subgoal": "generate-package-only-v17-after-governance",
   "provenance": [
     "control/goals/EXP-0001.yaml",
+    "docs/harness/T09_REMOTE_EXECUTION_BRIDGE_IMPLEMENTATION_LEDGER.md",
     "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
     "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
@@ -55,12 +58,13 @@
     "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json",
     "control/incidents/INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
     "control/incidents/INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
+    "control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
   ],
-  "recommended_action": "complete independent exact-head review and explicit merge authorization; only after merge begin the separately authorized package-only V17 task",
+  "recommended_action": "complete independent exact-head review and explicit merge authorization; only after the reviewed merge generate the package-only V17 successor",
   "repository": {
-    "commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-    "tree": "52aba08c58342ab714ccb548b1049cb3685c5574"
+    "commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
+    "tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -74,7 +78,7 @@
     "next_package": "V17",
     "next_status": "not-created"
   },
-  "schema_version": "4.0.0",
+  "schema_version": "5.0.0",
   "science": {
     "interpretation_allowed": false,
     "interpretation_boundary": "no shadow or infrastructure output is a scientific result",
@@ -88,22 +92,22 @@
       "scientific_interpretation_allowed": false
     },
     "goal_record_path": "control/goals/EXP-0001.yaml",
-    "goal_record_sha256": "c949990e7379ceb4db5984ac59bf6f2f4596f1aed7d80af5b07cf5152becdb38",
+    "goal_record_sha256": "3d0f48adc39e8d553f173f96d4585dbf53f31ea05617b328ae275f33ff6e3ea4",
     "historical_contract_version": "V16",
     "schema_version": "1.0.0",
     "selected_command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
     "selected_package_status": "consumed-prelaunch-failure",
     "selected_plan_id": "PLAN-EXP0001-PILOT-V16",
     "selected_provider_contract_version": "V16",
-    "semantic_sha256": "2fc08b966d08c8e351c2c193131943258c6a568d55db59adaf49173c4767549e",
-    "source": "goal-record",
+    "semantic_sha256": "400d919e498852dea270c1646469be4239ad9b63469310b4cfb39e0672aa82d8",
+    "source": "explicit-provider-contract",
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "525a097d2906910b215c3eddb002b25cf89f19cef3057aaccd8659be86be9faf",
+  "semantic_sha256": "81d1ad0021ad562e1eff21423cd2c4891e421d6e7f4cb4a2899c4336bfc32f4d",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",
-    "V17 package identities and its package-specific effect implementation do not exist in this stabilization branch"
+    "V17 package identities and its package-specific effect implementation do not exist in this shared-control repair branch"
   ]
 }

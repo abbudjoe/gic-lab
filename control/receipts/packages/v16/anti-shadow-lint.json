@@ -8,7 +8,7 @@
     },
     {
       "classification": "legitimate deterministic effect fixture",
-      "line": 444,
+      "line": 449,
       "path": "src/giclab/control/shadow_effects.py",
       "token": "production-shadow"
     },
@@ -139,6 +139,16 @@
       "source_lines": "75-76, 249, 286-382, 614"
     }
   ],
+  "bridge_live_sources": [
+    "src/giclab/control/category3.py",
+    "src/giclab/control/effects.py",
+    "src/giclab/control/production.py",
+    "src/giclab/control/remote_bridge.py",
+    "src/giclab/harness/sira_gate_a_runtime.py",
+    "src/giclab/harness/t09_remote_host_phases.py",
+    "src/giclab/harness/t09_runtime_admission.py",
+    "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+  ],
   "classification_counts": {
     "documentation": 1,
     "historical test fixture": 4,
@@ -175,7 +185,15 @@
     "T09S025",
     "T09S026",
     "T09S027",
-    "T09S028"
+    "T09S028",
+    "T09S029",
+    "T09S030",
+    "T09S031",
+    "T09S032",
+    "T09S033",
+    "T09S034",
+    "T09S035",
+    "T09S036"
   ],
   "lint_definition_path": "src/giclab/control/anti_shadow_lint.py",
   "public_receipt_topology_scan": {
@@ -194,7 +212,7 @@
     ],
     "member_count_by_root": {
       "control/receipts": 25,
-      "control/receipts/packages/v16": 27
+      "control/receipts/packages/v16": 29
     },
     "sealed_roots_scanned": [
       "control/receipts",
@@ -204,17 +222,22 @@
     "selected_receipt_root": "control/receipts/packages/v16",
     "selected_root_matches_version": true
   },
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
-  "schema_version": "3.0.0",
-  "semantic_sha256": "ac55e6d2740f9831a92e0517f0d4a0ec736fa6e96f7748ee32d939a757d63d6f",
+  "repository_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
+  "repository_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
+  "schema_version": "4.0.0",
+  "semantic_sha256": "7098741f069af808f52d7c9db863a8a33291a6f92ce90405acc030ed25d9210f",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",
     "src/giclab/control/consumers.py",
     "src/giclab/control/contracts.py",
     "src/giclab/control/effects.py",
+    "src/giclab/control/live_method_viability.py",
     "src/giclab/control/production.py",
+    "src/giclab/control/remote_bridge.py",
+    "src/giclab/harness/sira_gate_a_runtime.py",
+    "src/giclab/harness/t09_remote_host_phases.py",
+    "src/giclab/harness/t09_runtime_admission.py",
     "src/giclab/harness/t09_sira_pilot.py"
   ]
 }

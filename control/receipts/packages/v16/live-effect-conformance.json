@@ -2,25 +2,25 @@
   "actual_v17_artifacts_created": false,
   "actual_v17_artifacts_present": false,
   "complete": true,
-  "control_implementation_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "control_implementation_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
-  "effect_protocol_version": "1.0.0",
+  "control_implementation_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
+  "control_implementation_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
+  "effect_protocol_version": "2.0.0",
   "live_authority_created": false,
   "network_provider_cloud_browser_science_effects": 0,
   "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
   "schema_version": "4.0.0",
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "3580d9f6f093df431b4cb6ae426a79cd12096c775e77964e8fccacc75b86cdd0",
+  "semantic_sha256": "bcceaece264c8ddf1cd166201b55a6dc94ff96c744a5b71f68149778c18e0ed1",
   "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
   "shared_source_byte_map_unchanged": true,
   "temporary_package": {
     "authorization": {
       "private_overlay_contents_retained": false,
-      "reference": "AUTH-T09-V16-CONFORMANCE-6216a38ac15aefa35c41148f",
+      "reference": "AUTH-T09-V16-CONFORMANCE-cc6d2f80450750a9abdf36b2",
       "replay_rejected": true,
       "same_reference_and_source_across_effect_metadata_launch_cleanup": true,
       "single_use_state": {
-        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-6216a38ac15aefa35c41148f",
+        "authorization_reference": "AUTH-T09-V16-CONFORMANCE-cc6d2f80450750a9abdf36b2",
         "contains_private_overlay_contents": false,
         "exact_private_source_context_root_and_receipt_validated": true,
         "private_runtime_identity_values_retained": false,
@@ -37,17 +37,17 @@
     "authorization_context_binding": {
       "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
       "control_binding_semantic_sha256": "f835cbba42179ab7f8dd6fcd6e0567f6ce60427f3298e531435ed7825aa78660",
-      "control_commit": "c8ebc0f7f318e601af0a5b219dcb8cc249b9c709",
-      "control_tree": "8b674c2e21f6502921bbe00f837489cc5be3d6d7",
+      "control_commit": "17b916922ccc01a056df8e3c01603ffd9b0793ad",
+      "control_tree": "63288362db3e34882baa6ca3b4697746c26c7939",
       "current_turn_scope": "T09-PR14-EXACT-HEAD-CONFORMANCE",
       "effect_implementation_sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4",
       "exact_private_source_sha256_validated": true,
-      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-6216a38ac15aefa35c41148f",
+      "external_authorization_reference": "AUTH-T09-V16-CONFORMANCE-cc6d2f80450750a9abdf36b2",
       "plan_path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
       "private_runtime_identity_values_retained": false,
       "provider_contract_version": "V16",
-      "public_binding_semantic_sha256": "bb3f0c733508522a75d91f11d2ea5f4026f584bb0846fbc69be2a438c346b3df",
+      "public_binding_semantic_sha256": "8525b1bf544f002ffc60a1926d6e17b6f25a6758628e9998d9b64b2b07829b80",
       "shared_held_transaction_root_identity_validated": true
     },
     "browser_accounting": {
@@ -64,7 +64,7 @@
     "clock": {
       "domains_separate": true,
       "injected": true,
-      "monotonic_sample_count": 178,
+      "monotonic_sample_count": 182,
       "sleep_calls": [
         0.25,
         1.0,
@@ -75,7 +75,7 @@
         1.0,
         5.0
       ],
-      "wall_sample_count": 55
+      "wall_sample_count": 59
     },
     "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
     "condition_traces": {
@@ -133,7 +133,7 @@
       "bytes": 906,
       "factory_entry_point": "build_package_effects",
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
-      "protocol_version": "1.0.0",
+      "protocol_version": "2.0.0",
       "sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4"
     },
     "first_pair_checkpoint": {
@@ -167,8 +167,8 @@
       "git_blob_bytes_matched": true,
       "path": "experiments/EXP-0001-sira-simulative-vs-reactive/runtime/temporary_live_effect_conformance.py",
       "path_revalidated_after_execution_and_factory": true,
-      "protocol_version": "1.0.0",
-      "public_attestation_semantic_sha256": "a13f55b8569ca44564205917267509cbcf009bceec1b98a3a39f0f91111a064b",
+      "protocol_version": "2.0.0",
+      "public_attestation_semantic_sha256": "96a937e69073ae9afadfdfa37fe010615d701082e083ef0b8c1e2a310f6175ed",
       "regular_current_user_single_link_safe_mode": true,
       "runtime_identity_values_retained": false,
       "sha256": "3f582748a12863cf98577bf3fd8977c4b8b4f66d775bac2d485af334fd4444c4"
@@ -445,8 +445,8 @@
     },
     "scientific_interpretation_allowed": false,
     "temporary_conformance_grant_only": true,
-    "temporary_repository_commit": "c8ebc0f7f318e601af0a5b219dcb8cc249b9c709",
-    "temporary_repository_tree": "8b674c2e21f6502921bbe00f837489cc5be3d6d7",
+    "temporary_repository_commit": "17b916922ccc01a056df8e3c01603ffd9b0793ad",
+    "temporary_repository_tree": "63288362db3e34882baa6ca3b4697746c26c7939",
     "typed_failure_accounting": {
       "ambiguous-task-model-send": {
         "model_call_attempts": 1,

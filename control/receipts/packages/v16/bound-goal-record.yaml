@@ -1,7 +1,7 @@
 schema_version: 1.0.0
 goal_id: EXP-0001
 terminal_goal: evaluate simulative versus reactive SiRA
-current_subgoal: complete independent exact-head review and explicit merge authorization for the live-capable shared production effects before package-only V17 generation
+current_subgoal: advance the completed remote-execution bridge through independent exact-head review and explicit merge authorization
 next_technical_subgoal: generate-package-only-v17-after-governance
 science:
   scientific_contract_id: EXP-0001
@@ -9,8 +9,8 @@ science:
   interpretation_allowed: false
   interpretation_boundary: no shadow or infrastructure output is a scientific result
 control_plane:
-  revision: T09-live-capable-production-effects
-  status: live-capable-production-effects-complete-external-governance
+  revision: T09-remote-execution-bridge
+  status: remote-execution-bridge-complete-external-governance
 runtime_package:
   historical_package: V16
   historical_status: consumed-prelaunch-failure
@@ -42,9 +42,10 @@ external_governance_gate:
 available_actions:
   - inspect-public-repository-state
   - run-local-control-gates
-  - review-live-capable-production-effects-pr
-recommended_action: complete independent exact-head review and explicit merge authorization; only after merge begin the separately authorized package-only V17 task
+  - review-remote-execution-bridge-pr
+recommended_action: complete independent exact-head review and explicit merge authorization; only after the reviewed merge generate the package-only V17 successor
 provenance:
+  - docs/harness/T09_REMOTE_EXECUTION_BRIDGE_IMPLEMENTATION_LEDGER.md
   - docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md
   - control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json
   - control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json
@@ -52,7 +53,8 @@ provenance:
   - control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json
   - control/incidents/INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY.json
   - control/incidents/INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY.json
+  - control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json
   - experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json
 uncertainties:
   - current-turn live authority must be supplied externally in a future turn
-  - V17 package identities and its package-specific effect implementation do not exist in this stabilization branch
+  - V17 package identities and its package-specific effect implementation do not exist in this shared-control repair branch

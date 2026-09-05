@@ -32,9 +32,12 @@
     "src/giclab/control/effects.py",
     "src/giclab/control/incidents.py",
     "src/giclab/control/live_conformance.py",
+    "src/giclab/control/live_method_viability.py",
     "src/giclab/control/production.py",
     "src/giclab/control/proofs.py",
     "src/giclab/control/registry_validation.py",
+    "src/giclab/control/remote_bridge.py",
+    "src/giclab/control/remote_execution_conformance.py",
     "src/giclab/control/scenarios.py",
     "src/giclab/control/shadow.py",
     "src/giclab/control/shadow_effects.py",
@@ -98,6 +101,8 @@
     "src/giclab/harness/t09_model_metadata_receipt.py",
     "src/giclab/harness/t09_pragmatic_provider.py",
     "src/giclab/harness/t09_provider_contracts.py",
+    "src/giclab/harness/t09_remote_host_phases.py",
+    "src/giclab/harness/t09_runtime_admission.py",
     "src/giclab/harness/t09_sira_pilot.py",
     "src/giclab/harness/task_source.py",
     "src/giclab/plans.py",
@@ -109,12 +114,12 @@
   ],
   "findings": [],
   "historical_module_allowlist": [],
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
+  "repository_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "2d04f11d6f22871f994e29ce55505b7214b01286e90e8308809d2dd4727c98c1"
+  "semantic_sha256": "d81d8bd79eaa50cd34f7c811e08eda9822a3099dd09e7901f51465372e15ff85"
 }

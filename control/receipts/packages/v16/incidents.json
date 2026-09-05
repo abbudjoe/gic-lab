@@ -1,6 +1,6 @@
 {
   "complete": true,
-  "incident_count": 6,
+  "incident_count": 7,
   "incidents": [
     {
       "complete": true,
@@ -128,10 +128,27 @@
       "regression_output": "...                                                                      [100%]",
       "regressions_passed": true,
       "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE",
+      "path": "control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json",
+      "regression_nodes": [
+        "tests/control/test_category3_shadow.py::test_local_assembly_and_host_transfer_are_ordered_around_provider_entry",
+        "tests/control/test_remote_host_phases.py::test_preflight_is_phase_specific_and_cannot_qualify_or_freeze",
+        "tests/control/test_remote_bridge.py::test_missing_shared_observer_cannot_admit_a_remote_provider_send",
+        "tests/control/test_live_method_viability.py::test_live_method_viability_has_one_launch_seam_and_zero_gaps",
+        "tests/control/test_remote_execution_conformance.py::test_remote_execution_bridge_conformance_uses_full_shared_controller",
+        "tests/control/test_historical_receipts.py::test_synthetic_successor_remote_bridge_uses_exact_inherited_contract_child"
+      ],
+      "regression_output": "......                                                                   [100%]",
+      "regressions_passed": true,
+      "status": "resolved"
     }
   ],
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
+  "repository_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
   "schema_version": "1.0.0",
-  "semantic_sha256": "3f220e26cb9878c8eea333519a4d7e06b51e2e3ac9731414930dabb7e350d2a0"
+  "semantic_sha256": "42631c85a6cdaddd68d0c897a16827e4796607e57d06be731334c1e8917350fd"
 }

@@ -1,0 +1,125 @@
+{
+  "actual_v17_artifacts_created": false,
+  "bridge_protocol_version": "1.0.0",
+  "complete": true,
+  "control_implementation_commit": "0e628694db56a90e1e1f4748c8c338d48baddbb2",
+  "control_implementation_tree": "d77c83be4d4495df9f1491e4dccdeb955d27a6de",
+  "controller_conformance": {
+    "cleanup_to_zero": true,
+    "condition_session_count": 4,
+    "first_pair_checkpoint_retained": true,
+    "raw_finalizer_evaluator_chain": true,
+    "receipt_semantic_sha256": "bcceaece264c8ddf1cd166201b55a6dc94ff96c744a5b71f68149778c18e0ed1",
+    "shared_controller_used": true,
+    "shared_production_assembly_used": true,
+    "terminal_state": "category3-live-complete-clean"
+  },
+  "duplex_condition_sessions": {
+    "all_effects_admitted_before_execution": true,
+    "all_private_endpoints_removed": true,
+    "all_processes_reaped": true,
+    "all_remote_boundaries_nonauthoritative": true,
+    "all_terminal_acknowledged": true,
+    "browser_action_count": 8,
+    "evidence_binding_sha256s": [
+      "c5d2baef690812389517b6da7a5c7bad51b667b4b1171f96a2dff53dbaa74214",
+      "836d2e48ba11b297c5c08893d26368e213c90aa204175b72bb0df311203a5ebd",
+      "aaaf2e13318709a3bcf97f3451843ab9e974d08fb0c9a371098e5d5617b34804",
+      "3161831d1e755dd45ed4ad8d7556d2ed709c93442df0a7148e8d427380db4251"
+    ],
+    "local_subprocess_count": 4,
+    "model_call_count": 8,
+    "model_roles": [
+      "actor",
+      "critic",
+      "default",
+      "world_model"
+    ],
+    "private_ipc_count": 4,
+    "run_ids": [
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    ],
+    "session_count": 4,
+    "shared_transcript_sha256s": [
+      "b4a2eda46384a0a2448332bc5305a767640eb81798c11d1007c99935517c961e",
+      "d32f18269cc13c2046900482f1dd0525802c564f8c0581a522ffcdffbd113250",
+      "82b3f299f88ebafdcebd48d2b8eb7b5f73663e75890dfc33df9823032aff31c0",
+      "762513d20acca32c60e0ec871a47558daceea7fa40862d6dc5b168e93c6a34e8"
+    ]
+  },
+  "effect_protocol_version": "2.0.0",
+  "evidence": {
+    "host_relay_transcript": true,
+    "raw_and_essential_binding": true,
+    "remote_mirrored_journal": true,
+    "shared_authoritative_transcript": true,
+    "terminal_hash_chain": true
+  },
+  "failure_probes": {
+    "cleanup_after_bridge_failure": true,
+    "disconnect_after_send": true,
+    "disconnect_before_send": true,
+    "replay_rejected": true,
+    "response_accounting_incomplete": true,
+    "transcript_mutation_rejected": true
+  },
+  "host_phase_entrypoints": {
+    "browser_actions": 0,
+    "condition_entries": 0,
+    "full_manifest_validated": true,
+    "model_requests": 0,
+    "network_effects": 0,
+    "operations": [
+      "host-transfer-verify",
+      "host-preflight",
+      "host-qualify",
+      "host-freeze",
+      "host-cleanup"
+    ],
+    "ordered": true,
+    "process_model": "forked-selected-contract-child",
+    "provider_entry_precedes_transfer": true,
+    "receipt_validation_projection_sha256s": [
+      "757a45f2b1a0571cca77161002c47e2d62cc07c88c512987614515bbcb2ef3db",
+      "110163cc340000577a131a17b3bd8d1ac49274697f0cedb4cc04c431e34e22c5",
+      "6b24a1a2b2bebffa609f00e395cafc0c7aa1d300626f9a1f08b16d3ea5ce9e94",
+      "6115cf48e9cc99058c0b67210afed6bb673db94fb4c9b6fe4d88b897ba3e2b5f",
+      "1cff566923b479cbc6a55b781b16bf1974677f85d7a42e8967442f191c754ffe"
+    ],
+    "serialized_contract_override": false,
+    "subprocess_count": 5,
+    "tracked_runner_loaded": true,
+    "transfer_rehashed": true
+  },
+  "live_authority_created": false,
+  "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
+  "projected_real_cost_usd": "0.00",
+  "provider_contract_version": "V16",
+  "remote_runner_entry_point": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+  "runtime_admission_entry_point": "giclab.harness.sira_gate_a_runtime._install_locked_llm_factory",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "semantic_sha256": "7bece5fee48d0e800c7da117b255167f9211cd458851e5ee5d8ade72d8d4be73",
+  "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
+  "sole_accountant": {
+    "coupling_probe_passed": true,
+    "independent_remote_budget_boundary": false,
+    "owner": "ConditionEventObserver",
+    "remote_boundary_authoritative": false
+  },
+  "zero_real_effects": {
+    "authenticated_metadata_requests": 0,
+    "browser": 0,
+    "cloud_mutations": 0,
+    "condition_reservations": 0,
+    "docker": 0,
+    "live_ssh": 0,
+    "new_cost_usd": "0.00",
+    "provider_requests": 0,
+    "scientific_actions": 0,
+    "secret_reads": 0
+  }
+}
