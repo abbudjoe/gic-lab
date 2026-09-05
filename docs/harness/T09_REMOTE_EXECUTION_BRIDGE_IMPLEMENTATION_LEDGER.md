@@ -1,6 +1,6 @@
 # T09 remote-execution bridge implementation ledger
 
-Status: **draft-pr-preparation**
+Status: **complete-awaiting-independent-review**
 
 Plan role: **Category 1 shared-control repair workstream**
 
@@ -68,7 +68,7 @@ The immutable base is commit
 | RB-19 | No actual V17 artifact exists | Tracked/worktree boundary scan | met |
 | RB-20 | Science and authority remain unchanged/false | Science hash diff, capsule, and receipt assertions | met |
 | RB-21 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
-| RB-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/check metadata | not-started |
+| RB-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/check metadata | met |
 
 No item may be marked `met` without concrete source or regression evidence. The
 workstream cannot be reported complete while any row is partial, blocked, or not
@@ -219,6 +219,23 @@ started.
   unavailable private T09 evidence. Lock consistency, formatting, Ruff, strict
   mypy, aggregate agent-check, repository validation, Quarto `1.9.38` rendering of
   all 16 pages, site validation, and parity all passed.
+- 2026-09-05: draft PR #15 is open against
+  `phase-1/sira-pilot-autonomous-r2`, remains draft and unmerged, and has no
+  auto-merge request. GitHub Actions run `33966412283`, job `101307218125`,
+  completed successfully in 3h40m18s against exact implementation-evidence head
+  `e6732bdfd0c40f3f249718fc9ec682d6c32cf1d1`. The deterministic agent/control
+  gate and exact-base PR parity gate both passed; the non-PR strict-local branch
+  was correctly skipped. This ledger closure is an evidence-only descendant and
+  must itself receive the same exact-final-head local and hosted gates before
+  handoff.
+- 2026-09-05: direct Sol/max self-review found no route for host transfer before
+  provider entry, no implicit qualification or freeze in preflight, no minimal
+  substitute accepted by the full-manifest validator, no remote model or browser
+  action without shared admission, no second authoritative remote accountant, no
+  secondary provider launch seam, and no missing transcript binding in raw or
+  essential-failure evidence. The source-grounded viability receipt confirms a
+  package-only successor can map all 31 live methods and 24 shared phases without
+  another shared-control edit.
 
 ## Decisions and blockers
 
