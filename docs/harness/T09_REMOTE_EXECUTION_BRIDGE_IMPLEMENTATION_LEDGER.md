@@ -1,6 +1,6 @@
 # T09 remote-execution bridge implementation ledger
 
-Status: **in-progress**
+Status: **local-validation-in-progress**
 
 Plan role: **Category 1 shared-control repair workstream**
 
@@ -64,7 +64,7 @@ The immutable base is commit
 | RB-15 | Full no-network remote-bridge conformance passes | Local subprocess/private IPC receipt | met |
 | RB-16 | Viability receipt reports every live method complete | Generated V16 receipt and schema validation | met |
 | RB-17 | Synthetic successor requires no shared edits | Temporary successor conformance and byte-map proof | met |
-| RB-18 | Historical V16 proof remains valid | Rebound/current and historical-root validation | not-started |
+| RB-18 | Historical V16 proof remains valid | Rebound/current and historical-root validation | met |
 | RB-19 | No actual V17 artifact exists | Tracked/worktree boundary scan | met |
 | RB-20 | Science and authority remain unchanged/false | Science hash diff, capsule, and receipt assertions | met |
 | RB-21 | Full/parity/static/privacy/site gates pass | Required local validation contract | in-progress |
@@ -143,6 +143,23 @@ started.
   in a bounded forked child. The child inherits the exact already-selected registry,
   while the receipt proves five child processes, the tracked entry point, and the
   absence of any serialized contract override or default/latest selection.
+- 2026-09-04: froze final shared implementation ancestor
+  `0e628694db56a90e1e1f4748c8c338d48baddbb2`, tree
+  `d77c83be4d4495df9f1491e4dccdeb955d27a6de`. The unchanged normal generator
+  executed all seven incident groups three times through its standalone,
+  pre-topology agent-check, and post-topology agent-check paths, then atomically
+  published 29 V16 receipts. Aggregate binding file SHA-256 is
+  `232e080c866d5d26d7eaa5db1afa86dfdcf354908d431b33ea46f2323ecde58b`;
+  the sealed root Git tree in receipt descendant `8c8a2789ed1f5e52e18a358893c2b4819afd1e7d`
+  is `13da342b9d2665f0df70ad92f82baba813110c1e`.
+- 2026-09-04: the sealed viability receipt reports protocol `2.0.0`, 31 methods,
+  24 ordered phases, zero unresolved methods, one launch mutation seam, synthetic
+  successor compatibility, and zero real effects. The sealed remote bridge receipt
+  reports five tracked-runner host-phase child processes, four duplex condition
+  sessions, the shared controller/production assembly, one authoritative observer,
+  complete transcript/evidence bindings, all failure probes passing, zero real
+  effects, and USD `0.00` new cost. Both the retained legacy root and rebound V16
+  package root validate in the generated topology.
 
 ## Decisions and blockers
 
