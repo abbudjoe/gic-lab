@@ -1,6 +1,6 @@
 # T09 remote-execution bridge implementation ledger
 
-Status: **local-validation-in-progress**
+Status: **draft-pr-preparation**
 
 Plan role: **Category 1 shared-control repair workstream**
 
@@ -67,7 +67,7 @@ The immutable base is commit
 | RB-18 | Historical V16 proof remains valid | Rebound/current and historical-root validation | met |
 | RB-19 | No actual V17 artifact exists | Tracked/worktree boundary scan | met |
 | RB-20 | Science and authority remain unchanged/false | Science hash diff, capsule, and receipt assertions | met |
-| RB-21 | Full/parity/static/privacy/site gates pass | Required local validation contract | in-progress |
+| RB-21 | Full/parity/static/privacy/site gates pass | Required local validation contract | met |
 | RB-22 | Draft PR open, exact-head CI green, no merge | GitHub PR/check metadata | not-started |
 
 No item may be marked `met` without concrete source or regression evidence. The
@@ -208,7 +208,17 @@ started.
   collected parameter IDs. Explicit compatibility IDs now retain those exact base
   nodes while their assertions exercise local assembly, the stronger preflight
   predecessor, and the stronger qualification predecessor. All five current
-  host-effect mutation cases pass; a fresh complete comparison remains required.
+  host-effect mutation cases pass.
+- 2026-09-05: the fresh complete `ci-check` against exact base
+  `f56dfc2c9346c9b8d8eea4380a3b2388b9668bd2` passed on head
+  `647fc84aa7c0bce418a33fb39ee852b020c452e7`. The base reported 27 failures;
+  the head reported the 23 unchanged historical/private-evidence failures and four
+  parity-sandbox environment/path nodes newly passing. The comparator reported zero
+  newly failing nodes, zero missing base failures, zero missing collected base
+  nodes, zero invalid outcome transitions, and five symmetric deselections for the
+  unavailable private T09 evidence. Lock consistency, formatting, Ruff, strict
+  mypy, aggregate agent-check, repository validation, Quarto `1.9.38` rendering of
+  all 16 pages, site validation, and parity all passed.
 
 ## Decisions and blockers
 
