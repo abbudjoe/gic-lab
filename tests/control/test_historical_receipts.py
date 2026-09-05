@@ -141,7 +141,7 @@ def test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_ro
         (repository / "control/receipts/packages/v17/anti-shadow-lint.json").read_bytes()
     )
     topology = receipt["public_receipt_topology_scan"]
-    assert receipt["schema_version"] == "3.0.0"
+    assert receipt["schema_version"] == "4.0.0"
     assert topology["selected_provider_contract_version"] == "V17"
     assert topology["selected_receipt_root"] == "control/receipts/packages/v17"
     assert topology["selected_root_matches_version"] is True
@@ -153,6 +153,24 @@ def test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_ro
     assert all(
         topology["member_count_by_root"][root] > 0 for root in topology["sealed_roots_scanned"]
     )
+
+
+def test_synthetic_successor_remote_bridge_uses_exact_inherited_contract_child(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    repository, _v17_contract = successor_receipt_repository
+    receipt = json.loads(
+        (
+            repository / "control/receipts/packages/v17/remote-execution-bridge-conformance.json"
+        ).read_bytes()
+    )
+    host_phases = receipt["host_phase_entrypoints"]
+    assert receipt["provider_contract_version"] == "V17"
+    assert receipt["complete"] is True
+    assert host_phases["subprocess_count"] == 5
+    assert host_phases["process_model"] == "forked-selected-contract-child"
+    assert host_phases["tracked_runner_loaded"] is True
+    assert host_phases["serialized_contract_override"] is False
 
 
 @pytest.mark.parametrize(

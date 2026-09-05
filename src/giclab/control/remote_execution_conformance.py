@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import importlib.util
 import io
 import json
 import os
+import select
+import signal
 import socket
 import struct
 import subprocess
@@ -77,6 +80,8 @@ RUNTIME_ADMISSION_ENTRY_POINT: Final = (
 REMOTE_EXECUTION_CONFORMANCE_SCHEMA: Final = (
     "schemas/t09-remote-execution-bridge-conformance.schema.json"
 )
+RUNNER_CHILD_MAX_RESULT_BYTES: Final = 65_536
+RUNNER_CHILD_TIMEOUT_SECONDS: Final = 30.0
 
 
 class _ClockSource:
@@ -201,6 +206,156 @@ def _runner_environment(repository: Path) -> dict[str, str]:
     }
 
 
+def _write_runner_child_result(descriptor: int, document: Mapping[str, object]) -> None:
+    encoded = canonical_bytes(document)
+    if len(encoded) > RUNNER_CHILD_MAX_RESULT_BYTES:
+        encoded = canonical_bytes(
+            {
+                "returncode": 1,
+                "error_type": "RunnerChildResultTooLarge",
+                "error": "retained runner child result exceeded its fixed cap",
+                "stdout": "",
+                "stderr": "",
+            }
+        )
+    offset = 0
+    while offset < len(encoded):
+        written = os.write(descriptor, encoded[offset:])
+        if written <= 0:
+            return
+        offset += written
+
+
+def _execute_runner_in_inherited_contract_child(
+    repository: Path,
+    command: list[str],
+    result_descriptor: int,
+) -> None:
+    """Execute the tracked runner in an isolated child with the selected registry.
+
+    Receipt conformance must also work for an untracked synthetic successor. A fresh
+    interpreter cannot truthfully resolve that deliberately in-memory registry
+    entry. Forking preserves the already validated exact contract while still
+    exercising the tracked remote-runner entry point across an OS process boundary.
+    No serialized contract override or default-version selector exists.
+    """
+
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    result: dict[str, object]
+    try:
+        os.chdir(repository)
+        os.environ.clear()
+        os.environ.update(_runner_environment(repository))
+        source_root = str(repository / "src")
+        if source_root not in sys.path:
+            sys.path.insert(0, source_root)
+        runner_path = (repository / REMOTE_RUNNER_PATH).resolve(strict=True)
+        runner_path.relative_to(repository)
+        if not runner_path.is_file():
+            raise ValueError("retained remote runner is not a regular file")
+        sys.argv = [str(runner_path), *command]
+        specification = importlib.util.spec_from_file_location(
+            "_giclab_retained_remote_runner_conformance_child",
+            runner_path,
+        )
+        if specification is None or specification.loader is None:
+            raise ImportError("retained remote runner could not be loaded")
+        module = importlib.util.module_from_spec(specification)
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            specification.loader.exec_module(module)
+            entry_point = getattr(module, "main", None)
+            if not callable(entry_point):
+                raise TypeError("retained remote runner main entry point is missing")
+            returncode = entry_point()
+        if not isinstance(returncode, int) or isinstance(returncode, bool):
+            raise TypeError("retained remote runner returned a non-integer status")
+        result = {
+            "returncode": returncode,
+            "error_type": None,
+            "error": None,
+            "stdout": stdout.getvalue()[-4096:],
+            "stderr": stderr.getvalue()[-4096:],
+        }
+    except BaseException as exc:  # child must always return one bounded status frame
+        result = {
+            "returncode": 1,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[-4096:],
+            "stdout": stdout.getvalue()[-4096:],
+            "stderr": stderr.getvalue()[-4096:],
+        }
+    try:
+        _write_runner_child_result(result_descriptor, result)
+    finally:
+        os.close(result_descriptor)
+
+
+def _run_inherited_contract_child(repository: Path, command: list[str]) -> dict[str, object]:
+    read_descriptor, write_descriptor = os.pipe()
+    try:
+        process_id = os.fork()
+    except BaseException:
+        os.close(read_descriptor)
+        os.close(write_descriptor)
+        raise
+    if process_id == 0:
+        os.close(read_descriptor)
+        try:
+            _execute_runner_in_inherited_contract_child(repository, command, write_descriptor)
+        finally:
+            os._exit(0)
+    os.close(write_descriptor)
+    encoded = bytearray()
+    timed_out = False
+    deadline = time.monotonic() + RUNNER_CHILD_TIMEOUT_SECONDS
+    try:
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                timed_out = True
+                break
+            readable, _, _ = select.select([read_descriptor], [], [], remaining)
+            if not readable:
+                timed_out = True
+                break
+            chunk = os.read(read_descriptor, 8192)
+            if not chunk:
+                break
+            encoded.extend(chunk)
+            if len(encoded) > RUNNER_CHILD_MAX_RESULT_BYTES:
+                raise ValueError("retained runner child result exceeded its fixed cap")
+    finally:
+        os.close(read_descriptor)
+        if timed_out:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(process_id, signal.SIGKILL)
+        _waited_process_id, wait_status = os.waitpid(process_id, 0)
+    if timed_out:
+        raise TimeoutError("retained runner conformance child exceeded its deadline")
+    if not os.WIFEXITED(wait_status) or os.WEXITSTATUS(wait_status) != 0:
+        raise ValueError("retained runner conformance child exited abnormally")
+    try:
+        result: object = json.loads(bytes(encoded))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("retained runner conformance child returned malformed status") from exc
+    if not isinstance(result, dict) or not all(isinstance(key, str) for key in result):
+        raise ValueError("retained runner conformance child status is not an object")
+    if set(result) != {"returncode", "error_type", "error", "stdout", "stderr"}:
+        raise ValueError("retained runner conformance child status has unexpected fields")
+    if (
+        not isinstance(result.get("returncode"), int)
+        or isinstance(result.get("returncode"), bool)
+        or not all(
+            value is None or isinstance(value, str)
+            for value in (result.get("error_type"), result.get("error"))
+        )
+        or not all(isinstance(result.get(name), str) for name in ("stdout", "stderr"))
+    ):
+        raise ValueError("retained runner conformance child status has invalid field types")
+    return cast(dict[str, object], result)
+
+
 def _run_runner_phase(
     repository: Path,
     root: Path,
@@ -212,8 +367,6 @@ def _run_runner_phase(
     contract: T09ProviderContract,
 ) -> dict[str, object]:
     command = [
-        sys.executable,
-        str(repository / REMOTE_RUNNER_PATH),
         "--provider-contract",
         contract.version,
         "--repository",
@@ -228,20 +381,14 @@ def _run_runner_phase(
         "--phase-receipt",
         str(receipt),
     ]
-    completed = subprocess.run(
-        command,
-        cwd=repository,
-        env=_runner_environment(repository),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
-    if completed.returncode != 0:
+    completed = _run_inherited_contract_child(repository, command)
+    if completed.get("returncode") != 0:
         raise ValueError(
             f"retained runner {operation} conformance failed: "
-            + completed.stderr.decode("utf-8", errors="replace")[-1000:]
+            + str(completed.get("error") or completed.get("stderr") or "unknown child error")
         )
+    if completed.get("stdout") or completed.get("stderr"):
+        raise ValueError(f"retained runner {operation} emitted unexpected output")
     document = load_json(receipt)
     if (
         document.get("phase") != operation
@@ -652,6 +799,10 @@ def _host_phase_entrypoint_probe(
             "network_effects": sum(
                 cast(int, item["network_effects_performed"]) for item in receipts
             ),
+            "subprocess_count": len(receipts),
+            "process_model": "forked-selected-contract-child",
+            "tracked_runner_loaded": True,
+            "serialized_contract_override": False,
         },
         _file_sha256(frozen_manifest),
     )

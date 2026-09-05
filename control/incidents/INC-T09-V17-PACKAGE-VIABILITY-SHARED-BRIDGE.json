@@ -67,6 +67,10 @@
     {
       "kind": "test-node",
       "reference": "tests/control/test_remote_execution_conformance.py::test_remote_execution_bridge_conformance_uses_full_shared_controller"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_synthetic_successor_remote_bridge_uses_exact_inherited_contract_child"
     }
   ],
   "repair": "phase-conformant-remote-execution-bridge",

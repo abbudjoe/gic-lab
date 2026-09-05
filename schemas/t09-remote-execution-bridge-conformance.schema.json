@@ -77,7 +77,11 @@
         "condition_entries",
         "model_requests",
         "browser_actions",
-        "network_effects"
+        "network_effects",
+        "subprocess_count",
+        "process_model",
+        "tracked_runner_loaded",
+        "serialized_contract_override"
       ],
       "properties": {
         "operations": {
@@ -97,7 +101,11 @@
         "condition_entries": {"const": 0},
         "model_requests": {"const": 0},
         "browser_actions": {"const": 0},
-        "network_effects": {"const": 0}
+        "network_effects": {"const": 0},
+        "subprocess_count": {"const": 5},
+        "process_model": {"const": "forked-selected-contract-child"},
+        "tracked_runner_loaded": {"const": true},
+        "serialized_contract_override": {"const": false}
       }
     },
     "duplex_condition_sessions": {

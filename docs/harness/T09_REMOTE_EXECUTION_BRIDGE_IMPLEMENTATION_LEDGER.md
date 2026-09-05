@@ -137,6 +137,12 @@ started.
   repetitions disabled passed all remaining generation, topology, schema, and
   aggregate-binding gates with 29 receipts, then was destroyed. The final tracked
   root still requires the unchanged normal command with all incident regressions.
+- 2026-09-04: full incident repetition exposed that an untracked synthetic
+  successor's declarative registry entry cannot survive an `exec` into a fresh
+  interpreter. Host-phase conformance now runs the tracked remote-runner entry point
+  in a bounded forked child. The child inherits the exact already-selected registry,
+  while the receipt proves five child processes, the tracked entry point, and the
+  absence of any serialized contract override or default/latest selection.
 
 ## Decisions and blockers
 

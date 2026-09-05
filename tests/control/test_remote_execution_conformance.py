@@ -77,6 +77,14 @@ def test_remote_execution_bridge_conformance_is_deterministic_and_schema_exact()
         "host-freeze",
         "host-cleanup",
     ]
+    assert first["host_phase_entrypoints"]["subprocess_count"] == 5  # type: ignore[index]
+    assert (  # type: ignore[index]
+        first["host_phase_entrypoints"]["process_model"] == "forked-selected-contract-child"
+    )
+    assert first["host_phase_entrypoints"]["tracked_runner_loaded"] is True  # type: ignore[index]
+    assert (  # type: ignore[index]
+        first["host_phase_entrypoints"]["serialized_contract_override"] is False
+    )
     assert first["duplex_condition_sessions"]["session_count"] == 4  # type: ignore[index]
     assert first["duplex_condition_sessions"]["model_call_count"] == 8  # type: ignore[index]
     assert first["duplex_condition_sessions"]["browser_action_count"] == 8  # type: ignore[index]
