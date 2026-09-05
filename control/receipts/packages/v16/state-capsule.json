@@ -63,8 +63,8 @@
   ],
   "recommended_action": "complete independent exact-head review and explicit merge authorization; only after the reviewed merge generate the package-only V17 successor",
   "repository": {
-    "commit": "63f3306631d909e9bd161d473275c8621b3487d4",
-    "tree": "1e10b9a085a8121f32cb3d6709987546f0e9c827"
+    "commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
+    "tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -104,7 +104,7 @@
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "7a560c719c83102ad53fc7ee35f4c721237d7a828a1b7ab4cee65228791d8e79",
+  "semantic_sha256": "7d19be939c42d29f5efc8985bfbfdef6434c8ad1f4e8e8868275206769954ad8",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "current-turn live authority must be supplied externally in a future turn",
