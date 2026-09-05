@@ -12,6 +12,7 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+from types import MappingProxyType
 from typing import Final
 
 from jsonschema import Draft202012Validator
@@ -107,10 +108,28 @@ REQUIRED_SHARED_SOURCES: Final = V2_REQUIRED_SHARED_SOURCES | frozenset(
         "src/giclab/harness/t09_runtime_admission.py",
     }
 )
+SHARED_SOURCE_BINDING_SCHEMAS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
+    {
+        "1.0.0": LEGACY_REQUIRED_SHARED_SOURCES,
+        "2.0.0": V2_REQUIRED_SHARED_SOURCES,
+        "3.0.0": REQUIRED_SHARED_SOURCES,
+    }
+)
 
 
 class ControlProofError(ValueError):
     """A control proof failed before any effect boundary."""
+
+
+def required_shared_sources_for_schema(schema_version: object) -> frozenset[str]:
+    """Resolve one exact source-binding schema without a latest-version fallback."""
+
+    if not isinstance(schema_version, str):
+        raise ControlProofError("source-binding schema version is malformed")
+    try:
+        return SHARED_SOURCE_BINDING_SCHEMAS[schema_version]
+    except KeyError as exc:
+        raise ControlProofError("source-binding schema version is unsupported") from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -1627,15 +1646,7 @@ def _validate_control_receipt_set(
         if isinstance(source_files, list)
         else set()
     )
-    expected_sources = (
-        LEGACY_REQUIRED_SHARED_SOURCES
-        if source.get("schema_version") == "1.0.0"
-        else V2_REQUIRED_SHARED_SOURCES
-        if source.get("schema_version") == "2.0.0"
-        else REQUIRED_SHARED_SOURCES
-        if source.get("schema_version") == "3.0.0"
-        else frozenset()
-    )
+    expected_sources = required_shared_sources_for_schema(source.get("schema_version"))
     expected_source_version = {
         "4.0.0": "1.0.0",
         "5.0.0": "2.0.0",

@@ -168,6 +168,13 @@ started.
   complete transcript/evidence bindings, all failure probes passing, zero real
   effects, and USD `0.00` new cost. Both the retained legacy root and rebound V16
   package root validate in the generated topology.
+- 2026-09-04: the first repository-wide validation after sealing exposed one
+  duplicated schema dispatch: proof validation handled source-binding schemas
+  `1.0.0` through `3.0.0`, while top-level repository validation independently
+  handled only `1.0.0` and `2.0.0`. The shared exact-version resolver now owns all
+  three mappings, both consumers use it, unknown versions fail without a latest
+  fallback, and an exact three-generation regression covers the contract. A final
+  receipt rebind is required because the validator and proof source bytes changed.
 
 ## Decisions and blockers
 

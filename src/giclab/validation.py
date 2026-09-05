@@ -22,11 +22,10 @@ from giclab.control.proofs import (
     BASE_COMMIT as T09_CONTROL_RECEIPT_BASE_COMMIT,
 )
 from giclab.control.proofs import (
-    LEGACY_REQUIRED_SHARED_SOURCES,
-    REQUIRED_SHARED_SOURCES,
     ControlProofError,
     ControlProofReference,
     discover_sealed_control_receipt_roots,
+    required_shared_sources_for_schema,
     validate_control_receipt_set,
     validate_current_control_receipt_set,
 )
@@ -462,13 +461,11 @@ def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[st
         )
         if ancestor.returncode != 0:
             errors.append("T09 shared control-plane source commit is not based on the exact base")
-    required_paths = set(
-        LEGACY_REQUIRED_SHARED_SOURCES
-        if document.get("schema_version") == "1.0.0"
-        else REQUIRED_SHARED_SOURCES
-        if document.get("schema_version") == "2.0.0"
-        else ()
-    )
+    try:
+        required_paths = set(required_shared_sources_for_schema(document.get("schema_version")))
+    except ControlProofError as exc:
+        required_paths = set()
+        errors.append(f"T09 shared control-plane source binding: {exc}")
     files = document.get("files")
     bindings: dict[str, str] = {}
     if not isinstance(files, list):
