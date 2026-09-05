@@ -143,15 +143,23 @@ started.
   in a bounded forked child. The child inherits the exact already-selected registry,
   while the receipt proves five child processes, the tracked entry point, and the
   absence of any serialized contract override or default/latest selection.
-- 2026-09-04: froze final shared implementation ancestor
+- 2026-09-04: froze shared implementation ancestor
   `0e628694db56a90e1e1f4748c8c338d48baddbb2`, tree
   `d77c83be4d4495df9f1491e4dccdeb955d27a6de`. The unchanged normal generator
   executed all seven incident groups three times through its standalone,
   pre-topology agent-check, and post-topology agent-check paths, then atomically
-  published 29 V16 receipts. Aggregate binding file SHA-256 is
-  `232e080c866d5d26d7eaa5db1afa86dfdcf354908d431b33ea46f2323ecde58b`;
-  the sealed root Git tree in receipt descendant `8c8a2789ed1f5e52e18a358893c2b4819afd1e7d`
-  is `13da342b9d2665f0df70ad92f82baba813110c1e`.
+  published 29 V16 receipts. A default capsule check then rejected that first root's
+  explicit-selector target source, correctly preserving exact target equivalence.
+  The root remains recoverable in descendant `8c8a2789ed1f5e52e18a358893c2b4819afd1e7d`.
+- 2026-09-04: regenerated through the same normal command without a selector so the
+  sealed target source is the successor-driven `goal-record`, matching the base
+  convention and default consumer. The final receipt control ancestor is
+  `63f3306631d909e9bd161d473275c8621b3487d4`, tree
+  `1e10b9a085a8121f32cb3d6709987546f0e9c827`; aggregate binding file SHA-256 is
+  `77bd98899e51eb88422450c3c9d6c9b3007d6fe9decb75ba5b7f4850f2babd5d`.
+  Receipt descendant `f9f8e8d9ee9f338beecb5d07aa61f17c19adf009` has sealed-root Git tree
+  `33a051972b2790ff34740e58df7466536b3ac868`. The default deterministic capsule
+  selects V16 from the goal and reports anti-shadow valid.
 - 2026-09-04: the sealed viability receipt reports protocol `2.0.0`, 31 methods,
   24 ordered phases, zero unresolved methods, one launch mutation seam, synthetic
   successor compatibility, and zero real effects. The sealed remote bridge receipt
