@@ -50,7 +50,9 @@ from giclab.harness.t09_candidate_inputs import (
 )
 from giclab.harness.t09_cleanup_state import (
     CleanupTargetKind,
+    CleanupTargetState,
     EarlyCleanupJournal,
+    TerminalCleanupDisposition,
     cleanup_locator_identity,
 )
 
@@ -1755,6 +1757,7 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         self.source_inputs = source_inputs
         self.phase_receipts = {}
         self.transfer_request = None
+        self.unstarted_transfer_request = None
         self.phase_events = []
         self.retained_closeouts = {}
         self.condition_invocations = {}
@@ -2019,6 +2022,9 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         return receipt
 
     def transfer_package_to_host(self, request):
+        if self.fault_plan.fail_operation == "host.before-transfer":
+            self.unstarted_transfer_request = request
+            raise RuntimeError("injected carrier refusal before any transfer effect")
         self.transfer_request = request
         root = Path(request.binding.remote_root)
         root.mkdir(mode=0o700)
@@ -2803,7 +2809,7 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
     def cleanup_transaction(self, request):
         transfer = self.transfer_request
         if transfer is None:
-            raise RuntimeError("cleanup before transfer binding remains unproven")
+            return self._cleanup_before_transfer(request)
         binding = transfer.binding.to_document()
         predecessor = next(
             (
@@ -2875,6 +2881,104 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             remote_secret_removed=retained["remote_secret_removed"],
             firewall_restored=closeout["security_restored"],
             rulesets_restored=closeout["security_restored"],
+            started_wall_time=request.started_wall_time,
+            completed_wall_time=self._clock.wall_time(),
+            started_monotonic=request.started_monotonic,
+            completed_monotonic=self._clock.monotonic(),
+            receipt_sha256="",
+        )
+        return replace(
+            value, receipt_sha256=ProductionCategory3World._cleanup_receipt_identity(value)
+        )
+
+    def _cleanup_before_transfer(self, request):
+        """Use durable provider ownership before any retained host phase exists."""
+        handle = request.provider_handle
+        if (
+            handle is None
+            or self.unstarted_transfer_request is None
+            or self.phase_receipts
+            or self.remote_environment is not None
+            or request.empirical_prefix
+            or request.raw_prefix
+        ):
+            raise RuntimeError("pre-transfer cleanup does not match a zero-transfer prefix")
+        planned = self.unstarted_transfer_request
+        remote_root = Path(planned.binding.remote_root)
+        if (
+            planned.binding.provider_handle_identity != handle.opaque_identity
+            or remote_root != self._root / f"offline-remote-{handle.launch_ordinal}"
+            or os.path.lexists(remote_root)
+        ):
+            raise RuntimeError("planned pre-transfer root is not exactly absent")
+        campaign_root = (
+            self._root / "control-private" / f"campaign-slot-{handle.launch_ordinal:02d}"
+        )
+        entry = campaign_root / "entry-source/entry-receipt.json"
+        controls = self.campaign_low_level_controls()
+        journal = provider._cleanup_journal_for_closeout(
+            contract=self.contract,
+            private_root=campaign_root,
+            package_commit=controls.expected_package_commit,
+            plan_sha256=provider.file_sha256(self.repository / self.contract.provider_profile_path),
+            remote_cleanup_journal=None,
+        )
+        state = journal.load()
+        if state.provider_instance_identity_sha256 != handle.opaque_identity:
+            raise RuntimeError("pre-transfer cleanup owner differs from provider handle")
+        remote = self._credential_target(entry)
+        if os.path.lexists(remote):
+            raise RuntimeError("pre-transfer credential absence is contradicted")
+        if any(t.kind is CleanupTargetKind.OWNED_CONTAINER for t in state.targets):
+            raise RuntimeError("pre-transfer journal unexpectedly owns a container")
+        # This is an actual exact-path observation under the bound environmental
+        # double. Record it through the retained journal, with no host receipt or
+        # synthetic freeze and no interpretation of an absent transfer as cleanup.
+        journal.record_result(
+            target_id="temporary-remote-secret",
+            result=CleanupTargetState.ABSENT,
+            detail_code="exact-pre-transfer-credential-path-absent",
+            clock=self._clock.wall_time,
+        )
+        transport = self.campaign_closeout_transport(
+            contract=self.contract,
+            launch_ordinal=handle.launch_ordinal,
+            handle=handle,
+            clock=self._clock,
+        )
+        with self.campaign_scope():
+            path = provider.closeout_campaign(
+                contract=self.contract,
+                repository=self.repository,
+                package_commit=controls.expected_package_commit,
+                authorization_ledger=self._root / "control-private/authorization-overlay.json",
+                dotenv=self._root / "control-private/mixed.env",
+                private_root=campaign_root,
+                transport=transport,
+                clock=self._clock.wall_time,
+                sleeper=self._clock.sleep,
+            )
+        closed = json.loads(path.read_bytes())
+        final = journal.load()
+        if final.terminal_cleanup_disposition is not TerminalCleanupDisposition.COMPLETE:
+            raise RuntimeError("retained pre-transfer cleanup journal is unresolved")
+        self.retained_closeouts[handle.launch_ordinal] = path
+        from giclab.control.production import _host_module
+
+        # Execute the retained scanner on the exact planned, observed-absent
+        # remote artifact root. Public and held local evidence is additionally
+        # scanned by ProductionCategory3World.scan_privacy after this receipt.
+        privacy = _host_module(self.repository).privacy_violations(remote_root)
+        value = CleanupExecutionReceipt(
+            immutable_handoff_sha256=request.immutable_handoff_sha256,
+            owned_containers_absent=not any(
+                t.kind is CleanupTargetKind.OWNED_CONTAINER for t in final.targets
+            ),
+            exact_secret_matches=int(os.path.lexists(remote)),
+            structural_privacy_findings=tuple(privacy),
+            remote_secret_removed=not os.path.lexists(remote),
+            firewall_restored=closed["security_restored"],
+            rulesets_restored=closed["security_restored"],
             started_wall_time=request.started_wall_time,
             completed_wall_time=self._clock.wall_time(),
             started_monotonic=request.started_monotonic,

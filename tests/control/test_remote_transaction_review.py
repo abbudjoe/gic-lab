@@ -2209,6 +2209,9 @@ def test_r6_shared_pilot_entry_establishes_and_reuses_one_accountant(tmp_path):
     world.repository = ROOT
     world._pilot_state = tmp_path / "pilot-state.json"
     world._condition_observers = {}
+    world._campaign_output_boundary = None
+    world._campaign_cleanup_remaining = None
+    world._campaign_admission_blocked = False
     # This primitive invokes the real production failure reservation. Its
     # allowance comes from the unchanged pinned execution contract, rather than
     # the deliberately smaller conformance-only observer fixture. The separate
@@ -2265,7 +2268,9 @@ def test_r6_shared_pilot_entry_establishes_and_reuses_one_accountant(tmp_path):
     written += world._pilot_state.stat().st_size
     assert world._condition_accountant(template.run_id) is observer
     assert observer._controller_output_observed == written
-    assert world._aggregate_usage.output_bytes == observer._controller_output_allowance
+    assert world._aggregate_usage.output_bytes == (
+        observer._controller_output_allowance + observer.boundary.campaign_output_granted
+    )
     assert world._aggregate_observed_usage.output_bytes == observer._controller_output_observed
     assert observer._controller_output_allowance > observer._controller_output_observed
 
@@ -2309,6 +2314,9 @@ def test_r6_failed_initial_control_reserve_cannot_be_reused(tmp_path):
     boundary, template = conformance._observer_for(_binding())
     world = object.__new__(ProductionCategory3World)
     world._condition_observers = {}
+    world._campaign_output_boundary = None
+    world._campaign_cleanup_remaining = None
+    world._campaign_admission_blocked = False
     world._runtime_budget = SimpleNamespace(
         condition_caps={template.run_id: boundary.condition_caps},
         aggregate_caps=boundary.aggregate_caps,
@@ -2378,3 +2386,268 @@ def test_r6_mutable_control_counts_actual_writes_instead_of_signed_occupancy(
         else:
             assert len(temporary) == 1
             assert temporary[0].stat().st_size == sum(writes) == 7 < sum(grants)
+
+
+# Campaign writers use the production admission connection and real file writers.
+def _campaign_writer_world(root):
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    from giclab.control.production import ProductionCategory3World
+
+    boundary, template = conformance._observer_for(_binding())
+    execution = json.loads((ROOT / V16_PROVIDER_CONTRACT.execution_contract_path).read_bytes())
+    cap = execution["runtime_limits"]["max_output_bytes_per_attempt"]
+    world = object.__new__(ProductionCategory3World)
+    world.root = root
+    world.contract = V16_PROVIDER_CONTRACT
+    world.clock = template.clock
+    controls = SimpleNamespace(
+        capability_path=lambda slot, contract: root / f"launch-slot-{slot:02d}.json"
+    )
+    world.low_level_effects = SimpleNamespace(campaign_low_level_controls=lambda: controls)
+    world._runtime_budget = SimpleNamespace(
+        aggregate_caps=replace(boundary.aggregate_caps, max_output_bytes=4 * cap),
+        condition_caps={
+            run: replace(boundary.condition_caps, max_output_bytes=cap)
+            for run in V16_PROVIDER_CONTRACT.run_ids
+        },
+        model_revision=template.model_revision,
+        service_tier=template.service_tier,
+    )
+    world._aggregate_usage = boundary.aggregate_usage
+    world._aggregate_observed_usage = boundary.aggregate_observed_usage
+    world._campaign_output_boundary = None
+    world._campaign_cleanup_remaining = None
+    world._campaign_writes = []
+    world._campaign_admission_blocked = False
+    world._campaign_started_monotonic = None
+    world._campaign_deadline_monotonic = None
+    world._condition_observers = {}
+    world._seen_call_ids = set()
+    world._seen_logical_call_ids = set()
+    world._accounting = {}
+    return world, template
+
+
+def _campaign_actual_writer(root, role):
+    from giclab.harness import t09_model_metadata_receipt as metadata
+    from giclab.harness import t09_pragmatic_provider as provider
+    from giclab.harness.t09_cleanup_state import CleanupLifecycleStage, EarlyCleanupJournal
+
+    target = root / "output.json"
+    if role == "record":
+        return lambda: provider.write_exclusive(target, {"actual": "π"}), target
+    if role == "bytes":
+        return lambda: provider.write_bytes_exclusive(target, b"actual bytes"), target
+    if role == "append":
+        target.write_bytes(b"prior\n")
+        return lambda: provider._append_jsonl(target, {"actual": "π"}), target
+    if role in {"copy", "held-copy"}:
+        source = root / "source"
+        source.write_bytes(b"retained fixture bytes")
+        source.chmod(0o600)
+        if role == "copy":
+            return lambda: provider._copy_campaign_file(source, target), target
+        return lambda: provider._copy_exact_private_file(source, target, label="fixture"), target
+    if role == "metadata":
+        root.chmod(0o700)
+        return lambda: metadata._write_private_exclusive(target, {"actual": "π"}), target
+    journal = EarlyCleanupJournal.initialize(
+        root / "journal",
+        plan_id="PLAN-EXP0001-PILOT-V10",
+        host_run_id="RUN-T09-PILOT-HOST-AUTONOMOUS-0003",
+        package_commit="a" * 40,
+        plan_sha256="b" * 64,
+        provider_instance_id="instance-owned-0003",
+        provider_instance_identity_sha256="c" * 64,
+        provider_started_at_epoch=999.0,
+        launch_slot=1,
+        replacement_eligibility_sha256=None,
+        firewall_baseline_identity_sha256="d" * 64,
+        clock=lambda: 1000.0,
+    )
+    if role == "cleanup-journal":
+        return lambda: journal.advance_lifecycle(
+            CleanupLifecycleStage.SOURCE_STAGING, clock=lambda: 1001.0
+        ), journal.versions / "00000002.json"
+    assert role == "cleanup-receipt"
+    return lambda: journal.write_basic_closeout_receipt(target), target
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        "record",
+        "bytes",
+        "append",
+        "copy",
+        "held-copy",
+        "metadata",
+        "cleanup-journal",
+        "cleanup-receipt",
+    ],
+)
+@pytest.mark.parametrize("denied", [False, True])
+def test_r6_campaign_actual_writers_shared_admission_precedes_growth(tmp_path, role, denied):
+    from giclab.harness.sira_gate_a import ProviderBudgetExceeded
+
+    world, _ = _campaign_writer_world(tmp_path)
+    emit, target = _campaign_actual_writer(tmp_path, role)
+    before = {p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    boundary = world._campaign_accountant()
+    assert boundary._started is None and world._campaign_started_monotonic is None
+    if denied:
+        boundary.reserve_campaign_output_bytes(
+            boundary.aggregate_caps.max_output_bytes - boundary.aggregate_usage.output_bytes
+        )
+        with pytest.raises(ProviderBudgetExceeded), world._campaign_writer_scope():
+            emit()
+        after = {
+            p.relative_to(tmp_path): p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()
+        }
+        assert after == before
+        assert boundary.campaign_output_observed == 0
+        assert world._campaign_admission_blocked
+    else:
+        with world._campaign_writer_scope():
+            emit()
+        allowance = world._campaign_writes[-1]
+        assert allowance.observed == allowance.granted > 0
+        prior = len(before.get(target.relative_to(tmp_path), b""))
+        assert target.stat().st_size - prior == allowance.observed
+        assert boundary.campaign_output_observed == allowance.observed
+        assert boundary.aggregate_observed_usage.output_bytes == allowance.observed
+        assert world._aggregate_usage.output_bytes == boundary.campaign_output_granted
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        "record",
+        "bytes",
+        "append",
+        "copy",
+        "held-copy",
+        "metadata",
+        "cleanup-journal",
+        "cleanup-receipt",
+    ],
+)
+def test_r6_campaign_partial_writer_keeps_actual_prefix_and_unused_grant(
+    tmp_path, monkeypatch, role
+):
+    world, _ = _campaign_writer_world(tmp_path)
+    emit, _ = _campaign_actual_writer(tmp_path, role)
+    original_write = os.write
+    calls = 0
+
+    def interrupted(fd, data):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return original_write(fd, data[:7])
+        raise OSError("injected campaign writer interruption")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "write", interrupted)
+        with pytest.raises(OSError), world._campaign_writer_scope():
+            emit()
+    allowance = world._campaign_writes[-1]
+    assert allowance.observed == 7 < allowance.granted
+    boundary = world._campaign_accountant()
+    assert boundary.campaign_output_observed == 7
+    assert boundary.campaign_output_granted == world._aggregate_usage.output_bytes
+    assert world._aggregate_observed_usage.output_bytes == 7
+
+
+def test_r6_campaign_capacity_conserved_across_four_condition_boundaries_and_cleanup(tmp_path):
+    from giclab.harness import t09_pragmatic_provider as provider
+
+    world, template = _campaign_writer_world(tmp_path)
+    with world._campaign_writer_scope():
+        provider.write_bytes_exclusive(tmp_path / "entry", b"entry")
+    initial = world._campaign_accountant()
+    assert initial._started is None
+    assert world._campaign_deadline_monotonic is None
+    world._campaign_deadline_monotonic = template.campaign_deadline_monotonic
+    for index, run in enumerate(V16_PROVIDER_CONTRACT.run_ids):
+        observer = world._condition_accountant(run)
+        observer.allocate_controller_output_bytes(count=100)
+        observer.observe_controller_output_bytes(count=7)
+        world._record_boundary_state(run, observer)
+        assert world._aggregate_observed_usage.output_bytes == 5 + 7 * (index + 1)
+        assert observer.boundary.campaign_output_observed == 5
+        assert observer.boundary.campaign_output_granted == initial.campaign_output_granted
+    upper = world._aggregate_usage.output_bytes
+    with world._campaign_writer_scope(cleanup=True):
+        provider.write_bytes_exclusive(tmp_path / "cleanup", b"clean")
+    assert world._aggregate_usage.output_bytes == upper
+    assert world._aggregate_observed_usage.output_bytes == 38
+    assert world._campaign_accountant().campaign_output_observed == 10
+
+
+def test_r6_campaign_denial_is_sticky_but_prefunded_cleanup_survives(tmp_path):
+    from giclab.harness import t09_pragmatic_provider as provider
+    from giclab.harness.sira_gate_a import ProviderBudgetExceeded
+
+    world, template = _campaign_writer_world(tmp_path)
+    boundary = world._campaign_accountant()
+    boundary.reserve_campaign_output_bytes(
+        boundary.aggregate_caps.max_output_bytes - boundary.aggregate_usage.output_bytes
+    )
+    with (
+        pytest.raises(ProviderBudgetExceeded, match="caught campaign"),
+        world._campaign_writer_scope(),
+    ):
+        from contextlib import suppress
+
+        with suppress(ProviderBudgetExceeded):
+            provider.write_bytes_exclusive(tmp_path / "denied", b"denied")
+    assert not (tmp_path / "denied").exists()
+    with world._campaign_writer_scope(cleanup=True):
+        provider.write_bytes_exclusive(tmp_path / "failure", b"bounded failure")
+    assert boundary.aggregate_observed_usage.output_bytes == len(b"bounded failure")
+    world._campaign_deadline_monotonic = template.campaign_deadline_monotonic
+    with pytest.raises(ProviderBudgetExceeded, match="blocked campaign"):
+        world._condition_accountant(V16_PROVIDER_CONTRACT.run_ids[0])
+    assert not world._condition_observers
+
+
+@pytest.mark.parametrize("alias", ["symlink", "hardlink", "outside"])
+def test_r6_campaign_writer_rejects_alias_before_admission(tmp_path, alias):
+    from giclab.control.adapters import AdapterFailure
+    from giclab.harness import t09_pragmatic_provider as provider
+
+    owned = tmp_path / "owned"
+    owned.mkdir(mode=0o700)
+    outside = tmp_path / "foreign"
+    outside.write_bytes(b"unrelated")
+    world, _ = _campaign_writer_world(owned)
+    target = owned / "target"
+    if alias == "symlink":
+        target.symlink_to(outside)
+    elif alias == "hardlink":
+        os.link(outside, target)
+    else:
+        target = outside
+    boundary = world._campaign_accountant()
+    before = boundary.accounting_document()
+    with pytest.raises(AdapterFailure), world._campaign_writer_scope():
+        provider._append_jsonl(target, {"denied": True})
+    assert outside.read_bytes() == b"unrelated"
+    assert boundary.accounting_document() == before
+    assert not world._campaign_writes
+
+
+def test_r6_campaign_writer_capability_expires_at_scope_exit(tmp_path):
+    from giclab.harness import t09_pragmatic_provider as provider
+
+    world, _ = _campaign_writer_world(tmp_path)
+    with world._campaign_writer_scope():
+        provider.write_bytes_exclusive(tmp_path / "output", b"valid")
+    allowance = world._campaign_writes[-1]
+    before = world._campaign_accountant().accounting_document()
+    with pytest.raises(RuntimeError, match="own admitted allowance"):
+        allowance.observe(0)
+    assert world._campaign_accountant().accounting_document() == before

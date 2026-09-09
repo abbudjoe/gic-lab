@@ -4248,3 +4248,93 @@ a98b4b875ab4d101709d62bc7222b5c90681a893, draft/open/unmerged, auto-merge disabl
 no product push is authorized by these partial results. Private handoff/closeout
 records remain outside this source identity. Independent review PENDING;
 t09_remote_execution_bridge_review_repair_blocked.
+
+
+### PR15-R6-CAMPAIGN-ADMISSION-01 checkpoint (2026-09-09 UTC)
+
+This is a partial same-branch engineering increment after checkpoint
+8ee06de649d599ffd5ebaac60735fd6909de0551, not a final implementation ancestor.
+The shared ProviderBudgetBoundary now admits aggregate-only campaign writers before
+provider entry without an empirical run identity or clock. Its existing 64-MiB
+essential-cleanup reserve is charged within unchanged aggregate policy before entry;
+unused grants and actual observed write bytes carry into all four condition boundaries
+and cleanup. This is capacity reservation, not a policy-budget increase or observation.
+
+The campaign_output capability surface contains no policy owner. Production connects
+parent provider record/journal/copy and metadata writes plus parent cleanup journal/
+receipt writes to that boundary before byte growth. Actual partial write counts survive;
+unused grants are retained, expired capabilities and aliases are rejected, and caught
+policy denial blocks later condition entry while prefunded cleanup stays available.
+Historical unbound callers remain distinct from the active production context.
+
+The retained joined adapter now handles the actual provider-entry/pre-transfer prefix
+using durable exact ownership, observed absent planned transfer/credential paths and
+retained provider closeout validators. It creates no host phase or freeze receipt.
+The terminal closeout consumer supports source-validated idempotent reconciliation
+without another provider request. The new joined prefix asserts zero consumed conditions
+and then exercises that consumer with redispatch forbidden and unchanged accounting.
+This is not the entire interrupted/resumed full-controller cleanup matrix.
+
+Separate source-bound development outcomes (all native linux/arm64 on immutable CI
+image sha256:0928021614063435abaebc9771282edd681aa7dfe1e2960c1a86dda61b174a3a):
+
+| Run suffix | Passed | Failed/errors | Skipped | Input manifest SHA-256 |
+|---|---:|---:|---:|---|
+| 4b057810ac47ab58 | 126 | 26 | 0 | 6ace77f8653c35b4632d5e2254c92dc4e2c956215bec47df931c21af522ce247 |
+| d76b6a23f0394a46 | 152 | 0 | 0 | 7e2682f233d99acfd07f4dcd860ea31fb309655377044e7de111f66fff682981 |
+| 2703a45113a794ae | 0 | 2 setup errors | 0 | a81e000996bb2be7fc7f68937c9c5c270e9996a926a938556cea41e26302d8a4 |
+| 51d538fb4cce3872 | 1 | 1 | 0 | a4a6acb4c36085e41633a219f48cf20134f3e177ebe0173a5f24327f58204e6f |
+| 6edb4f1b97228816 | 157 | 0 | 0 | c00cbbaa803c52562d0e64e49a16156c649a93f7a80f80353f57f98ae06cbc25 |
+| 3e2ddfa84e07992c | 163 | 0 | 0 | eeebf11442aeb4734acfd46aa751bf7aa4192c2f228c76dea3ef21ece861635e |
+
+The first run exposed new component fixtures lacking explicit launch-capability paths
+and an assertion omitting reserved cleanup capacity. The first joined setup lacked the
+new module in the explicit candidate closure; it now has 354 members. The 51d5 positive
+four-condition transaction passed; its new pre-transfer case reached verified cleanup
+but failed a test assertion incorrectly expecting four conditions. Originals remain.
+The final 163-test run passed all five original joined parameters plus the new prefix
+and 157 components in one batch, pytest exit zero, 1030.192 seconds. Six closed transaction
+trees (1450 files, 11822925 bytes) were retained inside the verified 16049664-byte export.
+All 894 source members matched the snapshot before this additive ledger entry. This
+entry is not an exact-commit CI certificate of its subsequent checkpoint.
+
+Active source assertions: test_r6_campaign_actual_writers_shared_admission_precedes_growth,
+test_r6_campaign_partial_writer_keeps_actual_prefix_and_unused_grant,
+test_r6_campaign_capacity_conserved_across_four_condition_boundaries_and_cleanup,
+test_r6_campaign_denial_is_sticky_but_prefunded_cleanup_survives, and alias/expiry
+regressions in tests/control/test_remote_transaction_review.py. The retained candidate
+bootstrap requires actual provider-entry and cleanup-journal admission observations.
+The pre-transfer trace records 61 parent writes and 50862 observed bytes; cumulative
+granted bytes 67137869 include unused cleanup capacity, not additional observed output.
+
+R1–R6 remain PARTIAL. The next seam is explicit campaign output admission across the
+retained child-process cleanup/control boundary: CleanupExecutionRequest still has no
+such capability and the parent ContextVar does not cross processes. The trace labels
+its parent coverage. Full writer census, child admission, required cleanup corruption/
+interruption prefixes, controller timeout/disconnect/reaping and exhaustive hook-disable
+matrices remain incomplete. No full final gate is spent on this partial increment.
+Current V16 receipts, immutable implementation ancestor, exact-base parity and required
+full control/static/privacy/site/native-only product gates remain NOT RUN.
+
+Native source-only Ruff/format/diff checks passed on ten changed Python files; mypy
+passed six production modules with cache disabled. Initial cache-access diagnostics
+are retained as tooling failures, not guest I/O failures. Fresh-lane smoke
+782647804ef2f5c6 passed; each finished run exported results before exact-owned cleanup.
+The resumed encrypted image used the existing protected descriptor. A redundant
+uncredentialed imageinfo query timed out and prompted the owner for a password; the
+owner was advised to cancel. Actual image-encrypted mapping checks then verified the
+same attachment before profile start. That deviation is retained and the query is
+not a future resume method. Closeout and publication records remain external.
+
+The earlier b2cc XML derivative is corrected append-only by sanitizing values before
+serialization; all 271 original outcomes (270 pass, one failure) remain identical.
+No test rerun or replacement original is claimed. New source deltas were independently
+preserved (11 files, 1342104 bytes, inventory SHA-256
+687cb1bb09283a986317dc2e2a80a747da3ceb04218053c35b02eb90c31e2d05).
+Source106/108 remain separate historical development evidence. Source109 is UNKNOWN,
+excluded from successful validation, recovery deferred; Source110 was unvalidated at
+its original checkpoint. Old images/keys/recovery tools remain retained and unused.
+No new real experimental activity/cost, shared-runtime access, science change, V17,
+product push, PR mutation or merge occurred. PR head remains a98b4b8... pending full
+completion/publication gates. Independent review PENDING;
+t09_remote_execution_bridge_review_repair_blocked.

@@ -134,6 +134,12 @@ from giclab.control.remote_bridge import (
 from giclab.harness import t09_model_metadata_receipt as metadata
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
+from giclab.harness.campaign_output import (
+    CampaignWriteAllowance,
+    CampaignWriterRole,
+    campaign_cleanup_active,
+    campaign_output_scope,
+)
 from giclab.harness.sira_gate_a import (
     ImmutableModelRouting,
     ProviderBudgetBoundary,
@@ -879,6 +885,10 @@ class ProductionCategory3World:
         self._accounting: dict[str, dict[str, object]] = {}
         self._aggregate_usage = ProviderBudgetUsage()
         self._aggregate_observed_usage = ProviderBudgetUsage()
+        self._campaign_output_boundary: ProviderBudgetBoundary | None = None
+        self._campaign_cleanup_remaining: int | None = None
+        self._campaign_writes: list[CampaignWriteAllowance] = []
+        self._campaign_admission_blocked = False
         self._evaluations: dict[str, dict[str, object]] = {}
         self._raw_export_acknowledgements: dict[str, str] = {}
         self._provider_cost_receipt: ProviderCostReceipt | None = None
@@ -1284,7 +1294,7 @@ class ProductionCategory3World:
                         self.authority.consume_provider_launch()
                         self._authority_launch_consumed = True
                     self._primitive("validate_unified_live_authority:provider-launch")
-                with self.low_level_effects.campaign_scope():
+                with self._campaign_writer_scope(), self.low_level_effects.campaign_scope():
                     entry_receipt = provider.launch_campaign(
                         contract=self.contract,
                         repository=self.repository,
@@ -2127,7 +2137,7 @@ class ProductionCategory3World:
             clock=self.clock,
         )
         commit, _tree = self._source_identity()
-        with self.low_level_effects.campaign_scope():
+        with self._campaign_writer_scope(cleanup=True), self.low_level_effects.campaign_scope():
             provider.closeout_campaign(
                 contract=self.contract,
                 repository=self.repository,
@@ -2622,6 +2632,103 @@ class ProductionCategory3World:
             raise AdapterFailure("empirical campaign monotonic deadline expired")
         return now, self._campaign_deadline_monotonic - now
 
+    def _campaign_accountant(self) -> ProviderBudgetBoundary:
+        if self._runtime_budget is None:
+            raise AdapterFailure("campaign writer lacks validated aggregate policy")
+        if self._campaign_output_boundary is None:
+            self._campaign_output_boundary = ProviderBudgetBoundary(
+                routing=ImmutableModelRouting.locked(),
+                aggregate_caps=self._runtime_budget.aggregate_caps,
+                condition_caps=None,
+                monotonic=self.clock.monotonic,
+                initial_aggregate_usage=self._aggregate_usage,
+                initial_aggregate_observed_usage=self._aggregate_observed_usage,
+            )
+        boundary = self._campaign_output_boundary
+        if self._campaign_cleanup_remaining is None:
+            # Fund bounded cleanup before provider entry, within the same exact
+            # aggregate cap. This does not enter an empirical condition.
+            boundary.reserve_campaign_output_bytes(MAX_ESSENTIAL_FAILURE_BYTES)
+            self._campaign_cleanup_remaining = MAX_ESSENTIAL_FAILURE_BYTES
+        return boundary
+
+    def _carry_campaign_accounting(self, boundary: ProviderBudgetBoundary) -> None:
+        document = boundary.accounting_document()
+        upper = cast(Mapping[str, object], document["reserved_upper_bound"])
+        lower = cast(Mapping[str, object], document["observed_lower_bound"])
+        self._aggregate_usage = pilot.usage_from_document(upper["aggregate"])
+        self._aggregate_observed_usage = pilot.usage_from_document(lower["aggregate"])
+
+    @contextmanager
+    def _campaign_writer_scope(self, *, cleanup: bool = False) -> Iterator[None]:
+        boundary = self._campaign_accountant()
+        first_writer = len(self._campaign_writes)
+        controls = self.low_level_effects.campaign_low_level_controls()
+        capabilities = {
+            (
+                provider.launch_capability_path(slot, contract=self.contract)
+                if controls is None
+                else controls.capability_path(slot, self.contract)
+            )
+            for slot in range(1, self.contract.max_launch_count + 1)
+        }
+
+        def admit(path: Path, size: int, role: CampaignWriterRole) -> CampaignWriteAllowance:
+            if type(size) is not int or size < 0:
+                raise AdapterFailure("campaign writer has invalid output size")
+            if not path.is_absolute() or ".." in path.parts:
+                raise AdapterFailure("campaign writer path is not canonical")
+            if not path.is_relative_to(self.root) and path not in capabilities:
+                raise AdapterFailure("campaign writer is outside its exact owned scope")
+            root_device = self.root.lstat().st_dev
+            for parent in (path, *path.parents):
+                try:
+                    metadata = parent.lstat()
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISLNK(metadata.st_mode):
+                    raise AdapterFailure("campaign writer path contains a symlink")
+                if parent.is_relative_to(self.root) and (
+                    metadata.st_uid != os.getuid() or metadata.st_dev != root_device
+                ):
+                    raise AdapterFailure("campaign writer crossed its owned filesystem")
+                if parent == path and (
+                    not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1
+                ):
+                    raise AdapterFailure("campaign writer target is not an exact regular file")
+            if cleanup or campaign_cleanup_active():
+                remaining = self._campaign_cleanup_remaining
+                if remaining is None or size > remaining:
+                    raise ProviderBudgetExceeded("bounded campaign cleanup output exhausted")
+                self._campaign_cleanup_remaining = remaining - size
+            else:
+                if self._campaign_admission_blocked:
+                    raise ProviderBudgetExceeded("campaign output admission is already blocked")
+                try:
+                    boundary.reserve_campaign_output_bytes(size)
+                except ProviderBudgetExceeded:
+                    self._campaign_admission_blocked = True
+                    raise
+            allowance = CampaignWriteAllowance(
+                path,
+                role,
+                size,
+                boundary.observe_campaign_output_bytes,
+                cleanup=cleanup or campaign_cleanup_active(),
+            )
+            self._campaign_writes.append(allowance)
+            return allowance
+
+        try:
+            with campaign_output_scope(admit):
+                yield
+            if self._campaign_admission_blocked and not cleanup:
+                raise ProviderBudgetExceeded("caught campaign output denial remains blocking")
+        finally:
+            for allowance in self._campaign_writes[first_writer:]:
+                allowance.closed = True
+            self._carry_campaign_accounting(boundary)
+
     def _condition_accountant(self, run_id: str) -> _AccountingObserver:
         """Establish the one condition accountant before its first control write."""
         existing = self._condition_observers.get(run_id)
@@ -2631,9 +2738,13 @@ class ProductionCategory3World:
             return existing
         if self._runtime_budget is None or self._campaign_deadline_monotonic is None:
             raise AdapterFailure("condition control writer lacks its frozen budget")
+        if self._campaign_admission_blocked:
+            raise ProviderBudgetExceeded("condition entry follows blocked campaign output")
         caps = self._runtime_budget.condition_caps.get(run_id)
         if caps is None:
             raise AdapterFailure("condition control writer has no exact run cap")
+        previous = self._campaign_accountant()
+        self._carry_campaign_accounting(previous)
         boundary = ProviderBudgetBoundary(
             routing=ImmutableModelRouting.locked(),
             aggregate_caps=self._runtime_budget.aggregate_caps,
@@ -2641,7 +2752,10 @@ class ProductionCategory3World:
             monotonic=self.clock.monotonic,
             initial_aggregate_usage=self._aggregate_usage,
             initial_aggregate_observed_usage=self._aggregate_observed_usage,
+            initial_campaign_output_granted=previous.campaign_output_granted,
+            initial_campaign_output_observed=previous.campaign_output_observed,
         )
+        self._campaign_output_boundary = boundary
         observer = _AccountingObserver(
             run_id=run_id,
             model_revision=self._runtime_budget.model_revision,
@@ -5959,7 +6073,8 @@ class ProductionCategory3World:
                 ):
                     raise AdapterFailure("cleanup authority differs from the live transaction")
                 self._primitive("validate_unified_live_authority:cleanup")
-            receipt = self.low_level_effects.cleanup_transaction(request)
+            with self._campaign_writer_scope(cleanup=True):
+                receipt = self.low_level_effects.cleanup_transaction(request)
             returned_wall = self.clock.wall_time()
             returned_monotonic = self.clock.monotonic()
             if (

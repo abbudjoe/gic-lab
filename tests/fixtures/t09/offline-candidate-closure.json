@@ -986,6 +986,10 @@
       "role": "import-dependency"
     },
     {
+      "path": "src/giclab/harness/campaign_output.py",
+      "role": "import-dependency"
+    },
+    {
       "path": "src/giclab/harness/cli.py",
       "role": "active-validation-input"
     },

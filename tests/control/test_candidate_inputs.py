@@ -197,6 +197,7 @@ def test_normal_local_qualifier_rejects_candidate_before_runtime_access(
         "transaction-no-answer",
         "transaction-attach-output-denial",
         "transaction-export-output-denial",
+        "provider-entry-pre-transfer-failure",
         "qualification-start-failure",
         "preflight-start-failure",
         "local-qualification",
@@ -210,6 +211,7 @@ def test_normal_local_qualifier_rejects_candidate_before_runtime_access(
         "transaction-no-answer",
         "transaction-attach-output-denial",
         "transaction-export-output-denial",
+        "provider-entry-pre-transfer-failure",
         "qualification-start-failure",
         "preflight-start-failure",
         "local-qualification",
@@ -351,6 +353,11 @@ def test_candidate_actual_package_verifier_in_isolated_source_process(
             assert len(transaction["condition_identities_consumed"]) == 2
             assert transaction["earliest_stopping_phase"] == "first-pair-checkpoint"
             assert all(item["returncode"] == 0 for item in preparation["retained_phase_events"])
+        elif exercise_preparation == "provider-entry-pre-transfer-failure":
+            assert transaction["terminal_state"] == "category3-shadow-stopped-cleanup-verified"
+            assert transaction["condition_identities_consumed"] == []
+            assert preparation["retained_phase_events"] == []
+            assert len(preparation["retained_provider_closeouts"]) == 1
         elif exercise_preparation in {"qualification-start-failure", "preflight-start-failure"}:
             assert transaction["terminal_state"] == "category3-shadow-stopped-cleanup-verified"
             assert transaction["earliest_stopping_phase"] == (

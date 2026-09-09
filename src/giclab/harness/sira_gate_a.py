@@ -332,13 +332,15 @@ class ProviderBudgetBoundary:
         *,
         routing: ImmutableModelRouting,
         aggregate_caps: ProviderBudgetCaps,
-        condition_caps: ProviderBudgetCaps,
+        condition_caps: ProviderBudgetCaps | None,
         monotonic: Callable[[], float] = time.monotonic,
         persist: Callable[[ProviderBudgetUsage, int], None] | None = None,
         initial_aggregate_usage: ProviderBudgetUsage | None = None,
         initial_aggregate_observed_usage: ProviderBudgetUsage | None = None,
         persist_aggregate: Callable[[ProviderBudgetUsage, int], None] | None = None,
         persist_accounting: Callable[[Mapping[str, object]], None] | None = None,
+        initial_campaign_output_granted: int = 0,
+        initial_campaign_output_observed: int = 0,
     ) -> None:
         self.routing = routing
         self.aggregate_caps = aggregate_caps
@@ -355,7 +357,18 @@ class ProviderBudgetBoundary:
         self._condition_reserved = ProviderBudgetUsage()
         self._lock = threading.RLock()
         self._monotonic = monotonic
-        self._started = monotonic()
+        # An aggregate-only campaign has no empirical condition or empirical clock.
+        self._started = monotonic() if condition_caps is not None else None
+        if (
+            type(initial_campaign_output_granted) is not int
+            or type(initial_campaign_output_observed) is not int
+            or not 0 <= initial_campaign_output_observed <= initial_campaign_output_granted
+            or initial_campaign_output_granted > self.aggregate_usage.output_bytes
+            or initial_campaign_output_observed > self.aggregate_observed_usage.output_bytes
+        ):
+            raise GateAContractError("invalid carried campaign output accounting")
+        self.campaign_output_granted = initial_campaign_output_granted
+        self.campaign_output_observed = initial_campaign_output_observed
         self._persist = persist
         self._persist_aggregate = persist_aggregate
         self._persist_accounting = persist_accounting
@@ -419,11 +432,13 @@ class ProviderBudgetBoundary:
     def _assert_usage(
         self,
         usage: ProviderBudgetUsage,
-        caps: ProviderBudgetCaps,
+        caps: ProviderBudgetCaps | None,
         *,
         scope: str,
     ) -> None:
-        elapsed = self._monotonic() - self._started
+        if caps is None:
+            raise GateAContractError("campaign-only accountant cannot admit condition effects")
+        elapsed = 0.0 if self._started is None else self._monotonic() - self._started
         violations: list[str] = []
         if usage.cost_usd > caps.max_cost_usd:
             violations.append("cost_usd")
@@ -857,6 +872,11 @@ class ProviderBudgetBoundary:
             }
             return {
                 "schema_version": "0.2.0",
+                "campaign_output": {
+                    "granted_bytes": self.campaign_output_granted,
+                    "observed_bytes": self.campaign_output_observed,
+                    "condition_identity": None,
+                },
                 "observed_lower_bound": {
                     "condition": self._usage_document(self.condition_observed_usage),
                     "aggregate": self._usage_document(self.aggregate_observed_usage),
@@ -918,6 +938,39 @@ class ProviderBudgetBoundary:
                 self.condition_observed_usage, output_bytes=count
             )
             self._refresh_reserved_usage()
+            self._persist_state()
+
+    def reserve_campaign_output_bytes(self, count: int) -> None:
+        """Charge campaign capacity to the existing aggregate policy before growth.
+
+        Its upper bound is carried unchanged into subsequent condition boundaries.
+        Consumption changes only the lower bound, so unused grants cannot be
+        released or charged a second time at a condition transition.
+        """
+        if type(count) is not int or count < 0:
+            raise GateAContractError("campaign output grant must be non-negative")
+        with self._lock:
+            aggregate = self._add_usage(self.aggregate_usage, output_bytes=count)
+            self._assert_usage(
+                self._sum_usage(aggregate, self._aggregate_reserved),
+                self.aggregate_caps,
+                scope="aggregate",
+            )
+            self.aggregate_usage = aggregate
+            self.campaign_output_granted += count
+            self._persist_state()
+
+    def observe_campaign_output_bytes(self, count: int) -> None:
+        """Consume already admitted capacity; never admit growth during observation."""
+        if type(count) is not int or count < 0:
+            raise GateAContractError("campaign output observation must be non-negative")
+        with self._lock:
+            if self.campaign_output_observed + count > self.campaign_output_granted:
+                raise ProviderBudgetExceeded("campaign output exceeds its admitted capacity")
+            self.campaign_output_observed += count
+            self.aggregate_observed_usage = self._add_usage(
+                self.aggregate_observed_usage, output_bytes=count
+            )
             self._persist_state()
 
     def reserve_output_bytes(self, *, total_bytes: int) -> None:

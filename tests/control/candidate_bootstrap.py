@@ -432,6 +432,8 @@ def main() -> None:
                     if mode == "transaction-export-output-denial"
                     else "condition.attach-output-denial"
                     if mode == "transaction-attach-output-denial"
+                    else "host.before-transfer"
+                    if mode == "provider-entry-pre-transfer-failure"
                     else "host.qualify"
                     if mode == "qualification-start-failure"
                     else "host.preflight"
@@ -559,6 +561,84 @@ def main() -> None:
                     json.dumps(retained_failures, sort_keys=True, indent=2) + "\n"
                 )
                 snapshot.validate()
+                if mode == "provider-entry-pre-transfer-failure":
+                    from giclab.harness import t09_pragmatic_provider as provider
+
+                    # Reuse the actual terminal provider source without a second
+                    # environmental request. This is an idempotent consumer check
+                    # after the controller prefix, not a second campaign.
+                    closeout = effects.retained_closeouts[1]
+                    campaign_root = closeout.parent.parent
+                    controls = effects.campaign_low_level_controls()
+                    before_receipt = closeout.read_bytes()
+                    before_accounting = world._campaign_accountant().accounting_document()
+
+                    def no_duplicate_request(*args, **kwargs):
+                        raise AssertionError(
+                            "idempotent closeout dispatched another provider effect"
+                        )
+
+                    with world._campaign_writer_scope(cleanup=True), effects.campaign_scope():
+                        resumed = provider.closeout_campaign(
+                            contract=V16_PROVIDER_CONTRACT,
+                            repository=package,
+                            package_commit=controls.expected_package_commit,
+                            authorization_ledger=transaction_root
+                            / "control-private/authorization-overlay.json",
+                            dotenv=transaction_root / "control-private/mixed.env",
+                            private_root=campaign_root,
+                            transport=SimpleNamespace(request=no_duplicate_request),
+                            clock=effects._clock.wall_time,
+                            sleeper=effects._clock.sleep,
+                        )
+                    assert resumed == closeout and resumed.read_bytes() == before_receipt
+                    assert world._campaign_accountant().accounting_document() == before_accounting
+                    (transaction_root / "joined-pre-transfer-idempotence.json").write_text(
+                        json.dumps(
+                            {
+                                "candidate_binding_sha256": snapshot.digest,
+                                "receipt_sha256": hashlib.sha256(before_receipt).hexdigest(),
+                                "provider_redispatch_allowed": False,
+                                "accounting_unchanged": True,
+                                "scope": "retained terminal consumer after full-controller prefix",
+                            },
+                            sort_keys=True,
+                        )
+                        + "\n"
+                    )
+                campaign_boundary = world._campaign_accountant()
+                campaign_writers = [
+                    {
+                        "path": str(item.path.relative_to(transaction_root)),
+                        "role": item.role.value,
+                        "granted_bytes": item.granted,
+                        "observed_bytes": item.observed,
+                        "cleanup": item.cleanup,
+                        "closed": item.closed,
+                    }
+                    for item in world._campaign_writes
+                ]
+                campaign_projection = {
+                    "candidate_binding_sha256": snapshot.digest,
+                    "plan_id": V16_PROVIDER_CONTRACT.plan_id,
+                    "host_run_id": V16_PROVIDER_CONTRACT.host_run_id,
+                    "accounting": campaign_boundary.accounting_document(),
+                    "writers": campaign_writers,
+                    "coverage": "provider-parent and parent cleanup writers; not full R6 closure",
+                }
+                (transaction_root / "joined-campaign-output.json").write_text(
+                    json.dumps(campaign_projection, sort_keys=True, indent=2) + "\n"
+                )
+                assert campaign_boundary.campaign_output_observed == sum(
+                    item["observed_bytes"] for item in campaign_writers
+                )
+                assert all(item["closed"] for item in campaign_writers)
+                assert any(
+                    item["role"] == "provider-journal"
+                    and item["path"].endswith("entry-source/request-journal.jsonl")
+                    for item in campaign_writers
+                ), "retained provider entry was disconnected from campaign admission"
+                assert any(item["role"] == "cleanup-journal" for item in campaign_writers)
                 accounting_rows = []
                 for run_id, observer in world._condition_observers.items():
                     actual = observer.boundary.accounting_document()
@@ -595,6 +675,7 @@ def main() -> None:
                     else "category3-shadow-stopped-cleanup-verified"
                     if mode
                     in {
+                        "provider-entry-pre-transfer-failure",
                         "qualification-start-failure",
                         "preflight-start-failure",
                         "condition-failure-export",
@@ -725,6 +806,11 @@ def main() -> None:
                         e["phase"] == "first-pair-checkpoint"
                         for e in transaction["ordered_state_transitions"]
                     )
+                elif mode == "provider-entry-pre-transfer-failure":
+                    assert transaction["condition_identities_consumed"] == []
+                    assert effects.phase_receipts == {}
+                    assert len(effects.retained_closeouts) == 1
+                    assert not world._condition_observers
                 elif mode in {"qualification-start-failure", "preflight-start-failure"}:
                     assert transaction["earliest_stopping_phase"] == (
                         "host-preflight"

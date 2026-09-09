@@ -23,6 +23,12 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final, cast
 
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    admit_campaign_write,
+    observe_campaign_write,
+)
+
 EARLY_CLEANUP_SCHEMA_VERSION: Final = "1.0.0"
 EARLY_CLEANUP_RECEIPT_SCHEMA_VERSION: Final = "1.0.0"
 CLEANUP_EXPORT_HANDOFF_SCHEMA_VERSION: Final = "1.0.0"
@@ -946,6 +952,9 @@ class EarlyCleanupJournal:
         pending_name = f".{final_name}.pending.{uuid.uuid4().hex}"
         pending_path = self.versions / pending_name
         final_path = self.versions / final_name
+        allowance = admit_campaign_write(
+            final_path, len(encoded), CampaignWriterRole.CLEANUP_JOURNAL
+        )
         if self.before_write is not None:
             self.before_write(final_path, len(encoded))
         descriptor = os.open(
@@ -959,6 +968,7 @@ class EarlyCleanupJournal:
                 written = os.write(descriptor, encoded[offset:])
                 if written <= 0:
                     raise OSError("short early cleanup state write")
+                observe_campaign_write(allowance, written)
                 offset += written
             os.fsync(descriptor)
         finally:
@@ -1326,6 +1336,7 @@ class EarlyCleanupJournal:
             if path.is_symlink() or path.read_bytes() != encoded:
                 raise EarlyCleanupStateError("basic cleanup closeout receipt drifted")
             return path
+        allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.CLEANUP_RECEIPT)
         if self.before_write is not None:
             self.before_write(path, len(encoded))
         descriptor = os.open(
@@ -1339,6 +1350,7 @@ class EarlyCleanupJournal:
                 written = os.write(descriptor, encoded[offset:])
                 if written <= 0:
                     raise OSError("short basic cleanup closeout write")
+                observe_campaign_write(allowance, written)
                 offset += written
             os.fsync(descriptor)
         finally:

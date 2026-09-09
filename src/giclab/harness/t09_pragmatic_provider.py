@@ -20,7 +20,6 @@ import json
 import os
 import pwd
 import re
-import shutil
 import ssl
 import stat
 import subprocess
@@ -33,6 +32,12 @@ from typing import Final, Protocol, cast
 
 import yaml
 
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    admit_campaign_write,
+    campaign_cleanup_scope,
+    observe_campaign_write,
+)
 from giclab.harness.lambda_campaign_lifecycle import (
     AutonomousPilotLifecycleLimits,
     ObserverLifecycleLimits,
@@ -728,6 +733,7 @@ def _fsync_parent(path: Path) -> None:
 
 def write_exclusive(path: Path, value: object, *, mode: int = 0o600) -> None:
     encoded = _canonical_bytes(value)
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.PROVIDER_RECORD)
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -735,6 +741,7 @@ def write_exclusive(path: Path, value: object, *, mode: int = 0o600) -> None:
     )
     try:
         written = os.write(descriptor, encoded)
+        observe_campaign_write(allowance, written)
         if written != len(encoded):
             raise OSError("short write")
         os.fsync(descriptor)
@@ -744,6 +751,7 @@ def write_exclusive(path: Path, value: object, *, mode: int = 0o600) -> None:
 
 
 def write_bytes_exclusive(path: Path, value: bytes) -> None:
+    allowance = admit_campaign_write(path, len(value), CampaignWriterRole.PROVIDER_RECORD)
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -755,11 +763,51 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
             written = os.write(descriptor, value[offset:])
             if written <= 0:
                 raise OSError("short write")
+            observe_campaign_write(allowance, written)
             offset += written
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
     _fsync_parent(path)
+
+
+def _copy_campaign_file(source: Path, target: Path) -> None:
+    """Retain exact source bytes with admission preceding destination creation."""
+    source_fd = os.open(source, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        initial = os.fstat(source_fd)
+        if not stat.S_ISREG(initial.st_mode) or initial.st_nlink != 1:
+            raise T09ProviderError("retained copy source is not an exact regular file")
+        allowance = admit_campaign_write(target, initial.st_size, CampaignWriterRole.RETAINED_COPY)
+        destination_fd = os.open(
+            target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600
+        )
+        try:
+            count = 0
+            while count < initial.st_size:
+                chunk = os.read(source_fd, min(1_048_576, initial.st_size - count))
+                if not chunk:
+                    raise T09ProviderError("retained copy source shortened")
+                offset = 0
+                while offset < len(chunk):
+                    written = os.write(destination_fd, chunk[offset:])
+                    if written <= 0:
+                        raise OSError("retained copy write made no progress")
+                    observe_campaign_write(allowance, written)
+                    offset += written
+                count += len(chunk)
+            final = os.fstat(source_fd)
+            if any(
+                getattr(initial, field) != getattr(final, field)
+                for field in ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+            ):
+                raise T09ProviderError("retained copy source changed while held")
+            os.fsync(destination_fd)
+        finally:
+            os.close(destination_fd)
+    finally:
+        os.close(source_fd)
+    _fsync_parent(target)
 
 
 def launch_capability_path(
@@ -860,13 +908,16 @@ def _consume_launch_capability(
 
 def _append_jsonl(path: Path, value: object) -> None:
     encoded = _canonical_bytes(value)
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.PROVIDER_JOURNAL)
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0),
         0o600,
     )
     try:
-        if os.write(descriptor, encoded) != len(encoded):
+        written = os.write(descriptor, encoded)
+        observe_campaign_write(allowance, written)
+        if written != len(encoded):
             raise OSError("short append")
         os.fsync(descriptor)
     finally:
@@ -2641,6 +2692,7 @@ def _publish_replacement_launch_eligibility(
     return target
 
 
+@campaign_cleanup_scope()
 def _cleanup_provisional_owner(
     *,
     contract: T09ProviderContract,
@@ -5278,11 +5330,7 @@ def _copy_slot2_authority_tree(source: Path, destination: Path) -> None:
         if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
             raise T09ProviderError("slot-1 provider source contains an unsafe file")
         target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        with path.open("rb") as source_handle, target.open("xb") as target_handle:
-            shutil.copyfileobj(source_handle, target_handle, 1_048_576)
-            target_handle.flush()
-            os.fsync(target_handle.fileno())
-        target.chmod(0o600)
+        _copy_campaign_file(path, target)
 
 
 def _require_private_directory(path: Path, *, label: str) -> None:
@@ -5600,6 +5648,9 @@ def _copy_exact_private_file(source: Path, destination: Path, *, label: str) -> 
             or stat.S_IMODE(before.st_mode) != 0o600
         ):
             raise T09ProviderError(f"{label} source is unsafe")
+        allowance = admit_campaign_write(
+            destination, before.st_size, CampaignWriterRole.RETAINED_COPY
+        )
         target_descriptor = os.open(
             destination,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -5607,13 +5658,17 @@ def _copy_exact_private_file(source: Path, destination: Path, *, label: str) -> 
         )
         os.fchmod(target_descriptor, 0o600)
         copied = 0
-        while chunk := os.read(source_descriptor, 1_048_576):
+        while copied < before.st_size:
+            chunk = os.read(source_descriptor, min(1_048_576, before.st_size - copied))
+            if not chunk:
+                raise T09ProviderError(f"{label} source shortened during copy")
             source_digest.update(chunk)
             offset = 0
             while offset < len(chunk):
                 written = os.write(target_descriptor, chunk[offset:])
                 if written <= 0:
                     raise OSError("short authority copy")
+                observe_campaign_write(allowance, written)
                 target_digest.update(chunk[offset : offset + written])
                 offset += written
                 copied += written
@@ -6291,14 +6346,7 @@ def derive_retry4_preentry_replacement_eligibility(
     _copy_slot2_authority_tree(prior / "entry-source", source_root / "slot1-entry-source")
     _copy_slot2_authority_tree(prior / "closeout-source", source_root / "slot1-closeout-source")
     target_failure = source_root / "slot1-preentry-stage.tar.gz"
-    with (
-        slot1_failure_archive.resolve(strict=True).open("rb") as source,
-        target_failure.open("xb") as target,
-    ):
-        shutil.copyfileobj(source, target, 1_048_576)
-        target.flush()
-        os.fsync(target.fileno())
-    target_failure.chmod(0o600)
+    _copy_campaign_file(slot1_failure_archive.resolve(strict=True), target_failure)
     projection = _retry4_slot2_eligibility_projection(
         repository=repository.resolve(strict=True),
         package_commit=package_commit,
@@ -6409,14 +6457,7 @@ def derive_built_image_replacement_eligibility(
     _copy_slot2_authority_tree(prior / "entry-source", source_root / "slot1-entry-source")
     _copy_slot2_authority_tree(prior / "closeout-source", source_root / "slot1-closeout-source")
     target_failure = source_root / "slot1-zero-use.tar.gz"
-    with (
-        slot1_failure_archive.resolve(strict=True).open("rb") as source,
-        target_failure.open("xb") as target,
-    ):
-        shutil.copyfileobj(source, target, 1_048_576)
-        target.flush()
-        os.fsync(target.fileno())
-    target_failure.chmod(0o600)
+    _copy_campaign_file(slot1_failure_archive.resolve(strict=True), target_failure)
     projection = _slot2_eligibility_projection(
         repository=repository.resolve(strict=True),
         package_commit=package_commit,
@@ -7115,6 +7156,10 @@ def _retain_host_preempirical_source(source_root: Path, private_root: Path) -> P
         total += metadata.st_size
         if total > 1_048_576:
             raise T09ProviderError("pre-empirical source exceeds its retention cap")
+        destination_path = destination / source_path.name
+        allowance = admit_campaign_write(
+            destination_path, metadata.st_size, CampaignWriterRole.RETAINED_COPY
+        )
         source_descriptor = os.open(
             source_path,
             os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
@@ -7136,6 +7181,7 @@ def _retain_host_preempirical_source(source_root: Path, private_root: Path) -> P
                     written = os.write(destination_descriptor, chunk[offset:])
                     if written <= 0:
                         raise T09ProviderError("pre-empirical source copy made no progress")
+                    observe_campaign_write(allowance, written)
                     offset += written
                 remaining -= len(chunk)
             if os.read(source_descriptor, 1):
@@ -8217,6 +8263,7 @@ def _launch_campaign_impl(
         _destroy_bytearray(credential)
 
 
+@campaign_cleanup_scope()
 def closeout_campaign(
     *,
     contract: T09ProviderContract,
@@ -8298,6 +8345,35 @@ def closeout_campaign(
         raise T09ProviderError("remote cleanup continuation has no provider journal prefix")
     existing_closeout_root = private_root / "closeout-source"
     if os.path.lexists(existing_closeout_root):
+        if campaign_cleanup_journal is not None and preempirical_receipt is None:
+            # A terminal, source-validated provider receipt may precede a lost
+            # journal acknowledgement. Reconcile that exact receipt and local
+            # secret ownership; never issue a second termination in this path.
+            receipt_path = existing_closeout_root / "closeout-receipt.json"
+            _require_private_directory(existing_closeout_root, label="provider closeout source")
+            _require_private_file(receipt_path, label="provider closeout receipt")
+            closed = validate_closeout_receipt(
+                receipt_path,
+                existing_closeout_root,
+                contract=contract,
+                entry_receipt_path=entry_receipt_path,
+                entry_source_root=private_root / "entry-source",
+                package_commit=package_commit,
+                plan_sha256=file_sha256(repository / contract.provider_profile_path),
+                lifecycle=lifecycle,
+            )
+            if any(
+                closed.get(key) is not True
+                for key in ("terminal_or_absent", "zero_t09_instances", "security_restored")
+            ):
+                raise T09ProviderError("retained provider closeout remains unresolved")
+            _record_provider_closeout_cleanup(
+                campaign_cleanup_journal,
+                private_root=private_root,
+                closeout_receipt=closed,
+                clock=clock,
+            )
+            return receipt_path
         if (
             campaign_cleanup_journal is None
             or retained_preempirical_source is None
@@ -8492,11 +8568,7 @@ def closeout_campaign(
         ):
             raise T09ProviderError("empirical clock manifest metadata is unsafe")
         destination = closeout_root / "empirical-clock-manifest.json"
-        with source_manifest.open("rb") as source, destination.open("xb") as target:
-            shutil.copyfileobj(source, target, 1_048_576)
-            target.flush()
-            os.fsync(target.fileno())
-        destination.chmod(0o600)
+        _copy_campaign_file(source_manifest, destination)
     write_exclusive(
         closeout_root / "owned-state-binding.json",
         {
