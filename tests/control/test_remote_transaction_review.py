@@ -15,6 +15,8 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -2651,3 +2653,376 @@ def test_r6_campaign_writer_capability_expires_at_scope_exit(tmp_path):
     with pytest.raises(RuntimeError, match="own admitted allowance"):
         allowance.observe(0)
     assert world._campaign_accountant().accounting_document() == before
+
+
+# Cleanup has its own campaign identity and consumes the shared prefunded reserve.
+def _cleanup_output_binding(root):
+    from giclab.harness.campaign_output import CleanupOutputBinding
+
+    return CleanupOutputBinding(
+        "plan-cleanup",
+        "host-cleanup",
+        "a" * 40,
+        "b" * 40,
+        "c" * 64,
+        str(root),
+        "d" * 64,
+        1,
+        output_roots=(str(root),),
+    )
+
+
+@pytest.mark.parametrize(
+    "role",
+    [
+        "host-json",
+        "host-bytes",
+        "host-atomic",
+        "pilot-atomic",
+        "pilot-exclusive",
+        "cleanup-journal",
+        "cleanup-receipt",
+        "phase-control",
+        "phase-receipt",
+        "environment-state",
+    ],
+)
+@pytest.mark.parametrize("denied", [False, True])
+def test_r6_cleanup_child_channel_actual_writer_before_growth(tmp_path, role, denied):
+    import threading
+
+    from giclab.control.production import _host_module
+    from giclab.harness import t09_sira_pilot as pilot
+    from giclab.harness.campaign_output import (
+        CleanupOutputAuthority,
+        CleanupOutputChannel,
+        campaign_output_scope,
+    )
+    from tests.control.retained_candidate_effects import write
+
+    host = _host_module(ROOT)
+    world, _ = _campaign_writer_world(tmp_path)
+    target = tmp_path / "record.json"
+    calls = []
+    if role.startswith("cleanup-"):
+        action, target = _campaign_actual_writer(tmp_path, role)
+    elif role == "host-json":
+        action = partial(host.write_exclusive, target, {"actual": "value"})
+    elif role == "host-bytes":
+        action = partial(host.write_bytes_exclusive, target, b"actual bytes")
+    elif role == "host-atomic":
+        target.write_bytes(b"prior bytes")
+        action = partial(host.write_atomic, target, {"actual": "replacement"})
+    elif role == "pilot-atomic":
+        target.write_bytes(b"prior bytes")
+        action = partial(
+            pilot._write_json_atomic,
+            target,
+            {"actual": "replacement"},
+            before_write=lambda *_: calls.append("legacy"),
+            after_output_write=lambda *_: calls.append("legacy-observe"),
+        )
+    elif role == "pilot-exclusive":
+        action = partial(
+            pilot._write_json_exclusive,
+            target,
+            {"actual": "value"},
+            before_write=lambda *_: calls.append("legacy"),
+            after_output_write=lambda *_: calls.append("legacy-observe"),
+        )
+    elif role == "environment-state":
+        from types import SimpleNamespace
+
+        from tests.control.retained_candidate_effects import ImageCommandChannel
+
+        state = object.__new__(ImageCommandChannel)
+        state.transaction_root = tmp_path
+        state.binding = SimpleNamespace(digest="f" * 64)
+        state.loaded = state.tagged = False
+        state.load_count = state.removal_count = 0
+        state.before_load = set()
+        state.containers = {}
+        target.write_bytes(b"prior fixture state")
+        action = partial(state.save_state, target)
+    elif role == "phase-receipt":
+        from giclab.harness.t09_remote_host_phases import write_phase_receipt
+
+        action = partial(write_phase_receipt, target, {"actual": "phase-receipt"})
+    else:
+        action = partial(write, target, {"actual": "phase"})
+    before = target.read_bytes() if target.exists() else None
+    original_paths = set(tmp_path.rglob("*"))
+    left, right = socket.socketpair()
+    errors = []
+    deadline = time.monotonic() + 5
+    from giclab.harness.sira_gate_a import ProviderBudgetExceeded
+
+    with (
+        pytest.raises(ProviderBudgetExceeded) if denied else nullcontext(),
+        world._campaign_writer_scope(cleanup=True),
+    ):
+        authority = CleanupOutputAuthority(
+            _cleanup_output_binding(tmp_path), deadline=deadline, monotonic=time.monotonic
+        )
+        if denied:
+            world._campaign_cleanup_remaining = 0
+        server = CleanupOutputChannel(left.fileno(), authority.binding, deadline)
+        client = CleanupOutputChannel(right.fileno(), authority.binding, deadline)
+
+        def serve():
+            try:
+                server.serve(authority)
+            except BaseException as exc:
+                errors.append(type(exc).__name__)
+            finally:
+                left.close()
+
+        thread = threading.Thread(target=serve)
+        thread.start()
+        try:
+            client.connect()
+            token = host._HOST_OUTPUT_ADMISSION.set(lambda *_: calls.append("legacy-host"))
+            try:
+                with campaign_output_scope(client.admit):
+                    if denied:
+                        with pytest.raises(RuntimeError):
+                            action()
+                    else:
+                        action()
+            finally:
+                host._HOST_OUTPUT_ADMISSION.reset(token)
+            if not denied:
+                client.finish()
+        finally:
+            right.close()
+            thread.join(timeout=5)
+            authority.close()
+        assert not thread.is_alive()
+        assert not calls, "a second callback must not charge the same campaign write"
+        if denied:
+            assert errors == ["ProviderBudgetExceeded"]
+            assert (target.read_bytes() if target.exists() else None) == before
+            assert set(tmp_path.rglob("*")) == original_paths
+            assert not authority.leases
+        else:
+            assert not errors
+            assert len(authority.leases) == 1
+            lease = authority.leases[0]
+            assert lease.granted == lease.observed == target.stat().st_size
+            assert world._campaign_accountant().campaign_output_observed == lease.observed
+            assert any(x["operation"] == "verify" for x in authority.events)
+            assert authority.events[-1]["operation"] == "close"
+
+
+@pytest.mark.parametrize("mutation", ["source", "root", "attempt", "replay", "closed", "expired"])
+def test_r6_cleanup_authority_rejects_identity_lifetime_before_effect(tmp_path, mutation):
+    from dataclasses import replace
+
+    from giclab.harness.campaign_output import CampaignWriterRole, CleanupOutputAuthority
+
+    world, _ = _campaign_writer_world(tmp_path)
+    now = [5.0]
+    with world._campaign_writer_scope(cleanup=True):
+        authority = CleanupOutputAuthority(
+            _cleanup_output_binding(tmp_path), deadline=10.0, monotonic=lambda: now[0]
+        )
+        binding = authority.binding
+        if mutation == "source":
+            binding = replace(binding, source_commit="e" * 40)
+        if mutation == "root":
+            binding = replace(binding, transaction_root=str(tmp_path / "other"))
+        if mutation == "attempt":
+            binding = replace(binding, attempt=2)
+        if mutation == "replay":
+            authority.claim(binding.document())
+        if mutation == "closed":
+            authority.close()
+        if mutation == "expired":
+            now[0] = 10.0
+        with pytest.raises((RuntimeError, TimeoutError)):
+            authority.claim(binding.document())
+            authority.admit(tmp_path / "denied", 12, CampaignWriterRole.HOST_CONTROL)
+        assert not authority.leases and not list(tmp_path.iterdir())
+
+
+def test_r6_cleanup_journal_callback_selects_one_owner(tmp_path):
+    from giclab.harness.t09_cleanup_state import CleanupLifecycleStage, EarlyCleanupJournal
+    from tests.test_t09_early_cleanup_state import IncrementingClock, initialize_journal
+
+    calls = []
+    journal = initialize_journal(tmp_path, IncrementingClock())
+    journal = EarlyCleanupJournal(journal.root, before_write=lambda *_: calls.append("legacy"))
+    world, _ = _campaign_writer_world(tmp_path)
+    with world._campaign_writer_scope(cleanup=True):
+        journal.advance_lifecycle(CleanupLifecycleStage.SOURCE_STAGING, clock=lambda: 1001.0)
+    assert not calls and len(world._campaign_writes) == 1
+    assert world._campaign_writes[0].observed > 0
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "duplicate-sequence",
+        "wrong-role",
+        "outside-root",
+        "disconnect-before-observe",
+        "unverified-close",
+        "partial-write",
+    ],
+)
+def test_r6_cleanup_wire_failure_keeps_grant_and_actual_prefix(tmp_path, fault):
+    import threading
+
+    from giclab.harness.campaign_output import (
+        CampaignWriterRole,
+        CleanupOutputAuthority,
+        CleanupOutputChannel,
+    )
+
+    world, _ = _campaign_writer_world(tmp_path)
+    deadline = time.monotonic() + 3
+    errors = []
+    left, right = socket.socketpair()
+    with world._campaign_writer_scope(cleanup=True):
+        authority = CleanupOutputAuthority(
+            _cleanup_output_binding(tmp_path), deadline=deadline, monotonic=time.monotonic
+        )
+        server = CleanupOutputChannel(left.fileno(), authority.binding, deadline)
+        client = CleanupOutputChannel(right.fileno(), authority.binding, deadline)
+
+        def serve():
+            try:
+                server.serve(authority)
+            except BaseException as exc:
+                errors.append(type(exc).__name__)
+            finally:
+                left.close()
+
+        thread = threading.Thread(target=serve)
+        thread.start()
+        before = world._campaign_cleanup_remaining
+        path = tmp_path / "prefix"
+        try:
+            client.connect()
+            if fault == "duplicate-sequence":
+                client.sequence = 0
+                with pytest.raises(RuntimeError):
+                    client.request("grant", path=str(path), size=16, role="host-control")
+            elif fault == "wrong-role":
+                with pytest.raises(RuntimeError):
+                    client.request("grant", path=str(path), size=16, role="empirical-condition")
+            elif fault == "outside-root":
+                with pytest.raises(RuntimeError):
+                    client.admit(tmp_path.parent / "escape", 16, CampaignWriterRole.HOST_CONTROL)
+            else:
+                lease = client.admit(path, 16, CampaignWriterRole.HOST_CONTROL)
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                try:
+                    count = os.write(fd, b"partial")
+                    assert count == 7
+                finally:
+                    os.close(fd)
+                if fault != "disconnect-before-observe":
+                    lease.observe(count)
+                if fault == "unverified-close":
+                    with pytest.raises(RuntimeError):
+                        client.finish()
+                # Partial output/ambiguous possibly-sent consumption is retained;
+                # disconnection is never evidence permitting a refund.
+        finally:
+            right.close()
+            thread.join(timeout=4)
+            authority.close()
+        assert not thread.is_alive() and errors
+        if fault in {"disconnect-before-observe", "unverified-close", "partial-write"}:
+            assert path.read_bytes() == b"partial"
+            assert world._campaign_cleanup_remaining == before - 16
+            assert authority.leases[0].granted == 16
+            assert authority.leases[0].observed == (
+                0 if fault == "disconnect-before-observe" else 7
+            )
+            assert authority.leases[0].closed
+        else:
+            assert not path.exists() and not authority.leases
+            assert world._campaign_cleanup_remaining == before
+
+
+@pytest.mark.parametrize("binary", [False, True])
+def test_r6_cleanup_campaign_keeps_unresolved_atomic_prefix(tmp_path, binary):
+    from giclab.control.production import _host_module
+
+    host = _host_module(ROOT)
+    target = tmp_path / "published.json"
+    pending = host._atomic_publication_temporary(target)
+    pending.write_bytes(b"earlier admitted partial evidence")
+    pending.chmod(0o600)
+    world, _ = _campaign_writer_world(tmp_path)
+    with world._campaign_writer_scope(cleanup=True), pytest.raises(FileExistsError):
+        if binary:
+            host.write_bytes_exclusive(target, b"new bytes")
+        else:
+            host.write_exclusive(target, {"new": "bytes"})
+    assert pending.read_bytes() == b"earlier admitted partial evidence"
+    assert not target.exists()
+    assert world._campaign_writes[0].observed == 0
+    assert world._campaign_writes[0].granted > 0
+
+
+def test_r6_cleanup_explicit_missing_authority_before_pipe_allocation(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from tests.control.retained_candidate_effects import RetainedCandidateEffects
+
+    effects = object.__new__(RetainedCandidateEffects)
+    calls = []
+
+    def forbidden_pipe():
+        calls.append("pipe")
+        raise AssertionError("missing authority allocated a descriptor")
+
+    monkeypatch.setattr(os, "pipe", forbidden_pipe)
+    with pytest.raises(AssertionError):
+        effects._cleanup_channel({}, tmp_path, SimpleNamespace(output_authority=None))
+    assert not calls
+
+
+def test_r6_cleanup_census_rejects_disconnected_writer_without_retrospective_grant(tmp_path):
+    from giclab.harness.campaign_output import (
+        CleanupOutputAuthority,
+        cleanup_output_inventory,
+        reconcile_cleanup_output,
+    )
+
+    world, _ = _campaign_writer_world(tmp_path)
+    with world._campaign_writer_scope(cleanup=True):
+        authority = CleanupOutputAuthority(
+            _cleanup_output_binding(tmp_path),
+            deadline=time.monotonic() + 5,
+            monotonic=time.monotonic,
+        )
+        before = cleanup_output_inventory(tmp_path)
+        (tmp_path / "unadmitted-control.json").write_bytes(b"unadmitted actual write")
+        with pytest.raises(RuntimeError, match="without prior admission"):
+            reconcile_cleanup_output(before, cleanup_output_inventory(tmp_path), authority)
+        assert not authority.leases
+        assert world._campaign_accountant().campaign_output_observed == 0
+        assert (tmp_path / "unadmitted-control.json").read_bytes() == b"unadmitted actual write"
+
+
+def test_r6_cleanup_child_cannot_spend_output_grant_on_immutable_input(tmp_path):
+    from dataclasses import replace
+
+    from giclab.harness.campaign_output import CampaignWriterRole, CleanupOutputAuthority
+
+    world, _ = _campaign_writer_world(tmp_path)
+    binding = replace(_cleanup_output_binding(tmp_path), output_roots=(str(tmp_path / "output"),))
+    with world._campaign_writer_scope(cleanup=True):
+        authority = CleanupOutputAuthority(
+            binding, deadline=time.monotonic() + 5, monotonic=time.monotonic
+        )
+        authority.claim(binding.document())
+        before = world._campaign_cleanup_remaining
+        with pytest.raises(RuntimeError, match="bound root"):
+            authority.admit(tmp_path / "input/source", 10, CampaignWriterRole.HOST_CONTROL)
+        assert world._campaign_cleanup_remaining == before
+        assert not list(tmp_path.iterdir()) and not authority.leases

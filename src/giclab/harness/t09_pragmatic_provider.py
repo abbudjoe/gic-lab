@@ -37,6 +37,7 @@ from giclab.harness.campaign_output import (
     admit_campaign_write,
     campaign_cleanup_scope,
     observe_campaign_write,
+    verify_campaign_write,
 )
 from giclab.harness.lambda_campaign_lifecycle import (
     AutonomousPilotLifecycleLimits,
@@ -747,6 +748,7 @@ def write_exclusive(path: Path, value: object, *, mode: int = 0o600) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    verify_campaign_write(allowance, path)
     _fsync_parent(path)
 
 
@@ -768,6 +770,7 @@ def write_bytes_exclusive(path: Path, value: bytes) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    verify_campaign_write(allowance, path)
     _fsync_parent(path)
 
 
@@ -807,6 +810,7 @@ def _copy_campaign_file(source: Path, target: Path) -> None:
             os.close(destination_fd)
     finally:
         os.close(source_fd)
+    verify_campaign_write(allowance, target)
     _fsync_parent(target)
 
 
@@ -922,6 +926,7 @@ def _append_jsonl(path: Path, value: object) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    verify_campaign_write(allowance, path)
 
 
 def _load_json(path: Path, *, maximum_bytes: int = MAX_RESPONSE_BYTES) -> dict[str, object]:
@@ -5688,6 +5693,7 @@ def _copy_exact_private_file(source: Path, destination: Path, *, label: str) -> 
     _require_private_file(destination, label=f"{label} retained copy")
     if file_sha256(destination) != source_digest.hexdigest():
         raise T09ProviderError(f"{label} retained copy hash mismatch")
+    verify_campaign_write(allowance, destination)
     _fsync_parent(destination)
 
 
@@ -7190,6 +7196,7 @@ def _retain_host_preempirical_source(source_root: Path, private_root: Path) -> P
         finally:
             os.close(destination_descriptor)
             os.close(source_descriptor)
+        verify_campaign_write(allowance, destination_path)
         if file_sha256(destination_path) != file_sha256(source_path):
             raise T09ProviderError("pre-empirical retained copy hash mismatch")
     directory = os.open(destination, os.O_RDONLY)

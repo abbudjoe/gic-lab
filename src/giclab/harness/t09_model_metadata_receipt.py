@@ -31,6 +31,7 @@ from giclab.harness.campaign_output import (
     CampaignWriterRole,
     admit_campaign_write,
     observe_campaign_write,
+    verify_campaign_write,
 )
 from giclab.harness.t09_provider_contracts import (
     MetadataPolicy,
@@ -375,6 +376,7 @@ def _write_private_exclusive(path: Path, value: Mapping[str, object]) -> None:
         if not complete and allowance is None:
             with contextlib.suppress(OSError):
                 path.unlink()
+    verify_campaign_write(allowance, path)
     _fsync_parent(path)
 
 

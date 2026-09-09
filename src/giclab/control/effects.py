@@ -35,6 +35,7 @@ from giclab.harness.t09_model_metadata_receipt import ModelMetadataResponse
 
 if TYPE_CHECKING:
     from giclab.harness import t09_pragmatic_provider as provider
+    from giclab.harness.campaign_output import CleanupOutputAuthority
     from giclab.harness.t09_provider_contracts import T09ProviderContract
 
 
@@ -2164,6 +2165,7 @@ class CleanupExecutionRequest:
     started_wall_time: float
     started_monotonic: float
     cleanup_deadline_monotonic: float
+    output_authority: CleanupOutputAuthority | None = None
 
 
 @dataclass(frozen=True, slots=True)

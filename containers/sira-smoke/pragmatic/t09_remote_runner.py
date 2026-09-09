@@ -67,6 +67,12 @@ from giclab.control.remote_bridge import (
     semantic_sha256,
     strict_json_object,
 )
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    admit_campaign_write,
+    observe_campaign_write,
+    verify_campaign_write,
+)
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
 from giclab.harness.t09_candidate_inputs import (
@@ -1054,10 +1060,13 @@ def write_exclusive(path: Path, value: object) -> None:
     """Atomically publish one immutable JSON object with O_EXCL semantics."""
 
     encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
-    admission = _HOST_OUTPUT_ADMISSION.get()
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
+    admission = _HOST_OUTPUT_ADMISSION.get() if allowance is None else None
+    if (admission is not None or allowance is not None) and os.path.lexists(
+        _atomic_publication_temporary(path)
+    ):
+        raise FileExistsError("admitted host publication retains an unresolved prefix")
     if admission is not None:
-        if os.path.lexists(_atomic_publication_temporary(path)):
-            raise FileExistsError("admitted host publication retains an unresolved prefix")
         admission(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = _prepare_atomic_publication_temporary(path)
@@ -1073,6 +1082,7 @@ def write_exclusive(path: Path, value: object) -> None:
             written = os.write(descriptor, encoded[offset:])
             if written <= 0:
                 raise T09HostError("evidence write made no progress")
+            observe_campaign_write(allowance, written)
             offset += written
         os.fsync(descriptor)
         os.close(descriptor)
@@ -1081,9 +1091,10 @@ def write_exclusive(path: Path, value: object) -> None:
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        if admission is None or os.path.lexists(path):
+        if (admission is None and allowance is None) or os.path.lexists(path):
             temporary.unlink(missing_ok=True)
         _fsync_directory(path.parent)
+    verify_campaign_write(allowance, path)
 
 
 def write_bytes_exclusive(
@@ -1091,10 +1102,13 @@ def write_bytes_exclusive(
 ) -> None:
     """Atomically publish immutable binary evidence with O_EXCL semantics."""
 
-    admission = _HOST_OUTPUT_ADMISSION.get()
+    allowance = admit_campaign_write(path, len(value), CampaignWriterRole.HOST_CONTROL)
+    admission = _HOST_OUTPUT_ADMISSION.get() if allowance is None else None
+    if (admission is not None or allowance is not None) and os.path.lexists(
+        _atomic_publication_temporary(path)
+    ):
+        raise FileExistsError("admitted host publication retains an unresolved prefix")
     if admission is not None:
-        if os.path.lexists(_atomic_publication_temporary(path)):
-            raise FileExistsError("admitted host publication retains an unresolved prefix")
         admission(path, len(value))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = _prepare_atomic_publication_temporary(path)
@@ -1113,8 +1127,9 @@ def write_bytes_exclusive(
                 continue
             if written <= 0:
                 raise T09HostError("binary evidence write made no progress")
+            observe_campaign_write(allowance, written)
             offset += written
-            if after_output_write is not None:
+            if allowance is None and after_output_write is not None:
                 after_output_write(written)
         os.fsync(descriptor)
         os.close(descriptor)
@@ -1123,9 +1138,10 @@ def write_bytes_exclusive(
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        if admission is None or os.path.lexists(path):
+        if (admission is None and allowance is None) or os.path.lexists(path):
             temporary.unlink(missing_ok=True)
         _fsync_directory(path.parent)
+    verify_campaign_write(allowance, path)
 
 
 def write_exclusive_or_validate(path: Path, value: object, *, label: str) -> None:
@@ -1141,8 +1157,9 @@ def write_exclusive_or_validate(path: Path, value: object, *, label: str) -> Non
 
 
 def write_atomic(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.with_suffix(f".{os.getpid()}.tmp")
     descriptor = os.open(
         temporary,
@@ -1155,11 +1172,13 @@ def write_atomic(path: Path, value: object) -> None:
             written = os.write(descriptor, encoded[offset:])
             if written <= 0:
                 raise T09HostError("atomic evidence write made no progress")
+            observe_campaign_write(allowance, written)
             offset += written
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
     os.replace(temporary, path)
+    verify_campaign_write(allowance, path)
     parent_descriptor = os.open(
         path.parent,
         os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_CLOEXEC", 0),

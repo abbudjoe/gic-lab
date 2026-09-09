@@ -26,6 +26,12 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any, Final, Literal, cast
 
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    admit_campaign_write,
+    observe_campaign_write,
+    verify_campaign_write,
+)
 from giclab.harness.sira_gate_a import (
     ProviderBudgetCaps,
     ProviderBudgetUsage,
@@ -1476,7 +1482,8 @@ def _write_json_atomic(
     """Replace one mutable control document and durably commit its directory entry."""
 
     encoded = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
-    if before_write is not None:
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
+    if allowance is None and before_write is not None:
         before_write(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.parent / f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
@@ -1490,13 +1497,15 @@ def _write_json_atomic(
             if written <= 0:
                 raise OSError("atomic control write made no progress")
             offset += written
-            if after_output_write is not None:
+            observe_campaign_write(allowance, written)
+            if allowance is None and after_output_write is not None:
                 after_output_write(written)
         os.fsync(descriptor)
         os.close(descriptor)
         descriptor = -1
         os.replace(temporary, path)
         published = True
+        verify_campaign_write(allowance, path)
         parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
         parent_descriptor = os.open(path.parent, parent_flags)
         try:
@@ -1506,7 +1515,7 @@ def _write_json_atomic(
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        if not published and before_write is None:
+        if not published and before_write is None and allowance is None:
             with contextlib.suppress(FileNotFoundError):
                 temporary.unlink()
 
@@ -1558,7 +1567,8 @@ def _write_json_exclusive(
     after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
-    if before_write is not None:
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
+    if allowance is None and before_write is not None:
         before_write(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor = os.open(
@@ -1573,11 +1583,13 @@ def _write_json_exclusive(
             if written <= 0:
                 raise T09PilotError("selection receipt write made no progress")
             offset += written
-            if after_output_write is not None:
+            observe_campaign_write(allowance, written)
+            if allowance is None and after_output_write is not None:
                 after_output_write(written)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    verify_campaign_write(allowance, path)
     directory = os.open(path.parent, os.O_RDONLY)
     try:
         os.fsync(directory)

@@ -42,6 +42,17 @@ from giclab.control.effects import (
 from giclab.control.production import ProductionCategory3World
 from giclab.control.shadow_effects import DeterministicLowLevelEffects
 from giclab.harness import t09_pragmatic_provider as provider
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    CleanupOutputBinding,
+    CleanupOutputChannel,
+    admit_campaign_write,
+    campaign_output_scope,
+    cleanup_output_inventory,
+    observe_campaign_write,
+    reconcile_cleanup_output,
+    verify_campaign_write,
+)
 from giclab.harness.t09_candidate_inputs import (
     canonical,
     load_candidate_source_snapshot,
@@ -974,11 +985,22 @@ class ImageCommandChannel:
         data = canonical(document)
         if len(data) > 65536:
             raise RuntimeError("environment state cap exceeded")
+        allowance = admit_campaign_write(path, len(data), CampaignWriterRole.PHASE_CONTROL)
         temporary = path.with_suffix(".next")
-        with temporary.open("xb") as stream:
-            stream.write(data)
-        temporary.chmod(0o600)
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            offset = 0
+            while offset < len(data):
+                count = os.write(descriptor, memoryview(data)[offset : offset + 65536])
+                if count <= 0:
+                    raise OSError("environment control state write made no progress")
+                observe_campaign_write(allowance, count)
+                offset += count
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
         os.replace(temporary, path)
+        verify_campaign_write(allowance, path)
 
     def load_state(self, path):
         from giclab.harness.t09_candidate_inputs import read_member
@@ -1737,10 +1759,22 @@ class ImageCommandChannel:
 
 
 def write(path, document):
+    encoded = canonical(document)
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.PHASE_CONTROL)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    with path.open("xb") as stream:
-        stream.write(canonical(document))
-    path.chmod(0o600)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    try:
+        offset = 0
+        while offset < len(encoded):
+            count = os.write(fd, memoryview(encoded)[offset : offset + 65536])
+            if count <= 0:
+                raise OSError("phase control write made no progress")
+            observe_campaign_write(allowance, count)
+            offset += count
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    verify_campaign_write(allowance, path)
     return path
 
 
@@ -1849,7 +1883,21 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         expected_projection=None,
         execution=None,
         observer=None,
+        cleanup_request=None,
     ):
+        if (phase == "host-cleanup") != (cleanup_request is not None):
+            raise RuntimeError("retained cleanup requires its explicit output authority")
+        if cleanup_request is not None:
+            authority = cleanup_request.output_authority
+            if (
+                authority is None
+                or authority.binding.transaction_root != str(self._root)
+                or authority.binding.candidate_sha256 != self.source_inputs.digest
+                or authority.binding.handoff_sha256 != cleanup_request.immutable_handoff_sha256
+                or authority.deadline != cleanup_request.cleanup_deadline_monotonic
+            ):
+                raise RuntimeError("retained cleanup output capability identity drift")
+            authority.remaining()
         root = Path(binding["remote_root"])
         root.mkdir(mode=0o700, exist_ok=True)
         phase_root = root / "phases"
@@ -1874,7 +1922,11 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             else None,
             "requested_wall_time": self._clock.wall_time(),
             "requested_monotonic": self._clock.monotonic(),
-            "deadline_monotonic": self._clock.monotonic() + 60,
+            "deadline_monotonic": (
+                cleanup_request.cleanup_deadline_monotonic
+                if cleanup_request is not None
+                else self._clock.monotonic() + 60
+            ),
             "inputs": {name: bound(path) for name, path in inputs.items()},
             "output_paths": {name: str(path) for name, path in outputs.items()},
             "expected_projection": expected_projection or {},
@@ -1962,7 +2014,9 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             else None,
         }
         phase_started = time.monotonic()
-        if execution is None:
+        if cleanup_request is not None:
+            result = self._cleanup_channel(invocation, phase_root, cleanup_request)
+        elif execution is None:
             result = subprocess.run(
                 [sys.executable, "-B", str(self.source_inputs.root / RELATIVE)],
                 input=json.dumps(invocation),
@@ -2003,7 +2057,11 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         # A real condition measures elapsed time in both processes. Carry that
         # interval into the campaign clock before cleanup or the next phase;
         # never infer chronology by editing a produced lifecycle receipt.
-        elapsed = time.monotonic() - phase_started if execution is not None else 0.0
+        elapsed = (
+            time.monotonic() - phase_started
+            if execution is not None or cleanup_request is not None
+            else 0.0
+        )
         self._clock.advance(0.5 + elapsed + sum(event["seconds"] for event in clock_events))
         self.phase_events.append(
             {
@@ -2806,6 +2864,212 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             partial_bridge_evidence=prefix,
         )
 
+    def _cleanup_channel(self, invocation, phase_root, request):
+        """Own every descriptor from the first allocation, including early failure."""
+        with contextlib.ExitStack() as resources:
+            return self._cleanup_channel_owned(invocation, phase_root, request, resources)
+
+    def _cleanup_channel_owned(self, invocation, phase_root, request, resources):
+        """Carry the production capability through the actual retained subprocess."""
+        authority = request.output_authority
+        assert authority is not None
+        # Translate the one original cleanup deadline exactly once into this
+        # process's native clock; every I/O operation and reap uses its remainder.
+        deadline = time.monotonic() + authority.remaining()
+        held_fds = set()
+
+        def close_fd(fd):
+            if fd in held_fds:
+                os.close(fd)
+                held_fds.remove(fd)
+
+        def pipe():
+            pair = os.pipe()
+            for fd in pair:
+                held_fds.add(fd)
+                resources.callback(close_fd, fd)
+            return pair
+
+        parent_read, child_write = pipe()
+        child_read, parent_write = pipe()
+        process = None
+        captures = []
+        capture_errors = []
+        error = None
+        inventory_before = None
+        inventory_result = None
+        inventory_error = None
+        transcript_path = phase_root / "host-cleanup-output-admission.json"
+        transcript_grant = admit_campaign_write(
+            transcript_path, 2 * 1024 * 1024, CampaignWriterRole.PHASE_CONTROL
+        )
+        assert transcript_grant is not None
+        invocation = {
+            **invocation,
+            "cleanup_output": {
+                "binding": authority.binding.document(),
+                "read_descriptor": child_read,
+                "write_descriptor": child_write,
+                "deadline": deadline,
+            },
+        }
+        invocation_path = write(phase_root / "host-cleanup-invocation.json", invocation)
+        channel = CleanupOutputChannel(
+            parent_read, authority.binding, deadline, write_fd=parent_write
+        )
+        channel.cancelled = lambda: bool(capture_errors)
+        env = {
+            "PATH": os.defpath,
+            "PYTHONPATH": str(self.source_inputs.root / "src"),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+        }
+        streams = []
+        try:
+            # Both capture files consume existing cleanup reserve before the
+            # child is started; threads receive their specific leases directly.
+            for suffix in ("stdout", "stderr"):
+                path = phase_root / ("host-cleanup-" + suffix + ".log")
+                lease = admit_campaign_write(path, 65536, CampaignWriterRole.PHASE_CONTROL)
+                assert lease is not None
+                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                streams.append((path, lease, fd))
+            inventory_before = cleanup_output_inventory(self._root)
+            process = subprocess.Popen(
+                [
+                    sys.executable,
+                    "-B",
+                    str(self.source_inputs.root / RELATIVE),
+                    "--invocation",
+                    str(invocation_path),
+                ],
+                cwd=self.source_inputs.root,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                pass_fds=(child_read, child_write),
+            )
+            close_fd(child_read)
+            close_fd(child_write)
+
+            def capture(stream, item):
+                path, lease, fd = item
+                try:
+                    while chunk := stream.read(4096):
+                        if lease.observed + len(chunk) > lease.granted:
+                            raise RuntimeError("cleanup child console grant exhausted")
+                        offset = 0
+                        while offset < len(chunk):
+                            written = os.write(fd, chunk[offset:])
+                            if written <= 0:
+                                raise OSError("cleanup capture short write")
+                            lease.observe(written)
+                            offset += written
+                    os.fsync(fd)
+                    verify_campaign_write(lease, path)
+                except BaseException as exc:
+                    capture_errors.append(type(exc).__name__)
+                    # The main channel observes cancellation on every bounded
+                    # readiness wait; this thread never closes another owner's fd.
+                    pass
+                finally:
+                    os.close(fd)
+                    stream.close()
+
+            for stream, item in zip((process.stdout, process.stderr), streams, strict=True):
+                thread = threading.Thread(target=capture, args=(stream, item), daemon=True)
+                captures.append(thread)
+                thread.start()
+            if self.fault_plan.fail_operation == "cleanup.admission-disconnect":
+                close_fd(parent_write)
+                raise RuntimeError("injected cleanup admission carrier disconnect")
+            channel.serve(authority)
+            returncode = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+            for thread in captures:
+                thread.join(timeout=max(0.001, deadline - time.monotonic()))
+            if returncode or capture_errors or any(t.is_alive() for t in captures):
+                raise RuntimeError("retained cleanup child/capture failed")
+        except BaseException as exc:
+            error = type(exc).__name__ + ": " + str(exc)
+        finally:
+            for fd in tuple(held_fds):
+                close_fd(fd)
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=min(1.0, max(0.001, deadline - time.monotonic())))
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=1.0)
+            for thread in captures:
+                thread.join(timeout=1.0)
+            # If process creation failed, capture threads never owned these fds.
+            if not captures:
+                for _, _, fd in streams:
+                    os.close(fd)
+            if inventory_before is not None:
+                try:
+                    inventory_after = cleanup_output_inventory(self._root)
+                    inventory_result = reconcile_cleanup_output(
+                        inventory_before,
+                        inventory_after,
+                        authority,
+                        parent_paths=tuple(item[0] for item in streams),
+                    )
+                except BaseException as exc:
+                    inventory_error = type(exc).__name__ + ": " + str(exc)
+                    error = error or inventory_error
+            record = {
+                "inventory": inventory_result,
+                "inventory_error": inventory_error,
+                "binding": authority.binding.document(),
+                "deadline": deadline,
+                "events": authority.events,
+                "error": error,
+                "capture_errors": capture_errors,
+                "child_exit": process.returncode if process is not None else None,
+                "reaped": process is None or process.poll() is not None,
+                "capture_threads_stopped": all(not t.is_alive() for t in captures),
+                "grant_releases": 0,
+                "counting_scope": (
+                    "cumulative-actual-write-bytes; full-temporary-grants; "
+                    "independent-publication-occupancy"
+                ),
+                "leases": [
+                    {
+                        "path": str(x.path),
+                        "role": x.role.value,
+                        "granted": x.granted,
+                        "observed": x.observed,
+                    }
+                    for x in authority.leases
+                ],
+            }
+            encoded = canonical(record)
+            if len(encoded) > transcript_grant.granted:
+                raise RuntimeError("cleanup admission transcript exceeded prefunded bound")
+            fd = os.open(
+                transcript_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600
+            )
+            try:
+                offset = 0
+                while offset < len(encoded):
+                    count = os.write(fd, memoryview(encoded)[offset : offset + 65536])
+                    if count <= 0:
+                        raise OSError("cleanup transcript write made no progress")
+                    transcript_grant.observe(count)
+                    offset += count
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+            verify_campaign_write(transcript_grant, transcript_path)
+        if error:
+            diagnostic = streams[1][0].read_text()[-8192:] if len(streams) == 2 else ""
+            raise RuntimeError("cleanup admission child failed: " + error + " " + diagnostic)
+        return subprocess.CompletedProcess([], process.returncode, "", "")
+
     def cleanup_transaction(self, request):
         transfer = self.transfer_request
         if transfer is None:
@@ -2842,6 +3106,7 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                 "cleanup_state": root / "phases/cleanup-state.json",
             },
             previous=predecessor,
+            cleanup_request=request,
         )
         terminal = json.loads((root / "phases/cleanup-terminal.json").read_bytes())
         retained_path = Path(terminal["retained_cleanup_source"]["path"])
@@ -3476,6 +3741,7 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         None,
         "condition.no-answer",
         "condition.partial-failure",
+        "cleanup.admission-disconnect",
         "condition.attach-output-denial",
         "export.output-denial",
     ):
@@ -3485,7 +3751,7 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         mode=condition_mode,
         output=output,
         goal=tasks[0 if ordinal < 2 else 1]["question"],
-        process_failure=fault == "condition.partial-failure",
+        process_failure=fault in {"condition.partial-failure", "cleanup.admission-disconnect"},
         attach_output_blocks=65 if fault == "condition.attach-output-denial" else 0,
     )
     sys.modules[selected.__name__] = selected
@@ -3636,6 +3902,42 @@ def main():
         invocation = json.loads(path.read_bytes())
     else:
         invocation = json.loads(sys.stdin.buffer.read(32768))
+    cleanup = invocation.get("cleanup_output")
+    if invocation["phase"] == "host-cleanup":
+        if not isinstance(cleanup, dict) or set(cleanup) != {
+            "binding",
+            "read_descriptor",
+            "write_descriptor",
+            "deadline",
+        }:
+            raise RuntimeError("cleanup child requires explicit campaign output authority")
+        binding = CleanupOutputBinding.from_document(cleanup["binding"])
+        if (
+            binding.candidate_sha256 != invocation["binding_sha256"]
+            or binding.transaction_root != invocation["transaction_root"]
+        ):
+            raise RuntimeError("cleanup child source/root capability mismatch")
+        channel = CleanupOutputChannel(
+            cleanup["read_descriptor"],
+            binding,
+            cleanup["deadline"],
+            write_fd=cleanup["write_descriptor"],
+        )
+        try:
+            channel.connect()
+            with campaign_output_scope(channel.admit):
+                _main(invocation)
+            channel.finish()
+        finally:
+            os.close(cleanup["read_descriptor"])
+            os.close(cleanup["write_descriptor"])
+        return
+    if cleanup is not None:
+        raise RuntimeError("cleanup capability supplied to another phase")
+    _main(invocation)
+
+
+def _main(invocation):
     phase_wall = float(invocation["wall"]) + 0.125
     condition_clock = None
     if invocation["phase"] == "condition-session":
@@ -3846,7 +4148,7 @@ def main():
             contract=contract,
         )
 
-    daemon_state = transaction / "offline-environment-state.json"
+    daemon_state = transaction / "retained-phase-traces/offline-environment-state.json"
     if image_channel is not None and "runtime_command" not in invocation:
         image_channel.load_state(daemon_state)
 

@@ -27,6 +27,7 @@ from giclab.harness.campaign_output import (
     CampaignWriterRole,
     admit_campaign_write,
     observe_campaign_write,
+    verify_campaign_write,
 )
 
 EARLY_CLEANUP_SCHEMA_VERSION: Final = "1.0.0"
@@ -955,7 +956,7 @@ class EarlyCleanupJournal:
         allowance = admit_campaign_write(
             final_path, len(encoded), CampaignWriterRole.CLEANUP_JOURNAL
         )
-        if self.before_write is not None:
+        if allowance is None and self.before_write is not None:
             self.before_write(final_path, len(encoded))
         descriptor = os.open(
             pending_path,
@@ -976,6 +977,7 @@ class EarlyCleanupJournal:
         if final_path.exists():
             raise EarlyCleanupStateError("early cleanup version already exists")
         os.rename(pending_path, final_path)
+        verify_campaign_write(allowance, final_path)
         self._fsync_directory(self.versions)
 
     def load(self) -> EarlyCleanupState:
@@ -1337,7 +1339,7 @@ class EarlyCleanupJournal:
                 raise EarlyCleanupStateError("basic cleanup closeout receipt drifted")
             return path
         allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.CLEANUP_RECEIPT)
-        if self.before_write is not None:
+        if allowance is None and self.before_write is not None:
             self.before_write(path, len(encoded))
         descriptor = os.open(
             path,
@@ -1355,5 +1357,6 @@ class EarlyCleanupJournal:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
+        verify_campaign_write(allowance, path)
         self._fsync_directory(path.parent)
         return path

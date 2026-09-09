@@ -30,6 +30,12 @@ from giclab.control.remote_bridge import (
     validate_full_dynamic_frozen_manifest,
     validate_postfreeze_receipt,
 )
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    admit_campaign_write,
+    observe_campaign_write,
+    verify_campaign_write,
+)
 from giclab.harness.t09_cleanup_state import EarlyCleanupJournal, EarlyCleanupState
 from giclab.harness.t09_provider_contracts import T09ProviderContract
 from giclab.registry import load_json, local_schema_registry
@@ -1183,15 +1189,21 @@ def write_phase_receipt(path: Path, receipt: Mapping[str, object]) -> None:
     encoded = _canonical_bytes(receipt)
     if len(encoded) > MAX_HOST_PHASE_RECEIPT_BYTES:
         raise HostPhaseError("host phase receipt exceeds its finite cap")
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.PHASE_CONTROL)
     path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     try:
-        with os.fdopen(descriptor, "wb", closefd=False) as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
+        offset = 0
+        while offset < len(encoded):
+            count = os.write(descriptor, memoryview(encoded)[offset : offset + 65536])
+            if count <= 0:
+                raise OSError("host phase receipt write made no progress")
+            observe_campaign_write(allowance, count)
+            offset += count
+        os.fsync(descriptor)
     finally:
         os.close(descriptor)
+    verify_campaign_write(allowance, path)
 
 
 __all__ = [

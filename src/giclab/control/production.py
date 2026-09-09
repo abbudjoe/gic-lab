@@ -137,6 +137,8 @@ from giclab.harness import t09_sira_pilot as pilot
 from giclab.harness.campaign_output import (
     CampaignWriteAllowance,
     CampaignWriterRole,
+    CleanupOutputAuthority,
+    CleanupOutputBinding,
     campaign_cleanup_active,
     campaign_output_scope,
 )
@@ -2663,6 +2665,13 @@ class ProductionCategory3World:
     def _campaign_writer_scope(self, *, cleanup: bool = False) -> Iterator[None]:
         boundary = self._campaign_accountant()
         first_writer = len(self._campaign_writes)
+        observation_lock = threading.Lock()
+        denied_here = False
+
+        def observe(count: int) -> None:
+            with observation_lock:
+                boundary.observe_campaign_output_bytes(count)
+
         controls = self.low_level_effects.campaign_low_level_controls()
         capabilities = {
             (
@@ -2674,6 +2683,7 @@ class ProductionCategory3World:
         }
 
         def admit(path: Path, size: int, role: CampaignWriterRole) -> CampaignWriteAllowance:
+            nonlocal denied_here
             if type(size) is not int or size < 0:
                 raise AdapterFailure("campaign writer has invalid output size")
             if not path.is_absolute() or ".." in path.parts:
@@ -2699,6 +2709,8 @@ class ProductionCategory3World:
             if cleanup or campaign_cleanup_active():
                 remaining = self._campaign_cleanup_remaining
                 if remaining is None or size > remaining:
+                    denied_here = True
+                    self._campaign_admission_blocked = True
                     raise ProviderBudgetExceeded("bounded campaign cleanup output exhausted")
                 self._campaign_cleanup_remaining = remaining - size
             else:
@@ -2707,13 +2719,14 @@ class ProductionCategory3World:
                 try:
                     boundary.reserve_campaign_output_bytes(size)
                 except ProviderBudgetExceeded:
+                    denied_here = True
                     self._campaign_admission_blocked = True
                     raise
             allowance = CampaignWriteAllowance(
                 path,
                 role,
                 size,
-                boundary.observe_campaign_output_bytes,
+                observe,
                 cleanup=cleanup or campaign_cleanup_active(),
             )
             self._campaign_writes.append(allowance)
@@ -2722,7 +2735,7 @@ class ProductionCategory3World:
         try:
             with campaign_output_scope(admit):
                 yield
-            if self._campaign_admission_blocked and not cleanup:
+            if denied_here or (self._campaign_admission_blocked and not cleanup):
                 raise ProviderBudgetExceeded("caught campaign output denial remains blocking")
         finally:
             for allowance in self._campaign_writes[first_writer:]:
@@ -6074,7 +6087,49 @@ class ProductionCategory3World:
                     raise AdapterFailure("cleanup authority differs from the live transaction")
                 self._primitive("validate_unified_live_authority:cleanup")
             with self._campaign_writer_scope(cleanup=True):
-                receipt = self.low_level_effects.cleanup_transaction(request)
+                commit, tree = self._source_identity()
+                # The child receives writable outputs, not the whole source/input
+                # closure. Historical local effects do not use this child bridge.
+                output_roots: tuple[str, ...] = (str(self.root),)
+                if self.source_inputs is not None:
+                    slot = handle.launch_ordinal if handle is not None else 1
+                    remote_root = self.root / f"offline-remote-{slot}"
+                    declared = [
+                        remote_root / "phases",
+                        remote_root / self.contract.control_root_name,
+                        self.root
+                        / "control-private"
+                        / f"campaign-slot-{slot:02d}"
+                        / "preflight-cleanup-state",
+                        self.root / "retained-phase-traces",
+                    ]
+                    if execution is not None:
+                        declared.extend(
+                            remote_root / Path(attempt.raw_output_root).parent
+                            for attempt in execution.attempts
+                        )
+                    output_roots = tuple(sorted({str(path) for path in declared}))
+                output_authority = CleanupOutputAuthority(
+                    CleanupOutputBinding(
+                        self.contract.plan_id,
+                        self.contract.host_run_id,
+                        commit,
+                        tree,
+                        self.source_inputs.digest if self.source_inputs is not None else None,
+                        str(self.root),
+                        handoff_sha,
+                        self._cleanup_calls,
+                        output_roots=output_roots,
+                    ),
+                    deadline=cleanup_deadline,
+                    monotonic=self.clock.monotonic,
+                )
+                try:
+                    receipt = self.low_level_effects.cleanup_transaction(
+                        replace(request, output_authority=output_authority)
+                    )
+                finally:
+                    output_authority.close()
             returned_wall = self.clock.wall_time()
             returned_monotonic = self.clock.monotonic()
             if (

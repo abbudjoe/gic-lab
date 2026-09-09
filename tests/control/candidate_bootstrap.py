@@ -341,6 +341,7 @@ def main() -> None:
     if request.get("exercise_transaction") in {
         "transaction",
         "condition-failure-export",
+        "condition-failure-cleanup-admission-disconnect",
         "transaction-no-answer",
         "transaction-attach-output-denial",
         "transaction-export-output-denial",
@@ -424,12 +425,18 @@ def main() -> None:
                 contract=V16_PROVIDER_CONTRACT,
                 fault_plan=ShadowFaultPlan(
                     "candidate-input-preparation",
-                    fail_operation="condition.partial-failure"
+                    fail_operation="cleanup.admission-disconnect"
+                    if mode == "condition-failure-cleanup-admission-disconnect"
+                    else "condition.partial-failure"
                     if mode == "condition-failure-export"
                     else "condition.no-answer"
                     if mode == "transaction-no-answer"
                     else "export.output-denial"
-                    if mode == "transaction-export-output-denial"
+                    if mode
+                    in {
+                        "transaction-export-output-denial",
+                        "condition-failure-cleanup-admission-disconnect",
+                    }
                     else "condition.attach-output-denial"
                     if mode == "transaction-attach-output-denial"
                     else "host.before-transfer"
@@ -624,7 +631,10 @@ def main() -> None:
                     "host_run_id": V16_PROVIDER_CONTRACT.host_run_id,
                     "accounting": campaign_boundary.accounting_document(),
                     "writers": campaign_writers,
-                    "coverage": "provider-parent and parent cleanup writers; not full R6 closure",
+                    "coverage": (
+                        "provider-parent and explicit retained cleanup child writers; "
+                        "not full R6 closure"
+                    ),
                 }
                 (transaction_root / "joined-campaign-output.json").write_text(
                     json.dumps(campaign_projection, sort_keys=True, indent=2) + "\n"
@@ -671,7 +681,11 @@ def main() -> None:
                 )
                 expected_terminal = (
                     "category3-shadow-stopped-cleanup-unresolved"
-                    if mode == "transaction-export-output-denial"
+                    if mode
+                    in {
+                        "transaction-export-output-denial",
+                        "condition-failure-cleanup-admission-disconnect",
+                    }
                     else "category3-shadow-stopped-cleanup-verified"
                     if mode
                     in {
@@ -691,7 +705,24 @@ def main() -> None:
                     "retained_phase_events": effects.phase_events,
                     "retained_failure_exceptions": retained_failures,
                 }
-                if mode == "condition-failure-export":
+                if mode == "condition-failure-cleanup-admission-disconnect":
+                    assert transaction["condition_identities_consumed"] == [
+                        V16_PROVIDER_CONTRACT.run_ids[0]
+                    ]
+                    assert not effects.retained_closeouts
+                    channel_path = (
+                        transaction_root
+                        / "offline-remote-1/phases/host-cleanup-output-admission.json"
+                    )
+                    channel = json.loads(channel_path.read_bytes())
+                    assert channel["error"] and channel["child_exit"] != 0
+                    assert channel["reaped"] and channel["capture_threads_stopped"]
+                    assert not channel["events"] and not channel["leases"]
+                    assert channel["grant_releases"] == 0
+                    assert not (
+                        transaction_root / "offline-remote-1/phases/cleanup-terminal.json"
+                    ).exists()
+                elif mode == "condition-failure-export":
                     run_id = V16_PROVIDER_CONTRACT.run_ids[0]
                     assert transaction["condition_identities_consumed"] == [run_id], {
                         "stop": transaction["earliest_stopping_phase"],

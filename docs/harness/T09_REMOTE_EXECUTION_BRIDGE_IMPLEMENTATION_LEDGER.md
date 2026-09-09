@@ -4338,3 +4338,104 @@ No new real experimental activity/cost, shared-runtime access, science change, V
 product push, PR mutation or merge occurred. PR head remains a98b4b8... pending full
 completion/publication gates. Independent review PENDING;
 t09_remote_execution_bridge_review_repair_blocked.
+
+
+### PR15-R6-CHILD-CLEANUP-ADMISSION-02 — in progress (2026-09-09 UTC)
+
+Start: ordinary checkpoint 1c78005a52804c675a8fea2e8336a048f0709d6b,
+tree 11edd331697cd1c5f003ab5e5bb5aafe19fdfa63; reviewed separately with
+CHANGES REQUIRED, all R1–R6 partial. This increment carries explicit campaign
+cleanup writer authority through CleanupExecutionRequest and the retained child,
+with one authoritative reservation/observation owner, bounded remaining deadline,
+pre-growth write admission, conservative failure/disconnect accounting and exact
+owned cleanup. It must preserve all six joined cases, add meaningful child-binding
+and overlap/replay/partial/deadline negatives, and export relevant parent raw source
+records before future ephemeral cleanup. The earlier omitted originals are not
+reconstructed. The final full gate/product publication remain deferred.
+
+DoD status: explicit child authority, actual writer connection, conservation/census,
+deadline/reaping and joined coupling — in progress; next focused evidence pending.
+No new runtime profile, image, key, policy budget or scientific authority is created.
+
+### PR15-R6-CHILD-CLEANUP-ADMISSION-02 — focused checkpoint (2026-09-09 UTC)
+
+The typed CleanupExecutionRequest now carries a single-use campaign cleanup output
+capability to the actual retained host-cleanup child. Campaign/source/tree/candidate,
+owned output roots, phase/attempt and original cleanup handoff/deadline remain bound.
+Two inherited pipes reuse existing bounded bridge I/O; the child consumes the existing
+shared controller reserve and cannot create a policy budget or condition identity.
+Actual host/pilot/journal/receipt/phase/environment-state writes request finite capacity
+before growth. Legacy callbacks select one owner in a bound campaign. Actual partial
+write consumption, unreleased grants and independent publication occupancy are distinct.
+The transaction metadata census rejects changed files outside admitted paths; it does
+not authorize writes retrospectively or treat snapshot occupancy as cumulative writes.
+
+Separate original development runs (native linux/arm64, one pinned clean-lane image):
+- 0773149def0fcf31: 10 passed, 14 failed, no skips/errors; exit 1. Missing test import/
+  parent directory and caught socketpair dispatch were retained. Inherited pipes fixed
+  the actual cleanup transport without loosening the effect guard.
+- 83cda34ed96cc0b7: 187 passed, one failed, no skips/errors; exit 1. The new disconnect
+  negative expected verified cleanup incorrectly. Only that new assertion was corrected.
+- cf4b7297517b0788: 193 passed, four failed, no skips/errors; exit 1. Independent census
+  exposed unadmitted host-cleanup-receipt.json and offline-environment-state.json writes.
+  Actual write_phase_receipt and ImageCommandChannel.save_state now pre-admit growth;
+  the latter persists under the declared retained-phase-traces control-output root.
+  The full transaction census remains unchanged in coverage; no budget was increased.
+- 17a517aad47638fb: 202 passed, zero failures/errors/skips; pytest exit 0; 1160.846 seconds.
+  This is 195 components plus seven separate joined parameters, not a sum of earlier runs.
+
+Final focused input manifest SHA-256:
+cc8672a022e69ff1251ce3e591841f07054a7bc06d1e938bf3021f24f3fe3f27.
+It binds all 894 tracked source members; candidate closure remains 354 explicit members.
+The post-test source check passed. Source/test bytes match the sealed dirty snapshot
+rooted at 1c78005; only this additive ledger entry follows it. No exact-final-commit CI
+certificate is claimed. Image remains
+sha256:0928021614063435abaebc9771282edd681aa7dfe1e2960c1a86dda61b174a3a,
+Python 3.11.14 / uv 0.11.7 / Quarto 1.9.38 and unchanged dependency pins.
+
+The positive transaction controller-transaction-gja19n1o executes all four fresh runtime
+clients, retained first-pair checkpoint, finalizer/evaluator and verified cleanup. Its
+cleanup child recorded 62 protocol events / 20 allowances / 87606 actual written bytes,
+with matching independent publication checks and zero uncovered census writes. Child
+exit was zero, it was reaped and capture threads stopped. Intentional condition failure,
+no-answer, pre-transfer, attach denial and export denial remain separate assertions.
+The added cleanup-carrier disconnect consumes only the first condition, preserves
+unresolved cleanup, reaps the child and does not fabricate a terminal receipt. The
+existing export-denial path preserves three child grants / 29387 observed prefix bytes
+with a failed acknowledgement and unresolved cleanup. No grants are refunded by failure.
+
+Relevant actual parent entry/closeout records and full journals were exported before
+exact-owned ephemeral cleanup: final batch 457 parent records / 2419875 bytes, including
+112 entry-source and 40 closeout-source files. Earlier omitted originals are not
+reconstructed. Full final export: 21227520 bytes, SHA-256
+cd9b87f85bcd630ddf3dd8a599b3b4c8e74676671e55a8664aacecbd21c5474b.
+The private handoff supplies readable source deltas, complete source transports, original
+record hashes and labelled sanitized derivatives. An initial local projection looked
+in the wrong exported subtree for child receipts; its corrected derivative references
+six already-preserved originals. That projection correction is not a test rerun.
+
+New source preservation: 13 Python files / 2892456 bytes; inventory SHA-256
+450286f81be78092a260482410f648aa106c61ff2c24bab16008ee56c858d21b.
+The additive ledger is separately preserved and bound in the ordinary checkpoint.
+Ruff/format on all 13 changed Python files, mypy on eight production modules, and diff
+checks passed. These are native source-only checks, not the complete native-only gates.
+Clean-lane containment/storage/export smoke e07ad19be62109d3 passed. Resume used the
+existing protected descriptor and verified encrypted mapping; the redundant uncredentialed
+imageinfo query is absent. No password value or derivative was displayed or published.
+
+R1-R6 remain PARTIAL. Active assertions are mapped in the private engineering scope
+review; missing complete cleanup-prefix/corruption/interruption/restart, controller
+backpressure/descendant/reaping and exhaustive hook-disable/writer-role matrices remain
+explicit. The census is not a complete transient-write or adversarial filesystem audit.
+Complete current receipts, immutable implementation ancestor, exact-base parity, final
+make ci-check and full control/privacy/site/native-only gates remain NOT RUN. No product
+push or PR change; independent review PENDING. Runtime closeout/publication evidence is
+external to this source checkpoint and must be read for its actual disposition.
+
+Source109 remains UNKNOWN, excluded from successful validation, recovery deferred;
+old storage cause and old container/three-volume absence remain unresolved. Old images,
+keys and recovery tools remain unused; no shared Desktop/Lab/Biblos access. Authorized
+outer clean-lane VM/native-image activity is distinct from guarded inner environmental
+doubles and zero real experimental/provider/model activity or new scientific cost.
+Frozen EXP-0001 inputs, order, budgets and zero retries remain unchanged. No V17, live
+execution or merge. t09_remote_execution_bridge_review_repair_blocked.
