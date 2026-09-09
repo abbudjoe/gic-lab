@@ -15,9 +15,11 @@ import math
 import os
 import re
 import select
+import signal
 import socket
 import stat
 import struct
+import subprocess
 import threading
 import time
 from collections.abc import Callable, Iterator, Mapping
@@ -359,6 +361,283 @@ class TranscriptEntry:
         return {"direction": self.direction, "frame": self.frame.to_document()}
 
 
+class RetainedProcessOwner:
+    """One owner for inherited-pipe process groups and nonblocking captures.
+
+    The child creates a dedicated session before exec. Its leader is kept
+    unreaped until group signals finish, preserving the owned process-group ID.
+    Captures are serviced by the calling bridge's readiness loop, with no worker
+    threads or delayed ownership transfer. This owns processes, never policy.
+    """
+
+    def __init__(self, deadline_monotonic: float) -> None:
+        self.deadline = deadline_monotonic
+        self.started = time.monotonic()
+        self._waitid = getattr(os, "waitid", None)
+        if self._waitid is None:
+            raise RuntimeError("retained supervision requires non-reaping waitid support")
+        remaining = self.deadline - self.started
+        if not math.isfinite(remaining) or remaining <= 0:
+            raise TimeoutError("retained process deadline unavailable")
+        self.teardown_reserve = min(1.0, remaining / 4)
+        self.work_deadline = self.deadline - self.teardown_reserve
+        self.process: subprocess.Popen[bytes] | None = None
+        self.group: int | None = None
+        self.descriptors: dict[int, tuple[int, int]] = {}
+        self.streams: list[BinaryIO] = []
+        self.captures: list[dict[str, object]] = []
+        self.errors: list[str] = []
+        self.signals: list[int] = []
+        self.closed = False
+        self.group_absent: bool | None = None
+        self.created_descriptors = 0
+        self.closed_descriptors = 0
+
+    def _error(self, stage: str, error: BaseException) -> None:
+        if len(self.errors) < 16:
+            self.errors.append(stage + ": " + type(error).__name__ + ": " + str(error)[:256])
+
+    def own_descriptor(self, fd: int) -> int:
+        if fd in self.descriptors:
+            raise RuntimeError("retained descriptor ownership is ambiguous")
+        try:
+            metadata = os.fstat(fd)
+            if len(self.descriptors) >= 16:
+                raise RuntimeError("retained descriptor registry full")
+        except BaseException:
+            os.close(fd)
+            raise
+        self.descriptors[fd] = (metadata.st_dev, metadata.st_ino)
+        self.created_descriptors += 1
+        return fd
+
+    def pipe(self) -> tuple[int, int]:
+        pair = os.pipe()
+        try:
+            self.own_descriptor(pair[0])
+        except BaseException:
+            os.close(pair[1])
+            raise
+        self.own_descriptor(pair[1])
+        return pair
+
+    def close_descriptor(self, fd: int) -> None:
+        identity = self.descriptors.get(fd)
+        if identity is None:
+            return
+        metadata = os.fstat(fd)
+        if (metadata.st_dev, metadata.st_ino) != identity:
+            raise RuntimeError("retained descriptor identity changed before close")
+        os.close(fd)
+        del self.descriptors[fd]
+        self.closed_descriptors += 1
+
+    def start(self, argv: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
+        from typing import Any
+
+        if self.process is not None or self.closed or time.monotonic() >= self.work_deadline:
+            raise RuntimeError("retained process owner is already used or expired")
+        if any(key in kwargs for key in ("preexec_fn", "start_new_session", "process_group")):
+            raise RuntimeError("retained process ownership cannot be overridden")
+        # FileIO close cannot flush an unbounded buffered write during teardown.
+        self.process = subprocess.Popen(
+            argv, start_new_session=True, bufsize=0, **cast(dict[str, Any], kwargs)
+        )
+        self.streams = [
+            cast(BinaryIO, stream)
+            for stream in (self.process.stdin, self.process.stdout, self.process.stderr)
+            if stream is not None
+        ]
+        pid = self.process.pid
+        if pid <= 1 or os.getpgid(pid) != pid or os.getsid(pid) != pid:
+            raise RuntimeError("retained child did not establish its exact owned session")
+        self.group = pid
+        return self.process
+
+    def start_capture(
+        self,
+        stream: BinaryIO,
+        consume: Callable[[bytes], None],
+        finish: Callable[[], None] | None = None,
+    ) -> None:
+        if self.closed or stream not in self.streams or len(self.captures) >= 2:
+            raise RuntimeError("capture lacks a retained stream owner")
+        if any(row["stream"] is stream for row in self.captures):
+            raise RuntimeError("retained capture stream reused")
+        os.set_blocking(stream.fileno(), False)
+        self.captures.append(
+            {
+                "stream": stream,
+                "consume": consume,
+                "finish": finish,
+                "eof": False,
+                "failed": False,
+                "finalized": False,
+            }
+        )
+
+    def pump(self) -> None:
+        """At most one bounded nonblocking read per capture at each bridge poll."""
+        for capture in self.captures:
+            if capture["eof"] or capture["failed"]:
+                continue
+            stream = cast(BinaryIO, capture["stream"])
+            try:
+                chunk = os.read(stream.fileno(), 4096)
+                if chunk:
+                    cast(Callable[[bytes], None], capture["consume"])(chunk)
+                else:
+                    capture["eof"] = True
+            except (BlockingIOError, InterruptedError):
+                continue
+            except BaseException as error:
+                capture["failed"] = True
+                self._error("capture", error)
+
+    def cancelled(self) -> bool:
+        self.pump()
+        return bool(self.errors) or time.monotonic() >= self.work_deadline
+
+    def _exited_unreaped(self) -> bool:
+        if self.process is None:
+            return True
+        if self.process.returncode is not None:
+            raise RuntimeError("retained child was reaped before process-group release")
+        assert self._waitid is not None
+        return (
+            self._waitid(os.P_PID, self.process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            is not None
+        )
+
+    def wait_for_completion(self) -> None:
+        while time.monotonic() < self.work_deadline:
+            self.pump()
+            if self.errors:
+                raise RuntimeError("retained capture failed: " + self.errors[0])
+            if self._exited_unreaped() and all(row["eof"] for row in self.captures):
+                return
+            time.sleep(min(0.005, max(0.0, self.work_deadline - time.monotonic())))
+        raise TimeoutError("retained process/capture consumed its original work deadline")
+
+    def close(self) -> dict[str, object]:
+        if self.closed:
+            return self.document()
+        self.closed = True
+        process = self.process
+        # Never signal a process group after freeing its leader's PID.
+        if process is not None:
+            try:
+                if process.returncode is not None:
+                    raise RuntimeError("process was externally reaped; group ownership unresolved")
+                # waitid(WNOWAIT) proves this remains our unreaped child; its
+                # live/zombie PID anchors the exact group until the last signal.
+                self._exited_unreaped()
+                if (
+                    self.group != process.pid
+                    or os.getpgid(process.pid) != process.pid
+                    or os.getsid(process.pid) != process.pid
+                ):
+                    raise RuntimeError("process group ownership changed or was never verified")
+                try:
+                    os.killpg(self.group, signal.SIGTERM)
+                    self.signals.append(int(signal.SIGTERM))
+                except ProcessLookupError:
+                    pass
+                grace = min(
+                    self.deadline,
+                    time.monotonic() + min(0.1, max(0.0, self.deadline - time.monotonic()) / 3),
+                )
+                while time.monotonic() < grace:
+                    self.pump()
+                    time.sleep(min(0.005, max(0.0, grace - time.monotonic())))
+                try:
+                    os.killpg(self.group, signal.SIGKILL)
+                    self.signals.append(int(signal.SIGKILL))
+                except ProcessLookupError:
+                    pass
+            except BaseException as error:
+                self._error("owned-group-stop", error)
+                # An unverified group gives no group signal authority. The exact
+                # unreaped Popen child remains ours, and is released independently.
+                if process.returncode is None:
+                    try:
+                        self._exited_unreaped()
+                        process.kill()
+                    except BaseException as child_error:
+                        self._error("owned-child-stop", child_error)
+            try:
+                while time.monotonic() < self.deadline and not all(
+                    row["eof"] or row["failed"] for row in self.captures
+                ):
+                    self.pump()
+                    time.sleep(min(0.005, max(0.0, self.deadline - time.monotonic())))
+                process.wait(timeout=max(0.0, self.deadline - time.monotonic()))
+            except BaseException as error:
+                self._error("owned-child-reap", error)
+            # Observation only after reaping; never signal a possibly reused ID.
+            if self.group is not None:
+                try:
+                    while True:
+                        try:
+                            os.killpg(self.group, 0)
+                        except ProcessLookupError:
+                            self.group_absent = True
+                            break
+                        if time.monotonic() >= self.deadline:
+                            self.group_absent = False
+                            raise TimeoutError(
+                                "owned group absence unresolved at original deadline"
+                            )
+                        time.sleep(min(0.005, max(0.0, self.deadline - time.monotonic())))
+                except BaseException as error:
+                    self._error("owned-group-observation", error)
+        for stream in self.streams:
+            try:
+                if not stream.closed:
+                    stream.close()
+            except BaseException as error:
+                self._error("stream-close", error)
+        for capture in self.captures:
+            try:
+                if capture["finish"] is not None:
+                    cast(Callable[[], None], capture["finish"])()
+                capture["finalized"] = True
+            except BaseException as error:
+                self._error("capture-finalization", error)
+        for fd in tuple(self.descriptors):
+            try:
+                self.close_descriptor(fd)
+            except BaseException as error:
+                self._error("descriptor-close", error)
+        return self.document()
+
+    def document(self) -> dict[str, object]:
+        return {
+            "deadline_monotonic": self.deadline,
+            "work_deadline_monotonic": self.work_deadline,
+            "teardown_reserve_seconds": self.teardown_reserve,
+            "elapsed_seconds": time.monotonic() - self.started,
+            "process_id": self.process.pid if self.process is not None else None,
+            "process_group": self.group,
+            "process_group_absent": self.group_absent,
+            "child_exit": self.process.returncode if self.process is not None else None,
+            "reaped": self.process is None or self.process.returncode is not None,
+            "captures": len(self.captures),
+            "captures_finalized": sum(bool(row["finalized"]) for row in self.captures),
+            "capture_workers": 0,
+            "streams_closed": all(stream.closed for stream in self.streams),
+            "created_descriptors": self.created_descriptors,
+            "closed_descriptors": self.closed_descriptors,
+            "open_owned_descriptors": list(self.descriptors),
+            "signals": self.signals,
+            "errors": list(self.errors),
+            "ownership": (
+                "unreaped dedicated-session leader anchors process-group signals; "
+                "no post-reap signals"
+            ),
+        }
+
+
 class FramedDuplexEndpoint:
     """One length-prefixed canonical stream with a single global hash chain."""
 
@@ -370,6 +649,7 @@ class FramedDuplexEndpoint:
         binding: ConditionSessionBinding,
         deadline_monotonic: float,
         monotonic: Callable[[], float] = time.monotonic,
+        cancelled: Callable[[], bool] | None = None,
     ) -> None:
         if not math.isfinite(deadline_monotonic) or deadline_monotonic < monotonic():
             raise ValueError("bridge deadline is unavailable or already expired")
@@ -380,6 +660,7 @@ class FramedDuplexEndpoint:
         self.binding = binding
         self.deadline_monotonic = deadline_monotonic
         self.monotonic = monotonic
+        self.cancelled = cancelled
         self._next_sequence = 1
         self._previous_hash = _ZERO_HASH
         self._event_ids: set[str] = set()
@@ -400,6 +681,8 @@ class FramedDuplexEndpoint:
         return self._next_sequence
 
     def _remaining(self) -> float:
+        if self.cancelled is not None and self.cancelled():
+            raise RemoteBridgeDisconnected("bridge owner cancelled within original deadline")
         remaining = self.deadline_monotonic - self.monotonic()
         if remaining <= 0:
             raise RemoteBridgeDisconnected("bridge monotonic deadline expired")

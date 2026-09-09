@@ -4439,3 +4439,111 @@ outer clean-lane VM/native-image activity is distinct from guarded inner environ
 doubles and zero real experimental/provider/model activity or new scientific cost.
 Frozen EXP-0001 inputs, order, budgets and zero retries remain unchanged. No V17, live
 execution or merge. t09_remote_execution_bridge_review_repair_blocked.
+
+### PR15-R5-CLEANUP-OWNERSHIP-03 — in progress (2026-09-09 UTC)
+
+Start d21e53bec52c21f59ba39e358ec8370e91df8259, tree
+8a844376ad6290f4decd1880db2c7ca06dd93b04; independent review CHANGES REQUIRED.
+DoD: contained red characterization of descendant-held capture and first/second
+capture-start failure; exact process/capture/descriptor ownership; one remaining
+cleanup deadline including teardown; preserved primary/secondary failures and
+conservative grants; partial-start, post-grant/ack-interruption and joined controller
+regressions; all seven existing joined paths; bounded original export and closeout.
+All items in progress. No full final gate, product push or PR mutation is authorized
+for this partial increment. All R1-R6 remain partial. Source109 UNKNOWN/excluded/
+recovery deferred; old/shared runtimes remain unused.
+
+### PR15-R5-CLEANUP-OWNERSHIP-03 — focused repair checkpoint (2026-09-09 UTC)
+
+Starting parent d21e53bec52c21f59ba39e358ec8370e91df8259, tree 8a844376ad6290f4decd1880db2c7ca06dd93b04.
+Remote/PR remains a98b4b875ab4d101709d62bc7222b5c90681a893; required base
+f56dfc2c9346c9b8d8eea4380a3b2388b9668bd2. This is an ordinary preservation
+checkpoint, not the final implementation/test ancestor or an independent approval.
+
+The retained cleanup and related condition carriers now share RetainedProcessOwner.
+The unreaped dedicated-session leader anchors exact process-group termination;
+PID/PGID/SID and child ownership are checked before group signals, with no signals
+after reaping. Bounded nonblocking capture runs in the bridge caller, eliminating
+the capture-thread startup/ownership gap. Partial pipes, output files, Popen streams
+and capture registrations have one owner. One original monotonic deadline reserves
+teardown within its allowance instead of adding fresh one-second waits. Errors from
+one release do not skip the remaining releases or replace the primary failure.
+Cleanup pre-funds its failure transcript before allocation and reconciles only after
+owned process/capture shutdown. Existing shared grants and all writer caps are unchanged.
+
+Original contained red gic-pr15-ci-219e9c3395678f19: four failed nodes, pytest exit 1,
+input a7715896e766d804b08070f2d28e7c7946ebc455ca58a02b64284b41898029c5.
+First/second capture-start failures leaked owned outputs, masked the initial error
+with an unstarted-thread join, and omitted the failure receipt. Descendant-held
+pipes retained two workers and returned after 2.21864/3.27722 seconds against 0.8.
+The regression's separate containment released its exact deliberately stranded
+resources. Originals remain preserved; no historical red result was fabricated.
+Separate first green 572144924360c82b: four passed; original errors retained,
+no live recorded descendants/capture workers/open outputs and elapsed below 0.8.
+
+Separate 71704bea9e7aae9c: 11 passed / one failed, including a successful positive
+four-condition transaction. The new descendant fixture's wrong request-path lookup
+was denied by the real output authority; its missing probe assertion failed.
+Separate ca819c8d158f9e38: one joined descendant-interruption pass / three component
+fixture setup failures from absent required control roots. These were corrected as
+fixtures, not relabelled product defect reproductions. Separate b36c607900a029b9:
+211 component passes, zero failures/errors/skips, 11.462 seconds. Do not add runs.
+
+Two preparation-only attempts 1101f3c1c94500e6 and 55fed57ded91977c stopped before
+pytest: the added helper-hash check was placed after test-user ownership transfer,
+then before required initial root normalization. The corrected existing preparation
+now verifies helper bytes between its established ownership transitions; no new
+privilege or permission was added. Exact failed-preparation logs/source identities
+and ordinary exact-owned ephemeral closeouts are preserved separately. These were
+setup ordering defects, not storage-I/O failures. Earlier unexported cleanup console
+originals are not reconstructed. Final export explicitly retains the two bounded
+cleanup console files alongside parent/child JSON journals.
+
+Final focused run gic-pr15-ci-338d696e54f68bfe: 219 passed (211 components and eight distinct joined
+parameters), zero failures/errors/skips, pytest exit 0, 1295.213 seconds.
+Input-manifest SHA-256 d1e5f4f27ce2a073d19a41e03aa6d5a7f4eef781a90e19a3f393aff45e54fc32; 894 source members and
+354 candidate members. The guest source-integrity check passed; all current source
+bytes matched the sealed snapshot before this additive ledger entry. All five changed
+Python files match that snapshot. Final source archive/result identities, complete
+per-node JUnit, commands/exits, actual original/derivative bindings and source maps
+are in the private external handoff. This is dirty-development evidence rooted at
+d21e53b, not a final-commit make ci-check certificate.
+
+The assigned matrix covers both capture starts, both pipes, both output allocations,
+Popen, parent-pipe close failure, leader exit/termination with inherited pipes,
+TERM-ignoring descendants and blocked pipe writes; secondary finalizer failure and
+changed group identity; and actual condition-carrier partial starts. The new joined
+case runs retained cleanup/writers before a source-bound descendant and partial next
+frame. It preserves prior grants/actual observations, no fabricated terminal ACK,
+nonzero child outcome and unresolved cleanup, with no later condition and exact
+process/descriptor release. All seven prior joined terminal outcomes remain active,
+including four fresh runtime clients, actual finalizer/evaluator/checkpoint and
+normal cleanup. One campaign is not assembled from component successes.
+
+New named source preservation: five Python files / 619774 bytes; inventory SHA-256
+a33d2eae8fe9bbb58d167943a3e75b3943b5b846bf45f60fcee397a59e51317d. The additive ledger is separately retained in the checkpoint record.
+Targeted Ruff format/lint and diff checks passed. Mypy success is reused only for the
+unchanged exact remote_bridge.py source hash. These are native source-only checks,
+not the full native-only acceptance gates. Image remains
+sha256:0928021614063435abaebc9771282edd681aa7dfe1e2960c1a86dda61b174a3a,
+native linux/arm64, Python 3.11.14 / uv 0.11.7 / Quarto 1.9.38 and unchanged locks.
+Clean-lane containment/storage/export smoke 39f5cd738ec28fd9 passed. Protected-descriptor
+resume verified the existing encrypted clean mapping; no interactive imageinfo call.
+Runtime closeout and private publication are external records, not inferred here.
+
+Assigned ownership regressions are demonstrated; independent review is PENDING.
+R1-R6 remain PARTIAL: exhaustive cleanup-prefix/corruption/resume, full controller IPC,
+hook-disable and writer-role matrices remain incomplete. Owned inherited process groups
+are tested; arbitrary session-escaping descendants or a hard preemption guarantee for
+blocked native filesystem calls are not certified. No final source/receipt freeze,
+current V16 regeneration, exact-base parity, full make ci-check/control/privacy/site/
+native-only gate, product push or PR mutation occurred in this increment.
+
+Source109 remains UNKNOWN/excluded from successful validation; recovery deferred.
+Old storage cause and old container/three-volume absence remain unresolved. Old images,
+keys and recovery tools remain unused; shared Desktop/Lab/Biblos are untouched.
+Authorized outer clean-lane infrastructure and its existing generated credentials are
+separate from guarded inner doubles and zero real experimental/provider/model activity.
+EXP-0001 science, model, evaluator, data, task order, budgets and zero retries remain
+unchanged. No V17, live grant, new scientific cost or merge.
+t09_remote_execution_bridge_review_repair_blocked.

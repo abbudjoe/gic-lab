@@ -40,6 +40,7 @@ from giclab.control.effects import (
     repository_effect_identity,
 )
 from giclab.control.production import ProductionCategory3World
+from giclab.control.remote_bridge import RetainedProcessOwner
 from giclab.control.shadow_effects import DeterministicLowLevelEffects
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness.campaign_output import (
@@ -2437,8 +2438,14 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             / "preflight-cleanup-state",
         )
         control_before = sum(host.full_attempt_tree_usage(p).bytes for p in control_roots)
-        with stderr_path.open("xb", buffering=0) as stderr:
-            process = subprocess.Popen(
+        owner = RetainedProcessOwner(deadline)
+        process = None
+        endpoint = None
+        try:
+            stderr_fd = owner.own_descriptor(
+                os.open(stderr_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+            )
+            process = owner.start(
                 [
                     sys.executable,
                     "-B",
@@ -2460,80 +2467,45 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             )
             assert process.stdin is not None and process.stdout is not None
             assert process.stderr is not None
-            os.set_blocking(process.stderr.fileno(), False)
-            capture_errors = []
-            capture_done = threading.Event()
-
-            def capture_diagnostic():
-                total = 0
-                try:
-                    while not capture_done.is_set() and time.monotonic() < deadline:
-                        if not select.select([process.stderr], [], [], 0.05)[0]:
-                            continue
-                        try:
-                            chunk = os.read(process.stderr.fileno(), 4096)
-                        except (BlockingIOError, InterruptedError):
-                            continue
-                        if not chunk:
-                            return
-                        if total + len(chunk) > 65536:
-                            capture_errors.append("diagnostic byte cap")
-                            process.terminate()
-                            return
-                        carrier_output.write_diagnostic(stderr_path, stderr.fileno(), chunk)
-                        total += len(chunk)
-                except Exception as exc:
-                    capture_errors.append(type(exc).__name__)
-
-            capture = threading.Thread(target=capture_diagnostic)
-            capture.start()
+            owner.start_capture(
+                process.stderr,
+                lambda chunk: carrier_output.write_diagnostic(stderr_path, stderr_fd, chunk),
+                lambda: os.fsync(stderr_fd),
+            )
             endpoint = FramedDuplexEndpoint(
                 reader=process.stdout,
                 writer=process.stdin,
                 binding=binding,
-                deadline_monotonic=deadline,
+                deadline_monotonic=owner.work_deadline,
+                cancelled=owner.cancelled,
             )
-            try:
-                terminal = ConditionSessionSupervisor(
-                    endpoint,
-                    observer,
-                    accounting_document=observer.terminal_accounting_document,
-                ).serve()
-                process.stdin.close()
-                process.wait(timeout=max(0.001, deadline - time.monotonic()))
-            except Exception as exc:
-                error = type(exc).__name__ + ": " + str(exc)
-            finally:
-                if process.poll() is None:
-                    process.terminate()
-                    try:
-                        process.wait(timeout=1)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait(timeout=1)
-                capture.join(timeout=1)
-                if capture.is_alive():
-                    capture_done.set()
-                    capture.join(timeout=1)
-                if capture.is_alive():
-                    raise RuntimeError("retained condition diagnostic worker remains unresolved")
-                process.stderr.close()
-                if capture_errors:
-                    error = "; ".join(capture_errors)
-                for stream in (process.stdin, process.stdout):
-                    with contextlib.suppress(OSError):
-                        stream.close()
+            terminal = ConditionSessionSupervisor(
+                endpoint,
+                observer,
+                accounting_document=observer.terminal_accounting_document,
+            ).serve()
+            process.stdin.close()
+            owner.wait_for_completion()
+        except Exception as exc:
+            error = type(exc).__name__ + ": " + str(exc)
+        finally:
+            ownership = owner.close()
+            if ownership["errors"]:
+                error = error or "retained condition ownership failed: " + "; ".join(
+                    ownership["errors"]
+                )
+            if endpoint is not None:
                 carrier_output.publish(
                     shared_root / "shared-authoritative-transcript.json",
                     endpoint.transcript_document(side="shared-authoritative"),
                 )
-                if terminal is not None:
-                    carrier_output.publish(
-                        shared_root / "shared-terminal-receipt.json", terminal.to_document()
-                    )
+            if terminal is not None:
+                carrier_output.publish(
+                    shared_root / "shared-terminal-receipt.json", terminal.to_document()
+                )
         from giclab.control.production import _host_module
 
-        # The actual retained process and diagnostic worker have stopped above.
+        # The retained process group and owned capture/descriptor lifetimes close above.
         # Count the complete remote attempt (including host suffixes and failure
         # copies) against its pre-existing grant. The runtime event remains raw.
         remote_attempt = (
@@ -2549,14 +2521,20 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             observer.retain_closed_remote_output(total_bytes=total)
 
         # Preserve the bounded carrier diagnostic separately from sealed raw.
-        if stderr_path.stat().st_size > 65536:
-            raise RuntimeError("retained condition diagnostic exceeded its finite cap")
-        diagnostic = stderr_path.read_text(errors="replace")
+        diagnostic = ""
+        if stderr_path.exists():
+            if stderr_path.stat().st_size > 65536:
+                raise RuntimeError("retained condition diagnostic exceeded its finite cap")
+            diagnostic = stderr_path.read_text(errors="replace")
+        elif error is None:
+            raise RuntimeError("retained condition diagnostic unexpectedly unavailable")
         if error:
             diagnostic += "\nshared carrier: " + error
         return subprocess.CompletedProcess(
             [],
-            process.returncode if not error else (process.returncode or 1),
+            (process.returncode if process is not None else 1)
+            if not error
+            else ((process.returncode if process is not None else None) or 1),
             stdout="",
             stderr=diagnostic,
         )
@@ -2865,78 +2843,64 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         )
 
     def _cleanup_channel(self, invocation, phase_root, request):
-        """Own every descriptor from the first allocation, including early failure."""
-        with contextlib.ExitStack() as resources:
-            return self._cleanup_channel_owned(invocation, phase_root, request, resources)
+        assert request.output_authority is not None
+        deadline = time.monotonic() + request.output_authority.remaining()
+        owner = RetainedProcessOwner(deadline)
+        try:
+            return self._cleanup_channel_owned(invocation, phase_root, request, owner)
+        finally:
+            owner.close()
 
-    def _cleanup_channel_owned(self, invocation, phase_root, request, resources):
-        """Carry the production capability through the actual retained subprocess."""
+    def _cleanup_channel_owned(self, invocation, phase_root, request, owner):
+        """One owner carries the retained child, every pipe and console to teardown."""
         authority = request.output_authority
         assert authority is not None
-        # Translate the one original cleanup deadline exactly once into this
-        # process's native clock; every I/O operation and reap uses its remainder.
-        deadline = time.monotonic() + authority.remaining()
-        held_fds = set()
-
-        def close_fd(fd):
-            if fd in held_fds:
-                os.close(fd)
-                held_fds.remove(fd)
-
-        def pipe():
-            pair = os.pipe()
-            for fd in pair:
-                held_fds.add(fd)
-                resources.callback(close_fd, fd)
-            return pair
-
-        parent_read, child_write = pipe()
-        child_read, parent_write = pipe()
         process = None
-        captures = []
-        capture_errors = []
+        streams = []
         error = None
         inventory_before = None
         inventory_result = None
         inventory_error = None
         transcript_path = phase_root / "host-cleanup-output-admission.json"
+        # No resource allocation precedes this reserved failure-envelope capacity.
         transcript_grant = admit_campaign_write(
             transcript_path, 2 * 1024 * 1024, CampaignWriterRole.PHASE_CONTROL
         )
         assert transcript_grant is not None
-        invocation = {
-            **invocation,
-            "cleanup_output": {
-                "binding": authority.binding.document(),
-                "read_descriptor": child_read,
-                "write_descriptor": child_write,
-                "deadline": deadline,
-            },
-        }
-        invocation_path = write(phase_root / "host-cleanup-invocation.json", invocation)
-        channel = CleanupOutputChannel(
-            parent_read, authority.binding, deadline, write_fd=parent_write
-        )
-        channel.cancelled = lambda: bool(capture_errors)
-        env = {
-            "PATH": os.defpath,
-            "PYTHONPATH": str(self.source_inputs.root / "src"),
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "GIT_CONFIG_NOSYSTEM": "1",
-            "GIT_CONFIG_GLOBAL": "/dev/null",
-        }
-        streams = []
         try:
-            # Both capture files consume existing cleanup reserve before the
-            # child is started; threads receive their specific leases directly.
+            parent_read, child_write = owner.pipe()
+            child_read, parent_write = owner.pipe()
+            invocation = {
+                **invocation,
+                "cleanup_output": {
+                    "binding": authority.binding.document(),
+                    "read_descriptor": child_read,
+                    "write_descriptor": child_write,
+                    "deadline": owner.work_deadline,
+                },
+            }
+            invocation_path = write(phase_root / "host-cleanup-invocation.json", invocation)
+            channel = CleanupOutputChannel(
+                parent_read, authority.binding, owner.work_deadline, write_fd=parent_write
+            )
+            channel.cancelled = owner.cancelled
+            env = {
+                "PATH": os.defpath,
+                "PYTHONPATH": str(self.source_inputs.root / "src"),
+                "PYTHONDONTWRITEBYTECODE": "1",
+                "GIT_CONFIG_NOSYSTEM": "1",
+                "GIT_CONFIG_GLOBAL": "/dev/null",
+            }
             for suffix in ("stdout", "stderr"):
                 path = phase_root / ("host-cleanup-" + suffix + ".log")
                 lease = admit_campaign_write(path, 65536, CampaignWriterRole.PHASE_CONTROL)
                 assert lease is not None
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                fd = owner.own_descriptor(
+                    os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                )
                 streams.append((path, lease, fd))
             inventory_before = cleanup_output_inventory(self._root)
-            process = subprocess.Popen(
+            process = owner.start(
                 [
                     sys.executable,
                     "-B",
@@ -2951,64 +2915,47 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                 stderr=subprocess.PIPE,
                 pass_fds=(child_read, child_write),
             )
-            close_fd(child_read)
-            close_fd(child_write)
+            owner.close_descriptor(child_read)
+            owner.close_descriptor(child_write)
 
-            def capture(stream, item):
+            def capture(item, chunk):
+                _path, lease, fd = item
+                if lease.observed + len(chunk) > lease.granted:
+                    raise RuntimeError("cleanup child console grant exhausted")
+                offset = 0
+                while offset < len(chunk):
+                    written = os.write(fd, chunk[offset:])
+                    if written <= 0:
+                        raise OSError("cleanup capture short write")
+                    lease.observe(written)
+                    offset += written
+
+            def finalize(item):
                 path, lease, fd = item
-                try:
-                    while chunk := stream.read(4096):
-                        if lease.observed + len(chunk) > lease.granted:
-                            raise RuntimeError("cleanup child console grant exhausted")
-                        offset = 0
-                        while offset < len(chunk):
-                            written = os.write(fd, chunk[offset:])
-                            if written <= 0:
-                                raise OSError("cleanup capture short write")
-                            lease.observe(written)
-                            offset += written
-                    os.fsync(fd)
-                    verify_campaign_write(lease, path)
-                except BaseException as exc:
-                    capture_errors.append(type(exc).__name__)
-                    # The main channel observes cancellation on every bounded
-                    # readiness wait; this thread never closes another owner's fd.
-                    pass
-                finally:
-                    os.close(fd)
-                    stream.close()
+                os.fsync(fd)
+                verify_campaign_write(lease, path)
 
             for stream, item in zip((process.stdout, process.stderr), streams, strict=True):
-                thread = threading.Thread(target=capture, args=(stream, item), daemon=True)
-                captures.append(thread)
-                thread.start()
+                owner.start_capture(
+                    stream,
+                    lambda chunk, item=item: capture(item, chunk),
+                    lambda item=item: finalize(item),
+                )
             if self.fault_plan.fail_operation == "cleanup.admission-disconnect":
-                close_fd(parent_write)
+                owner.close_descriptor(parent_write)
                 raise RuntimeError("injected cleanup admission carrier disconnect")
             channel.serve(authority)
-            returncode = process.wait(timeout=max(0.001, deadline - time.monotonic()))
-            for thread in captures:
-                thread.join(timeout=max(0.001, deadline - time.monotonic()))
-            if returncode or capture_errors or any(t.is_alive() for t in captures):
-                raise RuntimeError("retained cleanup child/capture failed")
+            owner.wait_for_completion()
         except BaseException as exc:
             error = type(exc).__name__ + ": " + str(exc)
         finally:
-            for fd in tuple(held_fds):
-                close_fd(fd)
-            if process is not None and process.poll() is None:
-                process.terminate()
-                try:
-                    process.wait(timeout=min(1.0, max(0.001, deadline - time.monotonic())))
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait(timeout=1.0)
-            for thread in captures:
-                thread.join(timeout=1.0)
-            # If process creation failed, capture threads never owned these fds.
-            if not captures:
-                for _, _, fd in streams:
-                    os.close(fd)
+            ownership = owner.close()
+            if ownership["errors"]:
+                error = error or "retained process ownership failed: " + "; ".join(
+                    ownership["errors"]
+                )
+            if process is not None and process.returncode:
+                error = error or "retained cleanup child returned nonzero"
             if inventory_before is not None:
                 try:
                     inventory_after = cleanup_output_inventory(self._root)
@@ -3025,13 +2972,14 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                 "inventory": inventory_result,
                 "inventory_error": inventory_error,
                 "binding": authority.binding.document(),
-                "deadline": deadline,
+                "deadline": owner.deadline,
                 "events": authority.events,
                 "error": error,
-                "capture_errors": capture_errors,
+                "capture_errors": ownership["errors"],
+                "ownership": ownership,
                 "child_exit": process.returncode if process is not None else None,
-                "reaped": process is None or process.poll() is not None,
-                "capture_threads_stopped": all(not t.is_alive() for t in captures),
+                "reaped": ownership["reaped"],
+                "capture_threads_stopped": ownership["capture_workers"] == 0,
                 "grant_releases": 0,
                 "counting_scope": (
                     "cumulative-actual-write-bytes; full-temporary-grants; "
@@ -3742,6 +3690,7 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         "condition.no-answer",
         "condition.partial-failure",
         "cleanup.admission-disconnect",
+        "cleanup.descendant-interruption",
         "condition.attach-output-denial",
         "export.output-denial",
     ):
@@ -3751,7 +3700,12 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         mode=condition_mode,
         output=output,
         goal=tasks[0 if ordinal < 2 else 1]["question"],
-        process_failure=fault in {"condition.partial-failure", "cleanup.admission-disconnect"},
+        process_failure=fault
+        in {
+            "condition.partial-failure",
+            "cleanup.admission-disconnect",
+            "cleanup.descendant-interruption",
+        },
         attach_output_blocks=65 if fault == "condition.attach-output-denial" else 0,
     )
     sys.modules[selected.__name__] = selected
@@ -4737,6 +4691,62 @@ def _main(invocation):
         )
     snapshot.validate()
     print(json.dumps({"candidate": snapshot.digest, "fake_docker_observations": observations}))
+    if (
+        invocation["phase"] == "host-cleanup"
+        and invocation["fault_operation"] == "cleanup.descendant-interruption"
+    ):
+        # A bound carrier fault AFTER actual retained cleanup/writers. This is a
+        # real same-session descendant holding the two capture pipes, not a
+        # successful cleanup/export double. Readiness prevents a TERM race.
+        ready_read, ready_write = os.pipe()
+        probe = None
+        try:
+            code = (
+                "import os,signal,time; "
+                "signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+                f"os.write({ready_write},b'R'); os.close({ready_write}); "
+                "os.write(1,b'cleanup descendant stdout\\n'); "
+                "os.write(2,b'cleanup descendant stderr\\n'); time.sleep(120)"
+            )
+            admitted_probe_command = [sys.executable, "-B", "-c", code]
+            probe = native_popen(
+                admitted_probe_command, stdin=subprocess.DEVNULL, pass_fds=(ready_write,)
+            )
+            admitted_probe_command = None
+            os.close(ready_write)
+            ready_write = None
+            remaining = invocation["cleanup_output"]["deadline"] - time.monotonic()
+            if remaining <= 0 or not select.select([ready_read], [], [], min(1, remaining))[0]:
+                raise TimeoutError("cleanup descendant fixture readiness failed")
+            if os.read(ready_read, 1) != b"R":
+                raise RuntimeError("cleanup descendant fixture readiness malformed")
+            phase_request = Path(
+                invocation["argv"][invocation["argv"].index("--phase-request") + 1]
+            )
+            probe_path = phase_request.parent / "host-cleanup-supervision-probe.json"
+            write(
+                probe_path,
+                {
+                    "classification": "bound-offline-carrier-fault-not-success-receipt",
+                    "candidate_binding_sha256": snapshot.digest,
+                    "binding": invocation["cleanup_output"]["binding"],
+                    "leader_pid": os.getpid(),
+                    "descendant_pid": probe.pid,
+                    "ready": True,
+                    "fault": "partial-next-frame-after-retained-cleanup",
+                },
+            )
+            # Prefix only: the shared consumer must preserve the prior grants
+            # and classify actual EOF as interruption, without inventing an ACK.
+            os.write(invocation["cleanup_output"]["write_descriptor"], b"\x00\x00")
+            raise RuntimeError("bound cleanup partial-frame descendant interruption")
+        finally:
+            admitted_probe_command = None
+            os.close(ready_read)
+            if ready_write is not None:
+                os.close(ready_write)
+            # The outer owner retains the unreaped session leader and releases
+            # this inherited group; this child may not establish another policy.
 
 
 if __name__ == "__main__":

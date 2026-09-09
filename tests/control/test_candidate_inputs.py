@@ -195,6 +195,7 @@ def test_normal_local_qualifier_rejects_candidate_before_runtime_access(
         "transaction",
         "condition-failure-export",
         "condition-failure-cleanup-admission-disconnect",
+        "condition-failure-cleanup-descendant-interruption",
         "transaction-no-answer",
         "transaction-attach-output-denial",
         "transaction-export-output-denial",
@@ -210,6 +211,7 @@ def test_normal_local_qualifier_rejects_candidate_before_runtime_access(
         "transaction",
         "condition-failure-export",
         "condition-failure-cleanup-admission-disconnect",
+        "condition-failure-cleanup-descendant-interruption",
         "transaction-no-answer",
         "transaction-attach-output-denial",
         "transaction-export-output-denial",
@@ -257,6 +259,7 @@ def test_candidate_actual_package_verifier_in_isolated_source_process(
             "transaction",
             "condition-failure-export",
             "condition-failure-cleanup-admission-disconnect",
+            "condition-failure-cleanup-descendant-interruption",
             "transaction-no-answer",
             "transaction-attach-output-denial",
             "transaction-export-output-denial",
@@ -337,7 +340,10 @@ def test_candidate_actual_package_verifier_in_isolated_source_process(
             assert failure["call_ids"] == failure["logical_call_ids"]
             assert failure["source_authority"] == "immutable-raw-attempt"
             assert all(item["returncode"] == 0 for item in preparation["retained_phase_events"])
-        elif exercise_preparation == "condition-failure-cleanup-admission-disconnect":
+        elif exercise_preparation in {
+            "condition-failure-cleanup-admission-disconnect",
+            "condition-failure-cleanup-descendant-interruption",
+        }:
             assert transaction["terminal_state"] == "category3-shadow-stopped-cleanup-unresolved"
             assert len(transaction["condition_identities_consumed"]) == 1
             assert preparation["retained_provider_closeouts"] == []

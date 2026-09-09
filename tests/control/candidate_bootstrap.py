@@ -342,6 +342,7 @@ def main() -> None:
         "transaction",
         "condition-failure-export",
         "condition-failure-cleanup-admission-disconnect",
+        "condition-failure-cleanup-descendant-interruption",
         "transaction-no-answer",
         "transaction-attach-output-denial",
         "transaction-export-output-denial",
@@ -425,7 +426,9 @@ def main() -> None:
                 contract=V16_PROVIDER_CONTRACT,
                 fault_plan=ShadowFaultPlan(
                     "candidate-input-preparation",
-                    fail_operation="cleanup.admission-disconnect"
+                    fail_operation="cleanup.descendant-interruption"
+                    if mode == "condition-failure-cleanup-descendant-interruption"
+                    else "cleanup.admission-disconnect"
                     if mode == "condition-failure-cleanup-admission-disconnect"
                     else "condition.partial-failure"
                     if mode == "condition-failure-export"
@@ -436,6 +439,7 @@ def main() -> None:
                     in {
                         "transaction-export-output-denial",
                         "condition-failure-cleanup-admission-disconnect",
+                        "condition-failure-cleanup-descendant-interruption",
                     }
                     else "condition.attach-output-denial"
                     if mode == "transaction-attach-output-denial"
@@ -685,6 +689,7 @@ def main() -> None:
                     in {
                         "transaction-export-output-denial",
                         "condition-failure-cleanup-admission-disconnect",
+                        "condition-failure-cleanup-descendant-interruption",
                     }
                     else "category3-shadow-stopped-cleanup-verified"
                     if mode
@@ -705,7 +710,36 @@ def main() -> None:
                     "retained_phase_events": effects.phase_events,
                     "retained_failure_exceptions": retained_failures,
                 }
-                if mode == "condition-failure-cleanup-admission-disconnect":
+                if mode == "condition-failure-cleanup-descendant-interruption":
+                    assert transaction["condition_identities_consumed"] == [
+                        V16_PROVIDER_CONTRACT.run_ids[0]
+                    ]
+                    assert not effects.retained_closeouts
+                    phase_root = transaction_root / "offline-remote-1/phases"
+                    channel = json.loads(
+                        (phase_root / "host-cleanup-output-admission.json").read_bytes()
+                    )
+                    probe = json.loads(
+                        (phase_root / "host-cleanup-supervision-probe.json").read_bytes()
+                    )
+                    owned = channel["ownership"]
+                    assert probe["candidate_binding_sha256"] == snapshot.digest and probe["ready"]
+                    assert channel["error"] and channel["child_exit"] != 0
+                    assert (
+                        channel["events"] and channel["leases"] and channel["grant_releases"] == 0
+                    )
+                    assert sum(x["observed"] for x in channel["leases"]) > 0
+                    assert not any(x["operation"] == "close" for x in channel["events"])
+                    assert all(0 <= x["observed"] <= x["granted"] for x in channel["leases"])
+                    assert owned["process_id"] == probe["leader_pid"] == owned["process_group"]
+                    assert owned["reaped"] and owned["process_group_absent"]
+                    assert owned["streams_closed"] and not owned["open_owned_descriptors"]
+                    assert owned["capture_workers"] == 0 and owned["captures_finalized"] == 2
+                    assert not owned["errors"] and 15 in owned["signals"] and 9 in owned["signals"]
+                    assert not Path(f"/proc/{probe['descendant_pid']}").exists()
+                    assert channel["inventory_error"] is None
+                    assert channel["inventory"]["uncovered_writes"] == []
+                elif mode == "condition-failure-cleanup-admission-disconnect":
                     assert transaction["condition_identities_consumed"] == [
                         V16_PROVIDER_CONTRACT.run_ids[0]
                     ]

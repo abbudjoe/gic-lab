@@ -3026,3 +3026,381 @@ def test_r6_cleanup_child_cannot_spend_output_grant_on_immutable_input(tmp_path)
             authority.admit(tmp_path / "input/source", 10, CampaignWriterRole.HOST_CONTROL)
         assert world._campaign_cleanup_remaining == before
         assert not list(tmp_path.iterdir()) and not authority.leases
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "first-capture",
+        "second-capture",
+        "descendant-exit",
+        "descendant-term",
+        "descendant-backpressure",
+        "first-pipe",
+        "second-pipe",
+        "parent-close",
+        "first-output",
+        "second-output",
+        "popen",
+    ],
+)
+def test_r5_retained_cleanup_process_capture_ownership(
+    tmp_path, monkeypatch, record_property, fault
+):
+    """Contained old-path red: the fixture finally owns every deliberately stranded resource."""
+    import subprocess
+    import threading
+    from types import SimpleNamespace
+
+    import tests.control.retained_candidate_effects as retained
+    from giclab.harness.campaign_output import CleanupOutputAuthority
+
+    root = tmp_path / "transaction"
+    root.mkdir()
+    phases = root / "phases"
+    phases.mkdir()
+    pid_path = tmp_path / "fixture-descendant.json"
+    world, _ = _campaign_writer_world(root)
+    effects = object.__new__(retained.RetainedCandidateEffects)
+    effects._root = root
+    effects.source_inputs = SimpleNamespace(root=ROOT)
+    effects.fault_plan = SimpleNamespace(fail_operation=None)
+    native_popen = subprocess.Popen
+    native_open = os.open
+    native_start = threading.Thread.start
+    native_pipe = os.pipe
+    pipes = []
+    output_attempts = []
+    processes, workers, output_fds = [], [], []
+    starts = []
+    script = "import time; time.sleep(30)"
+    if fault.startswith("descendant-"):
+        descendant = (
+            "import os,signal,time; "
+            "signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+            "os.write(1,b'held stdout\\n'); os.write(2,b'held stderr\\n'); time.sleep(30)"
+        )
+        if fault == "descendant-backpressure":
+            descendant = (
+                "import os,signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); "
+                "os.write(1,b'x'*1048576); os.write(2,b'y'*1048576); time.sleep(30)"
+            )
+        script = (
+            "import subprocess,sys,json,time; from pathlib import Path; "
+            f"p=subprocess.Popen([sys.executable,'-c',{descendant!r}]); "
+            f"Path({str(pid_path)!r}).write_text(json.dumps({{'pid':p.pid}})); "
+            "time.sleep(0.15); " + ("sys.exit(0)" if fault.endswith("exit") else "time.sleep(30)")
+        )
+
+    def launch(_argv, **kwargs):
+        if fault == "popen":
+            raise OSError("synthetic popen allocation failure")
+        process = native_popen([sys.executable, "-c", script], **kwargs)
+        processes.append(process)
+        return process
+
+    def opened(path, flags, mode=0o777, **kwargs):
+        if (
+            isinstance(path, (str, Path))
+            and Path(path).name in {"host-cleanup-stdout.log", "host-cleanup-stderr.log"}
+            and flags & os.O_CREAT
+        ):
+            output_attempts.append(str(path))
+            if (fault == "first-output" and len(output_attempts) == 1) or (
+                fault == "second-output" and len(output_attempts) == 2
+            ):
+                raise OSError("synthetic output allocation failure")
+        fd = native_open(path, flags, mode, **kwargs)
+        if (
+            isinstance(path, (str, Path))
+            and Path(path).name in {"host-cleanup-stdout.log", "host-cleanup-stderr.log"}
+            and flags & os.O_CREAT
+        ):
+            st = os.fstat(fd)
+            output_fds.append((fd, (st.st_dev, st.st_ino)))
+        return fd
+
+    def start(thread, *args, **kwargs):
+        workers.append(thread)
+        starts.append(len(starts) + 1)
+        if fault in {"first-capture", "second-capture"} and len(starts) == (
+            1 if fault == "first-capture" else 2
+        ):
+            raise RuntimeError("synthetic capture startup failure")
+        return native_start(thread, *args, **kwargs)
+
+    def pipe():
+        if fault == "first-pipe" or (fault == "second-pipe" and pipes):
+            raise OSError("synthetic pipe allocation failure")
+        pair = native_pipe()
+        pipes.append(pair)
+        for fd in pair:
+            st = os.fstat(fd)
+            output_fds.append((fd, (st.st_dev, st.st_ino)))
+        return pair
+
+    monkeypatch.setattr(retained.os, "pipe", pipe)
+    monkeypatch.setattr(retained.subprocess, "Popen", launch)
+    monkeypatch.setattr(retained.os, "open", opened)
+    # Green implementation may remove capture threads entirely; inject the
+    # equivalent actual capture-registration boundary rather than fake a receipt.
+    owner = getattr(retained, "RetainedProcessOwner", None)
+    if owner is not None and fault == "parent-close":
+        native_close_descriptor = owner.close_descriptor
+        close_calls = []
+
+        def close_descriptor(self, fd):
+            close_calls.append(fd)
+            if len(close_calls) == 1:
+                raise OSError("synthetic parent pipe close failure")
+            return native_close_descriptor(self, fd)
+
+        monkeypatch.setattr(owner, "close_descriptor", close_descriptor)
+    if owner is None:
+        monkeypatch.setattr(threading.Thread, "start", start)
+    elif fault in {"first-capture", "second-capture"}:
+        native_capture = owner.start_capture
+
+        def start_capture(self, *args, **kwargs):
+            starts.append(len(starts) + 1)
+            if len(starts) == (1 if fault == "first-capture" else 2):
+                raise RuntimeError("synthetic capture startup failure")
+            return native_capture(self, *args, **kwargs)
+
+        monkeypatch.setattr(owner, "start_capture", start_capture)
+
+    def open_outputs():
+        result = []
+        for fd, identity in output_fds:
+            try:
+                st = os.fstat(fd)
+            except OSError:
+                continue
+            if (st.st_dev, st.st_ino) == identity:
+                result.append(fd)
+        return result
+
+    def descendant_live():
+        if not pid_path.exists():
+            return False
+        pid = json.loads(pid_path.read_bytes())["pid"]
+        try:
+            fields = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        except FileNotFoundError:
+            return False
+        return fields[0] != "Z"
+
+    began = time.monotonic()
+    deadline = began + 0.8
+    error = None
+    observations = None
+    try:
+        with world._campaign_writer_scope(cleanup=True):
+            authority = CleanupOutputAuthority(
+                _cleanup_output_binding(root), deadline=deadline, monotonic=time.monotonic
+            )
+            try:
+                effects._cleanup_channel({}, phases, SimpleNamespace(output_authority=authority))
+            except BaseException as exc:
+                error = type(exc).__name__ + ": " + str(exc)
+            finally:
+                authority.close()
+        receipt = phases / "host-cleanup-output-admission.json"
+        observations = {
+            "fault": fault,
+            "error": error,
+            "elapsed": time.monotonic() - began,
+            "deadline_seconds": 0.8,
+            "capture_workers_alive": sum(t.is_alive() for t in workers),
+            "owned_output_fds_open": open_outputs(),
+            "owned_streams_open": sum(
+                not stream.closed
+                for process in processes
+                for stream in (process.stdout, process.stderr)
+                if stream is not None
+            ),
+            "descendant_live": descendant_live(),
+            "receipt_available": receipt.exists(),
+            "capture_file_bytes": {
+                p.name: p.stat().st_size for p in phases.glob("host-cleanup-*.log")
+            },
+            "started_capture_boundaries": len(starts),
+        }
+        if receipt.exists():
+            data = json.loads(receipt.read_bytes())
+            observations["receipt_error"] = data["error"]
+            observations["child_reaped"] = data["reaped"]
+            observations["ownership"] = data.get("ownership")
+    finally:
+        # Separate, bounded regression containment, including the broken old path.
+        # No process name search or unrelated signal target is used.
+        for process in processes:
+            if process.poll() is None:
+                process.kill()
+            process.wait(timeout=2)
+        if pid_path.exists() and descendant_live():
+            os.kill(json.loads(pid_path.read_bytes())["pid"], signal.SIGKILL)
+        for thread in workers:
+            if thread.ident is not None:
+                thread.join(timeout=2)
+        for process in processes:
+            for stream in (process.stdout, process.stderr):
+                if stream is not None and not stream.closed:
+                    stream.close()
+        for fd in open_outputs():
+            os.close(fd)
+        assert not any(t.is_alive() for t in workers), "regression containment failed"
+        until = time.monotonic() + 2
+        while descendant_live() and time.monotonic() < until:
+            time.sleep(0.01)
+        assert not descendant_live(), "regression descendant containment failed"
+    assert observations is not None
+    record_property("cleanup_ownership", json.dumps(observations, sort_keys=True))
+    assert observations["receipt_available"], observations
+    assert observations["owned_output_fds_open"] == [], observations
+    assert all(count <= 65536 for count in observations["capture_file_bytes"].values()), (
+        observations
+    )
+    assert observations["owned_streams_open"] == 0, observations
+    assert observations["capture_workers_alive"] == 0, observations
+    assert not observations["descendant_live"], observations
+    assert observations["elapsed"] < 1.0, observations
+    assert observations["child_reaped"], observations
+    if fault in {"first-capture", "second-capture"}:
+        assert "synthetic capture startup failure" in observations["error"], observations
+
+
+@pytest.mark.parametrize("fault", ["finalizer", "group-identity"])
+def test_r5_retained_owner_independent_release_and_signal_identity(
+    tmp_path, monkeypatch, record_property, fault
+):
+    import subprocess
+
+    from giclab.control.remote_bridge import RetainedProcessOwner
+
+    owner = RetainedProcessOwner(time.monotonic() + 1)
+    read_fd, write_fd = owner.pipe()
+    process = owner.start(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    finalized = []
+
+    def finish_first():
+        finalized.append("first")
+        if fault == "finalizer":
+            raise OSError("synthetic first capture finalizer failure")
+
+    owner.start_capture(process.stdout, lambda b: None, finish_first)
+    owner.start_capture(process.stderr, lambda b: None, lambda: finalized.append("second"))
+    signals = []
+    native_killpg = os.killpg
+
+    def killpg(group, sig):
+        signals.append((group, sig))
+        return native_killpg(group, sig)
+
+    monkeypatch.setattr(os, "killpg", killpg)
+    if fault == "group-identity":
+        monkeypatch.setattr(os, "getpgid", lambda pid: pid + 1)
+    try:
+        receipt = owner.close()
+        repeated = owner.close()
+        assert (
+            repeated["signals"] == receipt["signals"]
+            and repeated["closed_descriptors"] == receipt["closed_descriptors"]
+        )
+        assert receipt["reaped"] and receipt["streams_closed"]
+        assert not receipt["open_owned_descriptors"]
+        assert receipt["created_descriptors"] == receipt["closed_descriptors"] == 2
+        assert finalized == ["first", "second"]
+        assert receipt["errors"]
+        if fault == "group-identity":
+            assert all(sig == 0 for _, sig in signals), signals
+            assert "ownership changed" in receipt["errors"][0]
+        else:
+            assert "synthetic first capture finalizer failure" in receipt["errors"][0]
+        for fd in (read_fd, write_fd):
+            with pytest.raises(OSError):
+                os.fstat(fd)
+        record_property("retained_owner_release", json.dumps(receipt, sort_keys=True))
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait(timeout=1)
+
+
+@pytest.mark.parametrize("fault", ["capture-start", "output-open", "popen"])
+def test_r5_condition_carrier_partial_start_uses_same_owner(
+    tmp_path, monkeypatch, record_property, fault
+):
+    from types import SimpleNamespace
+
+    import tests.control.retained_candidate_effects as retained
+
+    root = tmp_path / "transaction"
+    root.mkdir()
+    inv = root / "condition-invocation.json"
+    inv.write_text("{}")
+    effects = object.__new__(retained.RetainedCandidateEffects)
+    effects.contract = V16_PROVIDER_CONTRACT
+    effects.repository = ROOT
+    effects.source_inputs = SimpleNamespace(root=ROOT)
+    effects.transfer_request = SimpleNamespace(
+        binding=SimpleNamespace(remote_root=str(root / "remote")),
+        provider_entry_receipt_path=root / "entry/source/receipt.json",
+    )
+    (root / "remote" / V16_PROVIDER_CONTRACT.control_root_name).mkdir(parents=True)
+    (root / "entry/preflight-cleanup-state").mkdir(parents=True)
+    consumed = []
+    observer = SimpleNamespace(
+        allocate_controller_output_bytes=lambda **kw: consumed.append(kw),
+        observe_controller_output_bytes=lambda **kw: None,
+    )
+    request = SimpleNamespace(
+        transaction_root=root,
+        run_id=V16_PROVIDER_CONTRACT.run_ids[0],
+        evaluator_run_id="fixture-evaluator",
+        frozen_manifest_sha256="a" * 64,
+        raw_output_root="attempts/one/raw",
+    )
+    owners = []
+    native_owner = retained.RetainedProcessOwner
+
+    def owned(deadline):
+        value = native_owner(deadline)
+        owners.append(value)
+        return value
+
+    monkeypatch.setattr(retained, "RetainedProcessOwner", owned)
+    native_popen = retained.subprocess.Popen
+
+    def launch(argv, **kwargs):
+        if fault == "popen":
+            raise OSError("synthetic condition popen failure")
+        return native_popen([sys.executable, "-c", "import time; time.sleep(30)"], **kwargs)
+
+    monkeypatch.setattr(retained.subprocess, "Popen", launch)
+
+    def fail_capture(*args, **kwargs):
+        raise RuntimeError("synthetic condition capture startup failure")
+
+    monkeypatch.setattr(native_owner, "start_capture", fail_capture)
+    native_open = os.open
+
+    def opened(path, flags, mode=0o777, **kwargs):
+        if fault == "output-open" and path == inv.with_suffix(".stderr"):
+            raise OSError("synthetic condition output open failure")
+        return native_open(path, flags, mode, **kwargs)
+
+    monkeypatch.setattr(os, "open", opened)
+    result = effects._condition_channel(inv, request, observer)
+    assert result.returncode != 0 and "synthetic condition" in result.stderr
+    assert len(owners) == 1 and consumed
+    document = owners[0].document()
+    assert document["reaped"] and document["streams_closed"]
+    assert not document["open_owned_descriptors"] and not document["errors"]
+    assert document["capture_workers"] == 0
+    record_property("condition_owner", json.dumps(document, sort_keys=True))
