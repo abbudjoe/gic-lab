@@ -43,6 +43,7 @@ from giclab.control.proofs import (
     validate_current_control_receipt_set,
     validate_deterministic_staging,
 )
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_provider_contracts import (
     MetadataPolicy,
     ReplacementPolicy,
@@ -89,6 +90,7 @@ class Category3Request:
     expected_repository_commit: str
     expected_repository_tree: str
     control_proof: ControlProofReference | ValidatedShadowRehearsal
+    source_inputs: CandidateSourceSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -187,6 +189,11 @@ def prepare_category3(
 
     transitions: list[dict[str, object]] = []
     context = adapters.authorization_context
+    command_package_sha256 = request.contract.expected_command_manifest_sha256
+    if request.source_inputs is not None:
+        if adapters.authority.kind is not EffectAuthorityKind.SHADOW_ONLY:
+            raise ValueError("candidate transaction cannot use live authority")
+        command_package_sha256 = request.source_inputs.command_package_sha256(request.repository)
     if (
         adapters.authority.kind
         not in {
@@ -197,9 +204,11 @@ def prepare_category3(
         or context.provider_contract_version != request.contract.version
         or context.plan_id != request.contract.plan_id
         or context.plan_sha256 != request.contract.expected_plan_sha256
-        or context.command_package_sha256 != request.contract.expected_command_manifest_sha256
+        or context.command_package_sha256 != command_package_sha256
         or context.control_commit != request.expected_repository_commit
         or context.control_tree != request.expected_repository_tree
+        or context.candidate_source_binding_sha256
+        != (None if request.source_inputs is None else request.source_inputs.digest)
         or not adapters.authority.authorizes(context)
     ):
         _transition(
@@ -215,7 +224,11 @@ def prepare_category3(
             Category3Phase.VERIFY_IDENTITY.value,
             "effect authority is unavailable",
         )
-    commit, tree = repository_identity(request.repository)
+    commit, tree = (
+        repository_identity(request.repository)
+        if request.source_inputs is None
+        else request.source_inputs.package_identity(request.repository)
+    )
     if (commit, tree) != (
         request.expected_repository_commit,
         request.expected_repository_tree,
@@ -236,7 +249,15 @@ def prepare_category3(
     _transition(transitions, Category3Phase.VERIFY_IDENTITY, "passed")
 
     try:
-        composition = composition_builder(request.repository, request.contract)
+        if (
+            request.source_inputs is not None
+            and composition_builder is _default_composition_builder
+        ):
+            composition = compose_control_plane(
+                request.repository, contract=request.contract, source_inputs=request.source_inputs
+            )
+        else:
+            composition = composition_builder(request.repository, request.contract)
     except Exception as exc:
         _transition(
             transitions,
@@ -712,6 +733,17 @@ def _establish_provider(
                 )
         if failed_phase is None:
             return
+        replacement_allowed = (
+            replacement_eligible
+            and request.contract.capabilities.replacement_policy
+            is ReplacementPolicy.BOUNDED_PREFLIGHT
+            and launch_ordinal < max_launches
+        )
+        if not replacement_allowed:
+            # Preserve the exact handle for the ordinary terminal cleanup path.
+            # Remote cleanup must finish before that path terminates the host.
+            state.stop(failed_phase, failed_reason)
+            return
         try:
             adapters.provider_transport.terminate(handle)
         except TerminationUnavailable as exc:
@@ -721,15 +753,6 @@ def _establish_provider(
         inventory = adapters.provider_transport.inventory()
         if inventory != ():
             state.stop(failed_phase, f"{failed_reason}; replacement absence is unverified")
-            return
-        replacement_allowed = (
-            replacement_eligible
-            and request.contract.capabilities.replacement_policy
-            is ReplacementPolicy.BOUNDED_PREFLIGHT
-            and launch_ordinal < max_launches
-        )
-        if not replacement_allowed:
-            state.stop(failed_phase, failed_reason)
             return
         state.replacement_count += 1
     state.stop(Category3Phase.LAUNCH, "provider launch envelope exhausted")

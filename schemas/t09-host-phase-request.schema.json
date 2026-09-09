@@ -31,7 +31,7 @@
         "host-cleanup"
       ]
     },
-    "execution_mode": {"enum": ["deterministic-no-network", "external-live"]},
+    "execution_mode": {"enum": ["deterministic-no-network", "external-live", "external-offline-candidate"]},
     "binding": {"$ref": "#/$defs/binding"},
     "previous_phase_receipt_path": {"type": ["string", "null"], "minLength": 1},
     "previous_phase_receipt_sha256": {
@@ -95,6 +95,8 @@
         "source_commit": {"$ref": "#/$defs/git"},
         "source_tree": {"$ref": "#/$defs/git"},
         "remote_root": {"type": "string", "pattern": "^/[A-Za-z0-9._/-]+$"},
+        "candidate_source_binding_sha256": {"$ref": "#/$defs/sha256"},
+        "offline_environment_sha256": {"$ref": "#/$defs/sha256"},
         "host_transfer_receipt_sha256": {
           "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
         }

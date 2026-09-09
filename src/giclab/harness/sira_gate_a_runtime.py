@@ -8,9 +8,14 @@ log destinations, and environment cleanup surfaces before calling the pinned run
 from __future__ import annotations
 
 import argparse
+import builtins
+import codecs
+import contextlib
 import copy
 import importlib.util
+import io
 import json
+import locale
 import os
 import platform
 import resource
@@ -18,7 +23,7 @@ import stat
 import sys
 import threading
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -239,26 +244,18 @@ def _write_usage_ledger(
     path: Path,
     usage: ProviderBudgetUsage,
     unreconciled_provider_attempts: int,
+    *,
+    reserve_temporary_bytes: Callable[[int], None] | None = None,
+    require_output_admission: bool = False,
 ) -> None:
     with _LEDGER_WRITE_LOCK:
-        temporary = path.with_suffix(f".{threading.get_ident()}.tmp")
-        with temporary.open("w", encoding="utf-8") as handle:
-            handle.write(
-                json.dumps(
-                    _ledger_document(usage, unreconciled_provider_attempts),
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n"
-            )
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temporary, path)
-        directory = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory)
-        finally:
-            os.close(directory)
+        _publish_json_evidence(
+            path,
+            _ledger_document(usage, unreconciled_provider_attempts),
+            temporary=path.with_suffix(f".{threading.get_ident()}.tmp"),
+            reserve_temporary_bytes=reserve_temporary_bytes,
+            require_output_admission=require_output_admission,
+        )
 
 
 def _session_path(upstream_argv: Sequence[str]) -> Path:
@@ -284,14 +281,60 @@ def _session_history(upstream_argv: Sequence[str]) -> list[object]:
     return history
 
 
-def _write_json_evidence(path: Path, value: object) -> None:
+def _write_json_evidence(
+    path: Path,
+    value: object,
+    *,
+    reserve_temporary_bytes: Callable[[int], None] | None = None,
+    require_output_admission: bool = False,
+) -> None:
     """Atomically fsync one value-only evidence record."""
 
+    _publish_json_evidence(
+        path,
+        value,
+        temporary=path.with_suffix(f".{os.getpid()}.tmp"),
+        reserve_temporary_bytes=reserve_temporary_bytes,
+        require_output_admission=require_output_admission,
+    )
+
+
+def _publish_json_evidence(
+    path: Path,
+    value: object,
+    *,
+    temporary: Path,
+    reserve_temporary_bytes: Callable[[int], None] | None,
+    require_output_admission: bool,
+) -> None:
+    """Expose the atomic writer's full temporary growth before any mutation.
+
+    The caller owns admission. This writer cannot issue, extend or release an
+    allowance, and does not confuse a replacement's full temporary allocation
+    with its net published growth. In particular it must not subtract the old
+    file size: both files exist until replacement. Observed scope totals and
+    unused capacity remain the caller's responsibility, including on failure.
+
+    Existing callers retain their historical behavior when admission is not
+    required. Remote scope allocation must explicitly supply this boundary;
+    adding the callback alone does not establish admission for those callers.
+    """
+    if require_output_admission and reserve_temporary_bytes is None:
+        raise GateAContractError("JSON evidence writer has no bound output admission")
+    encoded = (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if reserve_temporary_bytes is not None:
+        reserve_temporary_bytes(len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    temporary = path.with_suffix(f".{os.getpid()}.tmp")
-    with temporary.open("w", encoding="utf-8") as handle:
-        handle.write(json.dumps(value, indent=2, sort_keys=True) + "\n")
-        handle.flush()
+    # Exclusive creation preserves a stale/replacement temporary record. A
+    # failed write retains the exact created prefix rather than removing
+    # evidence or implicitly returning its reservation to the allocator.
+    with temporary.open("xb", buffering=0) as handle:
+        offset = 0
+        while offset < len(encoded):
+            count = handle.write(encoded[offset:])
+            if count is None or count <= 0:
+                raise OSError("JSON evidence write made no progress")
+            offset += count
         os.fsync(handle.fileno())
     os.replace(temporary, path)
     directory = os.open(path.parent, os.O_RDONLY)
@@ -299,6 +342,215 @@ def _write_json_evidence(path: Path, value: object) -> None:
         os.fsync(directory)
     finally:
         os.close(directory)
+
+
+class _AdmittedPublicationAllowance:
+    """A consumption-only view of one already admitted output reservation."""
+
+    def __init__(self, capacity: int) -> None:
+        if type(capacity) is not int or capacity < 0:
+            raise GateAContractError("runtime publication allowance capacity is malformed")
+        self._remaining = capacity
+        self._denied = False
+        self._lock = threading.Lock()
+
+    @property
+    def remaining(self) -> int:
+        with self._lock:
+            return self._remaining
+
+    def require_no_denial(self) -> None:
+        with self._lock:
+            if self._denied:
+                raise GateAContractError("runtime publication allowance has a retained denial")
+
+    def __call__(self, count: int) -> None:
+        with self._lock:
+            if self._denied or type(count) is not int or not 0 <= count <= self._remaining:
+                self._denied = True
+                raise GateAContractError("runtime publication allowance exhausted")
+            self._remaining -= count
+
+
+def _reserve_terminal_publications(
+    admission_port: RuntimeAdmissionPort, *, capacity: int = 64 * 1024
+) -> _AdmittedPublicationAllowance:
+    """Prefund full terminal JSON temporaries before reservations can be denied.
+
+    The shared accountant admits the unchanged condition/campaign bounds. This
+    consumption mirror cannot enlarge capacity, claim observations, or free a
+    retained failed prefix. Unconsumed capacity remains unavailable to a census
+    of other writers and is explicitly carried in the output observation.
+    """
+    if type(capacity) is not int or not 0 < capacity <= 64 * 1024:
+        raise GateAContractError("runtime terminal publication allocation is invalid")
+    admission_port.reserve_output_growth(capacity)
+    return _AdmittedPublicationAllowance(capacity)
+
+
+class _AdmittedSourceStream:
+    """Lazy stream for the retained Python session/logger writers only.
+
+    Admit the encoded bytes before opening/truncating or writing. No descriptor
+    or raw-buffer escape is exposed. This is a writer boundary, not a sandbox
+    for arbitrary native code; attach streams and other roles have separate
+    retained writers and must be admitted separately.
+    """
+
+    def __init__(self, opener: Callable[[], Any], consume: Callable[[int], None], *, binary: bool):
+        self._opener = opener
+        self._consume = consume
+        self._binary = binary
+        self._stream: Any = None
+        self._closed = False
+        self._lock = threading.RLock()
+
+    def write(self, value: Any) -> int:
+        with self._lock:
+            if self._closed:
+                raise ValueError("source stream is closed")
+            if self._binary:
+                if not isinstance(value, (bytes, bytearray, memoryview)):
+                    raise TypeError("binary source stream requires bytes")
+                size = len(bytes(value))
+            else:
+                if not isinstance(value, str):
+                    raise TypeError("text source stream requires text")
+                size = len(value.encode("utf-8"))
+            self._consume(size)
+            if self._stream is None:
+                self._stream = self._opener()
+            return int(self._stream.write(value))
+
+    def writelines(self, values: Any) -> None:
+        for value in values:
+            self.write(value)
+
+    def flush(self) -> None:
+        with self._lock:
+            if self._stream is not None:
+                self._stream.flush()
+
+    def close(self) -> None:
+        with self._lock:
+            if self._stream is not None:
+                self._stream.close()
+            self._closed = True
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    @property
+    def encoding(self) -> str | None:
+        return None if self._binary else "utf-8"
+
+    def __enter__(self) -> _AdmittedSourceStream:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+
+@contextlib.contextmanager
+def _admit_source_writers(
+    attempt_root: Path, allowance: _AdmittedPublicationAllowance
+) -> Iterator[None]:
+    """Bind Python open/Path.open at the two retained upstream output roles."""
+    roots = (attempt_root / "sira-output", attempt_root / "source-logs")
+    original_open, original_io_open = builtins.open, io.open
+    streams: list[_AdmittedSourceStream] = []
+
+    def guarded_open(file: Any, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if not isinstance(file, (str, bytes, os.PathLike)) or not any(c in mode for c in "wax+"):
+            return original_open(file, mode, *args, **kwargs)
+        path = Path(os.fsdecode(file)).absolute()
+        if not any(path.is_relative_to(root) for root in roots):
+            return original_open(file, mode, *args, **kwargs)
+        if ".." in path.parts or any(parent.is_symlink() for parent in (path, *path.parents)):
+            raise GateAContractError("source output path is unsafe")
+        names = ("buffering", "encoding", "errors", "newline", "closefd", "opener")
+        if len(args) > len(names) or any(name in kwargs for name in names[: len(args)]):
+            raise TypeError("source writer has duplicate or excessive open arguments")
+        kwargs = {**dict(zip(names, args, strict=False)), **kwargs}
+        if (
+            mode not in {"w", "a", "x", "wb", "ab", "xb", "wt", "at", "xt"}
+            or kwargs.get("opener") is not None
+            or kwargs.get("closefd") is False
+        ):
+            raise GateAContractError("source writer requires its bound simple output mode")
+        if "b" not in mode:
+            encoding = kwargs.get("encoding")
+            if encoding in (None, "locale"):
+                encoding = locale.getencoding()
+            if (
+                not isinstance(encoding, str)
+                or codecs.lookup(encoding).name != "utf-8"
+                or kwargs.get("newline") not in (None, "", "\n")
+                or kwargs.get("errors") not in (None, "strict")
+            ):
+                raise GateAContractError("source writer requires exact UTF-8 byte accounting")
+            kwargs = {**kwargs, "encoding": "utf-8"}
+
+        def open_bound() -> Any:
+            # Resolve every directory with no-follow descriptors, then inspect
+            # the opened target before truncation. A hard link or nonregular
+            # replacement cannot turn output admission into write authority.
+            directories: list[tuple[Path, int]] = []
+            descriptor: int | None = None
+            try:
+                parent_fd = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY)
+                directories.append((Path(path.anchor), parent_fd))
+                current = Path(path.anchor)
+                for part in path.parts[1:-1]:
+                    current /= part
+                    parent_fd = os.open(
+                        part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent_fd
+                    )
+                    directories.append((current, parent_fd))
+                for directory, held_fd in directories:
+                    if directory.lstat() != os.fstat(held_fd):
+                        raise GateAContractError("source output directory changed")
+                flags = os.O_WRONLY | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK
+                if "x" in mode:
+                    flags |= os.O_EXCL
+                if "a" in mode:
+                    flags |= os.O_APPEND
+                descriptor = os.open(path.name, flags, 0o600, dir_fd=parent_fd)
+                metadata = os.fstat(descriptor)
+                if (
+                    not stat.S_ISREG(metadata.st_mode)
+                    or metadata.st_nlink != 1
+                    or metadata.st_uid != os.geteuid()
+                    or path.lstat() != metadata
+                ):
+                    raise GateAContractError("source output file identity is unsafe")
+                if "w" in mode:
+                    os.ftruncate(descriptor, 0)
+                opened = original_open(descriptor, mode, **kwargs)
+                descriptor = None
+                return opened
+            finally:
+                if descriptor is not None:
+                    os.close(descriptor)
+                for _, held_fd in reversed(directories):
+                    os.close(held_fd)
+
+        stream = _AdmittedSourceStream(open_bound, allowance, binary="b" in mode)
+        streams.append(stream)
+        return stream
+
+    builtins.open = guarded_open
+    io.open = guarded_open
+    try:
+        yield
+    finally:
+        builtins.open, io.open = original_open, original_io_open
+        for stream in streams:
+            stream.close()
+    # Logging handlers may catch write exceptions. A caught admission denial
+    # remains fatal for this runtime; it cannot silently become a valid answer.
+    allowance.require_no_denial()
 
 
 def _remove_secret_bearing_artifacts(
@@ -545,6 +797,13 @@ def _install_locked_llm_factory(
     observe_credential: Callable[[str], None] | None = None,
 ) -> None:
     del ledger_path
+    if pilot_events is not None:
+        pilot_events.bind_output_admission(
+            reserve_growth=admission_port.reserve_output_growth,
+            observe_growth=lambda count: admission_port.output_bytes(
+                total_bytes=admission_port.condition_usage.output_bytes + count
+            ),
+        )
     upstream_llm_module = importlib.import_module("sira.web.utils.llm")
     upstream_llm = upstream_llm_module.LLM
     call_identity_lock = threading.Lock()
@@ -554,7 +813,7 @@ def _install_locked_llm_factory(
         nonlocal call_identity_sequence
         with call_identity_lock:
             call_identity_sequence += 1
-            return f"CALL-T09-{call_identity_sequence:08d}"
+            return admission_port.call_identity(call_identity_sequence)
 
     class BudgetedLLM(upstream_llm):  # type: ignore[misc, valid-type]
         def __init__(self, *, role: ModelRole, credential: str) -> None:
@@ -625,7 +884,13 @@ def _install_locked_llm_factory(
                         classify_failure=_classify_provider_failure,
                     )
                 except Exception as exc:
-                    record = admission_port.terminal_call_state(call_id)
+                    try:
+                        record = admission_port.terminal_call_state(call_id)
+                    except KeyError:
+                        # Admission can fail before a remote terminal receipt is
+                        # available. Preserve that original failure, not a lookup
+                        # error or an invented zero-activity terminal record.
+                        raise exc from None
                     if pilot_events is not None:
                         pilot_events.append(
                             "provider-call-failed",
@@ -850,17 +1115,21 @@ def run(argv: Sequence[str] | None = None) -> int:
             prior_lambda_cost_usd=time_origins.prior_lambda_cost_usd,
         )
         resource_guard.check()
-        pilot_events = EventWriter(attempt_root / "normalized-events.jsonl")
-        pilot_lineage = _PilotLineage()
-        assert attempt is not None
-        pilot_events.append(
-            "regulation-decision-assignment",
-            {
-                "source_kind": "experiment_assignment",
-                "condition": attempt.condition,
-                "scientific_effect_on_h2k": "none",
-            },
+        pilot_events = EventWriter(
+            attempt_root / "normalized-events.jsonl",
+            require_output_admission=args.gate_admission_mode == "duplex-supervisor",
         )
+        pilot_lineage = _PilotLineage()
+        if args.gate_admission_mode == "historical-in-process":
+            assert attempt is not None
+            pilot_events.append(
+                "regulation-decision-assignment",
+                {
+                    "source_kind": "experiment_assignment",
+                    "condition": attempt.condition,
+                    "scientific_effect_on_h2k": "none",
+                },
+            )
 
     def before_empirical_operation() -> None:
         nonlocal empirical_entered
@@ -940,14 +1209,48 @@ def run(argv: Sequence[str] | None = None) -> int:
             expected_binding=expected_binding,
             expected_transaction_root_identity=(args.gate_duplex_transaction_root_identity),
         )
-    _write_usage_ledger(
-        ledger_path,
-        admission_port.condition_usage,
-        admission_port.unreconciled_provider_attempts,
-    )
-    _write_json_evidence(lifecycle_path, admission_port.accounting_document())
-    (attempt_root / "runtime-environment.json").write_text(
-        json.dumps(
+    try:
+        # Shared capacity and observed bytes are different quantities. Atomic
+        # publications reserve their full temporary file before creation; the final
+        # retained scope census is still independently checked, never replaced with
+        # a sum of these reservations.
+        remote_output = args.gate_admission_mode == "duplex-supervisor"
+        # Pre-admit a finite terminal publication allowance while the channel is
+        # still open to reservations. Once output is denied or the runtime detaches,
+        # terminal writers may consume this allowance but cannot request more.
+        finalizing_runtime = False
+        consume_terminal_publication = (
+            _reserve_terminal_publications(admission_port) if remote_output else None
+        )
+
+        def reserve_runtime_publication(count: int) -> None:
+            if finalizing_runtime:
+                assert consume_terminal_publication is not None
+                consume_terminal_publication(count)
+            else:
+                admission_port.reserve_output_growth(count)
+
+        def write_runtime_evidence(path: Path, value: object) -> None:
+            _write_json_evidence(
+                path,
+                value,
+                reserve_temporary_bytes=reserve_runtime_publication if remote_output else None,
+                require_output_admission=remote_output,
+            )
+
+        def write_runtime_ledger() -> None:
+            _write_usage_ledger(
+                ledger_path,
+                admission_port.condition_usage,
+                admission_port.unreconciled_provider_attempts,
+                reserve_temporary_bytes=reserve_runtime_publication if remote_output else None,
+                require_output_admission=remote_output,
+            )
+
+        write_runtime_ledger()
+        write_runtime_evidence(lifecycle_path, admission_port.accounting_document())
+        write_runtime_evidence(
+            attempt_root / "runtime-environment.json",
             {
                 "schema_version": "0.1.0",
                 "python_executable": sys.executable,
@@ -988,315 +1291,355 @@ def run(argv: Sequence[str] | None = None) -> int:
                 ),
                 "secret_variable_names": [SIRA_SECRET_VARIABLE],
             },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    runner = _load_module(runner_path, "giclab_t07_pinned_sira_runner")
-    observed_credentials: list[str] = []
-
-    def observe_credential(value: str) -> None:
-        if observed_credentials and observed_credentials[0] != value:
-            raise GateAContractError("more than one provider credential reached the runtime")
-        if not observed_credentials:
-            observed_credentials.append(value)
-
-    _install_locked_llm_factory(
-        runner,
-        admission_port=admission_port,
-        llm_timeout_seconds=condition_budget_caps.max_wall_seconds,
-        ledger_path=ledger_path,
-        pilot_events=pilot_events,
-        pilot_lineage=pilot_lineage,
-        before_empirical_operation=before_empirical_operation if pilot_contract else None,
-        resource_guard=resource_guard,
-        observe_credential=observe_credential if pilot_contract else None,
-    )
-    if pilot_events is not None and pilot_lineage is not None:
-        original_make_agent = runner.make_agent
-
-        def instrumented_make_agent(*agent_args: Any, **agent_kwargs: Any) -> Any:
-            agent = original_make_agent(*agent_args, **agent_kwargs)
-            original_step = agent.step
-
-            def instrumented_agent_step(raw_observation: Any) -> Any:
-                step_event_id = pilot_events.append(
-                    "agent-step-started",
-                    {"observation_available": raw_observation is not None},
-                )
-                pilot_lineage.parent_event_id = step_event_id
-                try:
-                    action, thoughts = original_step(raw_observation)
-                finally:
-                    pilot_lineage.parent_event_id = None
-                action_event_id = pilot_events.append(
-                    "requested-browser-action",
-                    {"requested_action": action, "agent_step_info": _json_safe(thoughts)},
-                    parent_event_id=step_event_id,
-                )
-                pilot_lineage.action_event_id = action_event_id
-                return action, thoughts
-
-            agent.step = instrumented_agent_step
-            return agent
-
-        runner_any_for_agent: Any = runner
-        runner_any_for_agent.make_agent = instrumented_make_agent
-    logger_module = importlib.import_module("sira.web.utils.logger")
-    original_agent_logger = logger_module.get_agent_logger
-
-    def owned_agent_logger(log_file: str = "default_log.log", log_dir: str | None = None) -> Any:
-        del log_dir
-        return original_agent_logger(
-            log_file=log_file,
-            log_dir=str(attempt_root / "source-logs" / "agent"),
         )
 
-    runner_any: Any = runner
-    logger_any: Any = logger_module
-    runner_any.get_agent_logger = owned_agent_logger
-    logger_any.get_agent_logger = owned_agent_logger
+        source_publications = None
+        if remote_output:
+            admission_port.reserve_output_growth(4 * 1024 * 1024)
+            source_publications = _AdmittedPublicationAllowance(4 * 1024 * 1024)
+        with (
+            _admit_source_writers(attempt_root, source_publications)
+            if source_publications is not None
+            else contextlib.nullcontext()
+        ):
+            runner = _load_module(runner_path, "giclab_t07_pinned_sira_runner")
+            observed_credentials: list[str] = []
 
-    opened_environments: list[Any] = []
-    original_gym_make = runner.gym.make
-
-    def tracked_gym_make(*make_args: Any, **make_kwargs: Any) -> Any:
-        created = original_gym_make(*make_args, **make_kwargs)
-        current = created
-        seen: set[int] = set()
-        while hasattr(current, "env") and id(current) not in seen:
-            seen.add(id(current))
-            current = current.env
-        opened_environments.append(current)
-        if pilot_events is not None and pilot_lineage is not None:
-            original_environment_step = current.step
-
-            def instrumented_environment_step(action: str) -> Any:
-                if resource_guard is not None:
-                    resource_guard.check()
-                action_event_id = pilot_lineage.action_event_id
-                if action_event_id is None:
-                    action_event_id = pilot_events.append(
-                        "requested-browser-action",
-                        {"requested_action": action, "agent_step_info": None},
+            def observe_credential(value: str) -> None:
+                if observed_credentials and observed_credentials[0] != value:
+                    raise GateAContractError(
+                        "more than one provider credential reached the runtime"
                     )
+                if not observed_credentials:
+                    observed_credentials.append(value)
 
-                def perform_browser_action() -> Any:
-                    before_empirical_operation()
-                    return original_environment_step(action)
-
-                try:
-                    result = admission_port.browser_action(
-                        action_id=action_event_id,
-                        perform=perform_browser_action,
-                    )
-                except Exception as exc:
-                    pilot_events.append(
-                        "post-action-result",
-                        {
-                            "requested_action": action,
-                            "result_available": False,
-                            "exception_type": type(exc).__name__,
-                        },
-                        parent_event_id=action_event_id,
-                    )
-                    pilot_lineage.action_event_id = None
-                    raise
-                if not isinstance(result, tuple) or len(result) != 5:
-                    raise GateAContractError("browser step returned an unexpected result shape")
-                observation, reward, terminated, truncated, info = result
-                serializable_observation = runner.get_serializable_obs(
-                    current,
-                    copy.deepcopy(observation),
-                )
+            _install_locked_llm_factory(
+                runner,
+                admission_port=admission_port,
+                llm_timeout_seconds=condition_budget_caps.max_wall_seconds,
+                ledger_path=ledger_path,
+                pilot_events=pilot_events,
+                pilot_lineage=pilot_lineage,
+                before_empirical_operation=before_empirical_operation if pilot_contract else None,
+                resource_guard=resource_guard,
+                observe_credential=observe_credential if pilot_contract else None,
+            )
+            if pilot_events is not None and args.gate_admission_mode == "duplex-supervisor":
+                assert attempt is not None
                 pilot_events.append(
-                    "post-action-result",
+                    "regulation-decision-assignment",
                     {
-                        "requested_action": action,
-                        "result_available": True,
-                        "observation": _json_safe(serializable_observation),
-                        "reward": _json_safe(reward),
-                        "terminated": _json_safe(terminated),
-                        "truncated": _json_safe(truncated),
-                        "info": _json_safe(info),
+                        "source_kind": "experiment_assignment",
+                        "condition": attempt.condition,
+                        "scientific_effect_on_h2k": "none",
                     },
-                    parent_event_id=action_event_id,
                 )
-                pilot_lineage.action_event_id = None
-                if resource_guard is not None:
-                    resource_guard.check()
-                return result
+            if pilot_events is not None and pilot_lineage is not None:
+                original_make_agent = runner.make_agent
 
-            current.step = instrumented_environment_step
-        return created
+                def instrumented_make_agent(*agent_args: Any, **agent_kwargs: Any) -> Any:
+                    agent = original_make_agent(*agent_args, **agent_kwargs)
+                    original_step = agent.step
 
-    runner.gym.make = tracked_gym_make
-    sys.argv = [str(runner_path), *args.upstream_argv[1:]]
-    cleanup_path = attempt_root / "runtime-cleanup.json"
-    close_errors: list[str] = []
-    secret_cleanup = {
-        "credential_observed": False,
-        "credential_removed_from_environment": False,
-        "content_scan_permitted": False,
-        "secret_bearing_artifacts_removed": [],
-        "remaining_exact_credential_matches": None,
-    }
-    runtime_core_cleanup: dict[str, object] = {
-        "core_artifacts_detected": [],
-        "core_artifact_count": 0,
-        "core_scan_integrity_failure": False,
-        "destruction_verified": True,
-        "credential_rotation_required_due_to_core_handling": False,
-        "core_content_or_hash_retained": False,
-        "core_detection_receipt_sha256": None,
-    }
-    runner_succeeded = False
-    runtime_terminalized = False
-    try:
-        runner.main()
-        runner_succeeded = True
-    finally:
-        try:
-            admission_port.close_in_flight(grace_seconds=5.0, sleeper=time.sleep)
-        except Exception as exc:
-            close_errors.append(type(exc).__name__)
-        for environment in opened_environments:
-            try:
-                environment.close()
-            except Exception as exc:  # cleanup evidence must survive a source close failure
-                close_errors.append(type(exc).__name__)
-        runtime_core_records: list[dict[str, object]] = []
-        runtime_core_paths: list[Path] = []
-        runtime_core_scan_failure = False
-        try:
-            runtime_core_records, runtime_core_paths = _runtime_core_census(
-                attempt_root,
-                runtime_budget_root=(
-                    aggregate_ledger_path.parent if aggregate_ledger_path is not None else None
-                ),
-            )
-        except (OSError, GateAContractError):
-            runtime_core_scan_failure = True
-        core_detection_path = attempt_root / "runtime-core-detection.json"
-        _write_json_evidence(
-            core_detection_path,
-            {
-                "schema_version": "0.1.0",
-                "scope": "condition-container-writable-roots-before-teardown",
-                "core_artifacts_detected": runtime_core_records,
-                "core_artifact_count": len(runtime_core_records),
-                "core_scan_integrity_failure": runtime_core_scan_failure,
-                "core_content_or_hash_retained": False,
-                "destructive_cleanup_not_yet_claimed": True,
-            },
-        )
-        runtime_core_destruction_verified = (
-            _remove_runtime_core_artifacts(
-                attempt_root,
-                runtime_core_paths,
-                runtime_core_records,
-                runtime_budget_root=(
-                    aggregate_ledger_path.parent if aggregate_ledger_path is not None else None
-                ),
-            )
-            if not runtime_core_scan_failure
-            else False
-        )
-        if runtime_core_records:
-            close_errors.append("CoreArtifactDetected")
-        if runtime_core_scan_failure:
-            close_errors.append("CoreScanIntegrityFailure")
-        runtime_core_cleanup = {
-            "core_artifacts_detected": runtime_core_records,
-            "core_artifact_count": len(runtime_core_records),
-            "core_scan_integrity_failure": runtime_core_scan_failure,
-            "destruction_verified": runtime_core_destruction_verified,
-            "credential_rotation_required_due_to_core_handling": (
-                runtime_core_scan_failure
-                or (bool(runtime_core_records) and not runtime_core_destruction_verified)
-            ),
-            "core_content_or_hash_retained": False,
-            "core_detection_receipt_sha256": file_sha256(core_detection_path),
-        }
-        if pilot_contract is not None:
-            secret_cleanup, credential_cleanup_errors = _privacy_safe_runtime_secret_cleanup(
-                attempt_root=attempt_root,
-                observed_credentials=tuple(observed_credentials),
-                core_scan_integrity_failure=runtime_core_scan_failure,
-                core_destruction_verified=runtime_core_destruction_verified,
-            )
-            close_errors.extend(credential_cleanup_errors)
-        _write_json_evidence(
-            cleanup_path,
-            {
-                "schema_version": "0.1.0",
-                "tracked_browser_environments": len(opened_environments),
-                "close_error_types": close_errors,
-                "all_environment_closes_succeeded": not close_errors,
-                "pilot_attempt_id": args.gate_pilot_attempt_id,
-                "empirical_entry_crossed": empirical_entered,
-                "secret_cleanup": secret_cleanup,
-                "core_cleanup": runtime_core_cleanup,
-            },
-        )
-        try:
-            if runner_succeeded:
-                if pilot_contract is None:
-                    _reconcile_browser_actions(args.upstream_argv[1:], admission_port)
-                else:
-                    if not empirical_entered:
-                        raise T09PilotError(
-                            "a successful pilot condition had no empirical operation"
+                    def instrumented_agent_step(raw_observation: Any) -> Any:
+                        step_event_id = pilot_events.append(
+                            "agent-step-started",
+                            {"observation_available": raw_observation is not None},
                         )
-                    if close_errors:
-                        raise T09PilotError("pilot browser cleanup did not complete")
-                    history = _session_history(args.upstream_argv[1:])
-                    if len(history) != admission_port.condition_usage.browser_actions:
-                        raise T09PilotError(
-                            "pre-action browser counter and retained session history disagree"
+                        pilot_lineage.parent_event_id = step_event_id
+                        try:
+                            action, thoughts = original_step(raw_observation)
+                        finally:
+                            pilot_lineage.parent_event_id = None
+                        action_event_id = pilot_events.append(
+                            "requested-browser-action",
+                            {"requested_action": action, "agent_step_info": _json_safe(thoughts)},
+                            parent_event_id=step_event_id,
                         )
-                    assert resource_guard is not None
-                    snapshot = resource_guard.check()
-                    admission_port.output_bytes(total_bytes=snapshot.attempt_output_bytes)
-                    if pilot_events is not None:
+                        pilot_lineage.action_event_id = action_event_id
+                        return action, thoughts
+
+                    agent.step = instrumented_agent_step
+                    return agent
+
+                runner_any_for_agent: Any = runner
+                runner_any_for_agent.make_agent = instrumented_make_agent
+            logger_module = importlib.import_module("sira.web.utils.logger")
+            original_agent_logger = logger_module.get_agent_logger
+
+            def owned_agent_logger(
+                log_file: str = "default_log.log", log_dir: str | None = None
+            ) -> Any:
+                del log_dir
+                return original_agent_logger(
+                    log_file=log_file,
+                    log_dir=str(attempt_root / "source-logs" / "agent"),
+                )
+
+            runner_any: Any = runner
+            logger_any: Any = logger_module
+            runner_any.get_agent_logger = owned_agent_logger
+            logger_any.get_agent_logger = owned_agent_logger
+
+            opened_environments: list[Any] = []
+            original_gym_make = runner.gym.make
+
+            def tracked_gym_make(*make_args: Any, **make_kwargs: Any) -> Any:
+                created = original_gym_make(*make_args, **make_kwargs)
+                current = created
+                seen: set[int] = set()
+                while hasattr(current, "env") and id(current) not in seen:
+                    seen.add(id(current))
+                    current = current.env
+                opened_environments.append(current)
+                if pilot_events is not None and pilot_lineage is not None:
+                    original_environment_step = current.step
+
+                    def instrumented_environment_step(action: str) -> Any:
+                        if resource_guard is not None:
+                            resource_guard.check()
+                        action_event_id = pilot_lineage.action_event_id
+                        if action_event_id is None:
+                            action_event_id = pilot_events.append(
+                                "requested-browser-action",
+                                {"requested_action": action, "agent_step_info": None},
+                            )
+
+                        def perform_browser_action() -> Any:
+                            before_empirical_operation()
+                            return original_environment_step(action)
+
+                        try:
+                            result = admission_port.browser_action(
+                                action_id=action_event_id,
+                                perform=perform_browser_action,
+                            )
+                        except Exception as exc:
+                            pilot_events.append(
+                                "post-action-result",
+                                {
+                                    "requested_action": action,
+                                    "result_available": False,
+                                    "exception_type": type(exc).__name__,
+                                },
+                                parent_event_id=action_event_id,
+                            )
+                            pilot_lineage.action_event_id = None
+                            raise
+                        if not isinstance(result, tuple) or len(result) != 5:
+                            raise GateAContractError(
+                                "browser step returned an unexpected result shape"
+                            )
+                        observation, reward, terminated, truncated, info = result
+                        serializable_observation = runner.get_serializable_obs(
+                            current,
+                            copy.deepcopy(observation),
+                        )
                         pilot_events.append(
-                            "cleanup-receipt",
+                            "post-action-result",
                             {
-                                "tracked_browser_environments": len(opened_environments),
-                                "all_environment_closes_succeeded": not close_errors,
-                                "attempt_output_bytes": snapshot.attempt_output_bytes,
-                                "pilot_disk_bytes": snapshot.pilot_disk_bytes,
-                                "gpu_use_claimed": False,
+                                "requested_action": action,
+                                "result_available": True,
+                                "observation": _json_safe(serializable_observation),
+                                "reward": _json_safe(reward),
+                                "terminated": _json_safe(terminated),
+                                "truncated": _json_safe(truncated),
+                                "info": _json_safe(info),
                             },
+                            parent_event_id=action_event_id,
                         )
-        finally:
-            _write_usage_ledger(
-                ledger_path,
-                admission_port.condition_usage,
-                admission_port.unreconciled_provider_attempts,
-            )
-            _write_json_evidence(lifecycle_path, admission_port.accounting_document())
-            if args.gate_admission_mode == "duplex-supervisor":
+                        pilot_lineage.action_event_id = None
+                        if resource_guard is not None:
+                            resource_guard.check()
+                        return result
+
+                    current.step = instrumented_environment_step
+                return created
+
+            runner.gym.make = tracked_gym_make
+            sys.argv = [str(runner_path), *args.upstream_argv[1:]]
+            cleanup_path = attempt_root / "runtime-cleanup.json"
+            close_errors: list[str] = []
+            secret_cleanup = {
+                "credential_observed": False,
+                "credential_removed_from_environment": False,
+                "content_scan_permitted": False,
+                "secret_bearing_artifacts_removed": [],
+                "remaining_exact_credential_matches": None,
+            }
+            runtime_core_cleanup: dict[str, object] = {
+                "core_artifacts_detected": [],
+                "core_artifact_count": 0,
+                "core_scan_integrity_failure": False,
+                "destruction_verified": True,
+                "credential_rotation_required_due_to_core_handling": False,
+                "core_content_or_hash_retained": False,
+                "core_detection_receipt_sha256": None,
+            }
+            runner_succeeded = False
+            runtime_terminalized = False
+            try:
+                runner.main()
+                if source_publications is not None:
+                    source_publications.require_no_denial()
+                runner_succeeded = True
+            finally:
+                finalizing_runtime = True
                 try:
-                    # Process outcome, final answer, and raw seal identities are
-                    # host-derived. The container detaches after its last runtime
-                    # event; the transparent host relay appends that exact evidence
-                    # before the sole shared terminal acknowledgement.
-                    _write_json_evidence(
-                        attempt_root / "duplex-runtime-detached.json",
-                        admission_port.detach_runtime(),
+                    admission_port.close_in_flight(grace_seconds=5.0, sleeper=time.sleep)
+                except Exception as exc:
+                    close_errors.append(type(exc).__name__)
+                for environment in opened_environments:
+                    try:
+                        environment.close()
+                    except Exception as exc:  # cleanup evidence must survive a source close failure
+                        close_errors.append(type(exc).__name__)
+                runtime_core_records: list[dict[str, object]] = []
+                runtime_core_paths: list[Path] = []
+                runtime_core_scan_failure = False
+                try:
+                    runtime_core_records, runtime_core_paths = _runtime_core_census(
+                        attempt_root,
+                        runtime_budget_root=(
+                            aggregate_ledger_path.parent
+                            if aggregate_ledger_path is not None
+                            else None
+                        ),
                     )
-                    runtime_terminalized = True
+                except (OSError, GateAContractError):
+                    runtime_core_scan_failure = True
+                core_detection_path = attempt_root / "runtime-core-detection.json"
+                write_runtime_evidence(
+                    core_detection_path,
+                    {
+                        "schema_version": "0.1.0",
+                        "scope": "condition-container-writable-roots-before-teardown",
+                        "core_artifacts_detected": runtime_core_records,
+                        "core_artifact_count": len(runtime_core_records),
+                        "core_scan_integrity_failure": runtime_core_scan_failure,
+                        "core_content_or_hash_retained": False,
+                        "destructive_cleanup_not_yet_claimed": True,
+                    },
+                )
+                runtime_core_destruction_verified = (
+                    _remove_runtime_core_artifacts(
+                        attempt_root,
+                        runtime_core_paths,
+                        runtime_core_records,
+                        runtime_budget_root=(
+                            aggregate_ledger_path.parent
+                            if aggregate_ledger_path is not None
+                            else None
+                        ),
+                    )
+                    if not runtime_core_scan_failure
+                    else False
+                )
+                if runtime_core_records:
+                    close_errors.append("CoreArtifactDetected")
+                if runtime_core_scan_failure:
+                    close_errors.append("CoreScanIntegrityFailure")
+                runtime_core_cleanup = {
+                    "core_artifacts_detected": runtime_core_records,
+                    "core_artifact_count": len(runtime_core_records),
+                    "core_scan_integrity_failure": runtime_core_scan_failure,
+                    "destruction_verified": runtime_core_destruction_verified,
+                    "credential_rotation_required_due_to_core_handling": (
+                        runtime_core_scan_failure
+                        or (bool(runtime_core_records) and not runtime_core_destruction_verified)
+                    ),
+                    "core_content_or_hash_retained": False,
+                    "core_detection_receipt_sha256": file_sha256(core_detection_path),
+                }
+                if pilot_contract is not None:
+                    secret_cleanup, credential_cleanup_errors = (
+                        _privacy_safe_runtime_secret_cleanup(
+                            attempt_root=attempt_root,
+                            observed_credentials=tuple(observed_credentials),
+                            core_scan_integrity_failure=runtime_core_scan_failure,
+                            core_destruction_verified=runtime_core_destruction_verified,
+                        )
+                    )
+                    close_errors.extend(credential_cleanup_errors)
+                write_runtime_evidence(
+                    cleanup_path,
+                    {
+                        "schema_version": "0.1.0",
+                        "tracked_browser_environments": len(opened_environments),
+                        "close_error_types": close_errors,
+                        "all_environment_closes_succeeded": not close_errors,
+                        "pilot_attempt_id": args.gate_pilot_attempt_id,
+                        "empirical_entry_crossed": empirical_entered,
+                        "secret_cleanup": secret_cleanup,
+                        "core_cleanup": runtime_core_cleanup,
+                    },
+                )
+                try:
+                    if runner_succeeded:
+                        if pilot_contract is None:
+                            _reconcile_browser_actions(args.upstream_argv[1:], admission_port)
+                        else:
+                            if not empirical_entered:
+                                raise T09PilotError(
+                                    "a successful pilot condition had no empirical operation"
+                                )
+                            if close_errors:
+                                raise T09PilotError("pilot browser cleanup did not complete")
+                            history = _session_history(args.upstream_argv[1:])
+                            if len(history) != admission_port.condition_usage.browser_actions:
+                                raise T09PilotError(
+                                    "pre-action browser counter and retained session "
+                                    "history disagree"
+                                )
+                            assert resource_guard is not None
+                            snapshot = resource_guard.check()
+                            admission_port.output_bytes(
+                                total_bytes=snapshot.attempt_output_bytes,
+                                retained_output_bytes=(
+                                    (
+                                        consume_terminal_publication.remaining
+                                        if consume_terminal_publication is not None
+                                        else 0
+                                    )
+                                    + (
+                                        source_publications.remaining
+                                        if source_publications is not None
+                                        else 0
+                                    )
+                                ),
+                            )
+                            if pilot_events is not None:
+                                pilot_events.append(
+                                    "cleanup-receipt",
+                                    {
+                                        "tracked_browser_environments": len(opened_environments),
+                                        "all_environment_closes_succeeded": not close_errors,
+                                        "attempt_output_bytes": snapshot.attempt_output_bytes,
+                                        "pilot_disk_bytes": snapshot.pilot_disk_bytes,
+                                        "gpu_use_claimed": False,
+                                    },
+                                )
                 finally:
-                    admission_port.close()
-            else:
-                admission_port.close()
-    if args.gate_admission_mode == "duplex-supervisor" and not runtime_terminalized:
-        raise GateAContractError("duplex runtime session did not terminalize")
-    return 0
+                    try:
+                        write_runtime_ledger()
+                        write_runtime_evidence(lifecycle_path, admission_port.accounting_document())
+                        if args.gate_admission_mode == "duplex-supervisor":
+                            # Process outcome, final answer, and raw seal identities are
+                            # host-derived. The container detaches after its last runtime
+                            # event; the transparent host relay appends that exact evidence
+                            # before the sole shared terminal acknowledgement.
+                            write_runtime_evidence(
+                                attempt_root / "duplex-runtime-detached.json",
+                                admission_port.detach_runtime(),
+                            )
+                            runtime_terminalized = True
+                    finally:
+                        admission_port.close()
+            if args.gate_admission_mode == "duplex-supervisor" and not runtime_terminalized:
+                raise GateAContractError("duplex runtime session did not terminalize")
+            return 0
+    finally:
+        admission_port.close()
 
 
 if __name__ == "__main__":

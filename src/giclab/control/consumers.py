@@ -17,6 +17,7 @@ from typing import Final
 from giclab.harness import t09_model_metadata_receipt as model_metadata
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_provider_contracts import (
     AuthorizationPolicy,
     CleanupFamily,
@@ -158,7 +159,12 @@ def _cleanup(repository: Path, contract: T09ProviderContract) -> ConsumerResolut
     )
 
 
-def _command_package(repository: Path, contract: T09ProviderContract) -> ConsumerResolution | None:
+def _command_package(
+    repository: Path,
+    contract: T09ProviderContract,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
+) -> ConsumerResolution | None:
     if contract.capabilities.command_package_family is CommandPackageFamily.HISTORICAL:
         return None
     if contract.capabilities.command_package_family is not CommandPackageFamily.AUTONOMOUS:
@@ -167,7 +173,11 @@ def _command_package(repository: Path, contract: T09ProviderContract) -> Consume
     # without creating a module-initialization cycle.
     from giclab.control.registry_validation import resolve_registered_command_package
 
-    document, sha256, source = resolve_registered_command_package(repository, contract)
+    document, sha256, source = resolve_registered_command_package(
+        repository,
+        contract,
+        source_inputs=source_inputs,
+    )
     if document.get("plan_id") != contract.plan_id:
         raise ConsumerResolutionError("command package resolved another contract")
     return _resolution(
@@ -242,12 +252,14 @@ def _package_transition(
 def _provider_selector(
     repository: Path,
     contract: T09ProviderContract,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> ConsumerResolution | None:
     if contract.capabilities.provider_selector_policy is ProviderSelectorPolicy.NONE:
         return None
     if contract.capabilities.provider_selector_policy is not ProviderSelectorPolicy.EXPLICIT:
         raise ConsumerResolutionError("provider-selector policy has no resolver")
-    command = _command_package(repository, contract)
+    command = _command_package(repository, contract, source_inputs=source_inputs)
     if command is None:
         raise ConsumerResolutionError("explicit provider selector lacks a command package")
     return _resolution(
@@ -289,12 +301,14 @@ def _stage_identity(repository: Path, contract: T09ProviderContract) -> Consumer
 def _production_assembly(
     repository: Path,
     contract: T09ProviderContract,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> ConsumerResolution | None:
     if contract.capabilities.command_package_family is not CommandPackageFamily.AUTONOMOUS:
         return None
     from giclab.control.production import probe_production_adapter_assembly
 
-    details = probe_production_adapter_assembly(repository, contract)
+    details = probe_production_adapter_assembly(repository, contract, source_inputs=source_inputs)
     return _resolution(
         "production_adapter_assembly",
         "category3-production-wrapper:v1",
@@ -352,11 +366,22 @@ def resolve_control_consumers(
     contract: T09ProviderContract,
     *,
     consumers: Mapping[str, ContractConsumer] = CONTROL_CONSUMERS,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> dict[str, ConsumerResolution | None]:
     """Resolve every registered consumer for one exact contract."""
 
     root = repository.resolve(strict=True)
-    return {name: consumer.resolve(root, contract) for name, consumer in consumers.items()}
+    result: dict[str, ConsumerResolution | None] = {}
+    for name, consumer in consumers.items():
+        if source_inputs is not None and consumer.resolve is _command_package:
+            result[name] = _command_package(root, contract, source_inputs=source_inputs)
+        elif source_inputs is not None and consumer.resolve is _provider_selector:
+            result[name] = _provider_selector(root, contract, source_inputs=source_inputs)
+        elif source_inputs is not None and consumer.resolve is _production_assembly:
+            result[name] = _production_assembly(root, contract, source_inputs=source_inputs)
+        else:
+            result[name] = consumer.resolve(root, contract)
+    return result
 
 
 def expected_consumer_handler_id(

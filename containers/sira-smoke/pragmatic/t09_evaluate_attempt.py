@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import platform
@@ -18,7 +19,7 @@ import resource
 import socket
 import stat
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
@@ -26,7 +27,14 @@ from typing import Any, cast
 from jsonschema import Draft202012Validator, FormatChecker
 
 from giclab.harness import t09_sira_pilot as pilot_contract
+from giclab.harness.t09_candidate_inputs import (
+    CandidateSourceSnapshot,
+    reject_candidate_source,
+    validate_candidate_package,
+)
+from giclab.harness.t09_environment_fixture import OfflineEnvironmentBinding
 from giclab.harness.t09_provider_contracts import provider_contract_for_plan_id
+from giclab.harness.t09_qualification_fixture import DATASET_PATH, DeterministicQualificationArchive
 from giclab.harness.t09_sira_pilot import (
     DATASET_REVISION,
     EVALUATOR_SHA256,
@@ -237,9 +245,16 @@ def _load_object(path: Path, *, label: str) -> dict[str, Any]:
     return cast(dict[str, Any], value)
 
 
-def _write_exclusive(path: Path, value: object) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+def _write_exclusive(
+    path: Path,
+    value: object,
+    *,
+    before_output_growth: Callable[[Path, int], None] | None = None,
+) -> None:
     encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    if before_output_growth is not None:
+        before_output_growth(path, len(encoded))
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor = os.open(
         path,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -342,11 +357,21 @@ def _validate_output_documents(
     run_id: str,
     pair_id: str,
     qualification_id: str,
+    source_inputs: CandidateSourceSnapshot | None = None,
+    environment_binding: OfflineEnvironmentBinding | None = None,
 ) -> None:
     score_schema = _load_object(score_schema_path.resolve(strict=True), label="score schema")
     evidence_schema = _load_object(
         evidence_schema_path.resolve(strict=True), label="evidence schema"
     )
+    if source_inputs is not None:
+        if environment_binding is None:
+            raise T09PilotError("candidate output schema lacks environment binding")
+        evidence_schema = environment_binding.evidence_schema(
+            source_inputs, evidence_schema_path.parent.parent, evidence_schema
+        )
+    elif environment_binding is not None:
+        raise T09PilotError("output schema environment lacks candidate binding")
     properties = evidence_schema.get("properties")
     if not isinstance(properties, dict) or "outcome" not in properties:
         raise T09PilotError("evidence schema outcome reference is unavailable")
@@ -640,7 +665,72 @@ def reconstruct_semantic_projection(
     }
 
 
-def finalize(args: argparse.Namespace) -> dict[str, object]:
+def finalize(
+    args: argparse.Namespace,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
+    fixture_binding: DeterministicQualificationArchive | None = None,
+    environment_binding: OfflineEnvironmentBinding | None = None,
+    output_admission: Callable[[Path, int], None] | None = None,
+) -> dict[str, object]:
+    repository = args.score_schema.resolve(strict=True).parent.parent
+    offline_inputs = None
+    expected_dataset = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+    expected_image_files = {
+        "package_manifest_sha256": (
+            "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
+        ),
+        "chromium_executable_sha256": (
+            "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
+        ),
+        "patched_upstream_runner_sha256": (
+            "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+        ),
+    }
+    if source_inputs is None:
+        reject_candidate_source(repository)
+        if fixture_binding is not None or environment_binding is not None:
+            raise T09PilotError("finalizer fixture inputs require an explicit source binding")
+    else:
+        validate_candidate_package(source_inputs, repository)
+        if (
+            fixture_binding is None
+            or environment_binding is None
+            or args.finalizer_execution_mode != "qualified-local"
+            or fixture_binding.document() != source_inputs.document()["qualification_fixture"]
+        ):
+            raise T09PilotError("candidate finalizer input selection is incomplete")
+        fixture_binding.validate(repository)
+        environment_binding.validate(source_inputs, repository)
+        selector = repository / "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+        source_inputs.source_sha256(repository, selector.relative_to(repository).as_posix())
+        specification = importlib.util.spec_from_file_location("bound_finalizer_selector", selector)
+        if specification is None or specification.loader is None:
+            raise T09PilotError("candidate finalizer selector cannot be loaded")
+        module = importlib.util.module_from_spec(specification)
+        sys.modules[specification.name] = module
+        specification.loader.exec_module(module)
+        offline_inputs = module._offline_freeze_inputs(
+            repository,
+            source_inputs=source_inputs,
+            environment_binding=environment_binding,
+            fixture_binding=fixture_binding,
+        )
+        expected_dataset = next(m.sha256 for m in fixture_binding.sources if m.path == DATASET_PATH)
+        image_members = {
+            m["runtime_path"]: m["sha256"]
+            for m in environment_binding.document()["image_file_members"]
+        }
+        expected_image_files = {
+            "package_manifest_sha256": image_members["/opt/giclab/installed-packages.txt"],
+            "chromium_executable_sha256": image_members[
+                "/opt/ms-playwright/chromium-1084/chrome-linux/chrome"
+            ],
+            "patched_upstream_runner_sha256": image_members["/opt/sira/scripts/run_web_agent.py"],
+        }
+        if file_sha256(args.dataset) != expected_dataset:
+            raise T09PilotError("candidate finalizer dataset bytes drifted")
+
     if len(args.package_commit) != 40 or any(
         character not in "0123456789abcdef" for character in args.package_commit
     ):
@@ -671,6 +761,8 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     if file_sha256(frozen_manifest_path) != args.frozen_run_manifest_sha256:
         raise T09PilotError("frozen run manifest hash changed")
     frozen_manifest = _load_object(frozen_manifest_path, label="frozen run manifest")
+    if frozen_manifest.get("offline_candidate_inputs") != offline_inputs:
+        raise T09PilotError("finalizer frozen input selection differs")
     evaluator_overlay_hashes = tuple(
         frozen_manifest.get(field)
         for field in (
@@ -720,8 +812,7 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
             or local_qualification.get("python_version") != "3.11.14"
             or local_qualification.get("evaluator_contract_sha256")
             != contract.evaluator_contract_sha256
-            or local_qualification.get("dataset_sha256")
-            != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+            or local_qualification.get("dataset_sha256") != expected_dataset
             or local_qualification.get("network_policy") != "socket-construction-denied"
             or local_qualification.get("real_evidence_regression_passed") is not True
             or not isinstance(local_base_packages, list)
@@ -750,11 +841,11 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         or frozen_manifest.get("execution_contract_sha256") != contract.sha256
         or frozen_manifest.get("replacement_image_id") != args.replacement_image_id
         or frozen_manifest.get("package_manifest_sha256")
-        != "4ff2603fa5e0f7033ba773decdcb86abf648dcce22e469d26bc48214e390e104"
+        != expected_image_files["package_manifest_sha256"]
         or frozen_manifest.get("chromium_executable_sha256")
-        != "0498f208c25339f386413ada7b3c35293b0b6250e67d85446ba9541d7fd636f7"
+        != expected_image_files["chromium_executable_sha256"]
         or frozen_manifest.get("patched_upstream_runner_sha256")
-        != "b06793ad1b366a934b798f9f3272fc80a7104a220cb3304ab3bda2eb2a78b331"
+        != expected_image_files["patched_upstream_runner_sha256"]
         or frozen_manifest.get("python_interpreter_path") != "/opt/sira/.venv/bin/python"
         or not isinstance(frozen_manifest.get("python_interpreter_sha256"), str)
         or any(
@@ -933,19 +1024,72 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         failure_reasons=infrastructure_failure_reasons,
     )
     lifecycle_calls = lifecycle.get("calls") if lifecycle else None
-    terminal_counts = lifecycle.get("terminal_counts") if lifecycle else None
-    if lifecycle and (
-        lifecycle.get("schema_version") != "0.2.0"
-        or not isinstance(lifecycle_calls, list)
-        or not isinstance(terminal_counts, dict)
-        or any(
-            not isinstance(call, dict) or call.get("terminal_state") is None
-            for call in lifecycle_calls
+    if lifecycle.get("schema_version") == "remote-mirror-1.0.0":
+        from giclab.control import remote_bridge
+
+        journal_path = raw_root / "duplex-remote-event-journal.json"
+        journal = _dynamic_object(
+            journal_path,
+            label="remote-admission-journal",
+            failure_reasons=infrastructure_failure_reasons,
         )
-    ):
-        infrastructure_failure_reasons.append("malformed-provider-call-lifecycle")
-    if lifecycle and lifecycle.get("unknown_outcomes") != 0:
-        infrastructure_failure_reasons.append("unknown-provider-outcome")
+        # Both files are already covered by the immutable raw seal validated
+        # above. The selected contract supplies every run/host/policy identity;
+        # the session identifier comes from that sealed admission record.
+        try:
+            bound = journal.get("binding")
+            if not isinstance(bound, dict) or not isinstance(bound.get("session_id"), str):
+                raise remote_bridge.RemoteBridgeError("sealed admission session is absent")
+            binding = remote_bridge.ConditionSessionBinding(
+                session_id=bound["session_id"],
+                provider_contract_version=provider_identity.version,
+                plan_id=provider_identity.plan_id,
+                host_run_id=provider_identity.host_run_id,
+                condition_run_id=attempt.run_id,
+                evaluator_run_id=provider_identity.evaluator_run_ids[
+                    provider_identity.attempt_order.index(attempt.run_id)
+                ],
+                frozen_manifest_sha256=args.frozen_run_manifest_sha256,
+            )
+            normalizer_path = repository / "src/giclab/control/remote_bridge.py"
+            if file_sha256(Path(remote_bridge.__file__)) != file_sha256(normalizer_path):
+                raise remote_bridge.RemoteBridgeError("lifecycle normalizer source differs")
+            projection = remote_bridge.remote_lifecycle_projection(
+                repository,
+                journal,
+                lifecycle,
+                expected_binding=binding,
+            )
+            projection.update(
+                journal_file_sha256=file_sha256(journal_path),
+                mirror_file_sha256=file_sha256(lifecycle_path),
+                normalizer_source_sha256=file_sha256(normalizer_path),
+            )
+            _write_exclusive(
+                finalized_root / "provider-call-lifecycle-projection.json",
+                projection,
+                before_output_growth=output_admission,
+            )
+            lifecycle_calls = projection["calls"]
+            if projection["unknown_outcomes"] != 0:
+                infrastructure_failure_reasons.append("unknown-provider-outcome")
+        except remote_bridge.RemoteBridgeError:
+            lifecycle_calls = []
+            infrastructure_failure_reasons.append("malformed-remote-provider-call-lifecycle")
+    else:
+        terminal_counts = lifecycle.get("terminal_counts") if lifecycle else None
+        if lifecycle and (
+            lifecycle.get("schema_version") != "0.2.0"
+            or not isinstance(lifecycle_calls, list)
+            or not isinstance(terminal_counts, dict)
+            or any(
+                not isinstance(call, dict) or call.get("terminal_state") is None
+                for call in lifecycle_calls
+            )
+        ):
+            infrastructure_failure_reasons.append("malformed-provider-call-lifecycle")
+        if lifecycle and lifecycle.get("unknown_outcomes") != 0:
+            infrastructure_failure_reasons.append("unknown-provider-outcome")
     sent_lifecycle_calls = (
         [
             call
@@ -1001,16 +1145,17 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
     evaluator_dir = finalized_root / "evaluator"
     evaluator_input_path = evaluator_dir / "input.json"
     evaluator_output_path = evaluator_dir / "output.json"
-    _write_exclusive(evaluator_input_path, evaluator_input)
+    _write_exclusive(evaluator_input_path, evaluator_input, before_output_growth=output_admission)
     evaluator_result = evaluate_retained_session(
         EvaluatorIdentity(
             root=args.evaluator_root.resolve(strict=True),
             dataset_path=args.dataset.resolve(strict=True),
             task_index=attempt.task_index,
+            fixture_subset=source_inputs is not None,
         ),
         session_paths,
     )
-    _write_exclusive(evaluator_output_path, evaluator_result)
+    _write_exclusive(evaluator_output_path, evaluator_result, before_output_growth=output_admission)
     semantic_projection = reconstruct_semantic_projection(
         raw_root=raw_root,
         evaluator_root=args.evaluator_root,
@@ -1357,12 +1502,16 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         run_id=attempt.run_id,
         pair_id=attempt.pair_id,
         qualification_id=str(frozen_manifest["qualification_id"]),
+        source_inputs=source_inputs,
+        environment_binding=environment_binding,
     )
-    _write_exclusive(outcome_path, outcome)
-    _write_exclusive(evidence_path, evidence_index)
+    _write_exclusive(outcome_path, outcome, before_output_growth=output_admission)
+    _write_exclusive(evidence_path, evidence_index, before_output_growth=output_admission)
     attempt_projection = scientific_attempt_projection(evidence_index)
     semantic_projection_path = finalized_root / "semantic-projection.json"
-    _write_exclusive(semantic_projection_path, attempt_projection)
+    _write_exclusive(
+        semantic_projection_path, attempt_projection, before_output_growth=output_admission
+    )
     retained_manifest, retained_receipt = _validate_raw_attempt(
         raw_root=raw_root,
         expected_raw_root_name=Path(attempt.raw_output_root).name,
@@ -1385,6 +1534,8 @@ def finalize(args: argparse.Namespace) -> dict[str, object]:
         run_id=attempt.run_id,
         pair_id=attempt.pair_id,
         qualification_id=str(frozen_manifest["qualification_id"]),
+        source_inputs=source_inputs,
+        environment_binding=environment_binding,
     )
     return {
         "run_id": attempt.run_id,

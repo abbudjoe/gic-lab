@@ -8,7 +8,6 @@ owns a :class:`ProviderBudgetBoundary`.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import math
 import os
@@ -22,15 +21,19 @@ from typing import BinaryIO, Protocol, TypeVar, cast
 
 from giclab.control.remote_bridge import (
     BRIDGE_PROTOCOL_VERSION,
+    MAX_BRIDGE_FRAME_BYTES,
     ConditionBridgeFrame,
     ConditionSessionBinding,
     FramedDuplexEndpoint,
     RemoteBridgeError,
     canonical_bytes,
+    condition_call_id,
+    held_unix_socket_address,
     provider_request_document,
     semantic_sha256,
     strict_json_object,
     usage_document,
+    validate_condition_call_ids,
 )
 from giclab.harness.sira_gate_a import (
     ProviderBudgetBoundary,
@@ -56,6 +59,8 @@ class RuntimeCallState:
 class RuntimeAdmissionPort(Protocol):
     """All before-effect admissions required by the SiRA runtime adaptation."""
 
+    def call_identity(self, sequence: int) -> str: ...
+
     @property
     def condition_usage(self) -> ProviderBudgetUsage: ...
 
@@ -75,7 +80,11 @@ class RuntimeAdmissionPort(Protocol):
 
     def browser_action(self, *, action_id: str, perform: Callable[[], T]) -> T: ...
 
-    def output_bytes(self, *, total_bytes: int) -> None: ...
+    def output_bytes(self, *, total_bytes: int, retained_output_bytes: int = 0) -> None: ...
+
+    def reserve_output_bytes(self, *, total_bytes: int) -> None: ...
+
+    def reserve_output_growth(self, count: int) -> None: ...
 
     def process_exit(self, *, exit_code: int) -> None: ...
 
@@ -103,6 +112,9 @@ class RuntimeAdmissionPort(Protocol):
 
 class InProcessBoundaryPort:
     """Historical adapter over the retained in-process budget boundary."""
+
+    def call_identity(self, sequence: int) -> str:
+        return f"CALL-T09-{sequence:08d}"
 
     def __init__(self, boundary: ProviderBudgetBoundary) -> None:
         self.boundary = boundary
@@ -148,10 +160,20 @@ class InProcessBoundaryPort:
             raise RuntimeError("in-process browser operation returned no result")
         return result[0]
 
-    def output_bytes(self, *, total_bytes: int) -> None:
+    def reserve_output_bytes(self, *, total_bytes: int) -> None:
+        self.boundary.reserve_output_bytes(total_bytes=total_bytes)
+
+    def reserve_output_growth(self, count: int) -> None:
+        if type(count) is not int or count < 0:
+            raise ValueError("output growth must be a nonnegative integer")
+        self.reserve_output_bytes(total_bytes=self.condition_usage.output_bytes + count)
+
+    def output_bytes(self, *, total_bytes: int, retained_output_bytes: int = 0) -> None:
         if type(total_bytes) is not int or total_bytes < self._output_total:
             raise ValueError("runtime output-byte total moved backward")
-        self.boundary.record_output_bytes(total_bytes - self._output_total)
+        self.boundary.record_output_bytes(
+            total_bytes - self._output_total, retained_output_bytes=retained_output_bytes
+        )
         self._output_total = total_bytes
 
     def process_exit(self, *, exit_code: int) -> None:
@@ -216,6 +238,8 @@ class DuplexSupervisorPort:
         *,
         remote_journal_path: Path,
         closeables: tuple[object, ...] = (),
+        require_journal_admission: bool = False,
+        host_output_prefix: bool = False,
     ) -> None:
         self.endpoint = endpoint
         self.remote_journal_path = remote_journal_path
@@ -223,9 +247,29 @@ class DuplexSupervisorPort:
         self._in_flight: set[str] = set()
         self._condition_usage = ProviderBudgetUsage()
         self._output_total = 0
+        self._output_allowance_total = 0
         self._terminalized = False
         self._closeables = closeables
         self._closed = False
+        self._call_sequence = 0
+        self._journal_admission = require_journal_admission
+        self._journal_capacity = 0
+        self._journal_used = 0
+        self._journal_deferred = require_journal_admission
+        if host_output_prefix:
+            self._output_allowance_total = endpoint.receive_host_output_prefix()
+        else:
+            self._start_session()
+        if self._journal_admission:
+            try:
+                self._reserve_journal_capacity(4 * MAX_BRIDGE_FRAME_BYTES)
+            except BaseException:
+                self.close()
+                raise
+            self._journal_deferred = False
+            self._persist_journal()
+
+    def _start_session(self) -> None:
         self._write_event(
             event_id="session.hello",
             event_type="condition-session-hello",
@@ -243,17 +287,28 @@ class DuplexSupervisorPort:
     def condition_usage(self) -> ProviderBudgetUsage:
         return self._condition_usage
 
+    def call_identity(self, sequence: int) -> str:
+        return condition_call_id(self.endpoint.binding, sequence)
+
     @property
     def unreconciled_provider_attempts(self) -> int:
         return len(self._in_flight)
 
     def _persist_journal(self, document: Mapping[str, object] | None = None) -> None:
+        if self._journal_deferred:
+            # Only the bounded handshake/allocation exchange may be retained in
+            # memory until its shared grant. No effect is admitted by this flag.
+            return
         document = (
             self.endpoint.transcript_document(side="remote-mirror")
             if document is None
             else dict(document)
         )
         encoded = canonical_bytes(document)
+        if self._journal_admission:
+            if self._journal_used + len(encoded) > self._journal_capacity:
+                raise RemoteBridgeError("remote journal lacks preadmitted temporary capacity")
+            self._journal_used += len(encoded)
         parent = self.remote_journal_path.parent
         parent.mkdir(parents=True, mode=0o700, exist_ok=True)
         temporary = parent / f".{self.remote_journal_path.name}.tmp"
@@ -270,18 +325,40 @@ class DuplexSupervisorPort:
                     raise RemoteBridgeError("remote journal write made no progress")
                 offset += written
             os.fsync(descriptor)
-        except BaseException:
-            with contextlib.suppress(OSError):
-                temporary.unlink()
-            raise
         finally:
             os.close(descriptor)
         os.replace(temporary, self.remote_journal_path)
+        if self._journal_admission:
+            self._journal_used = len(encoded)
         directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(directory)
         finally:
             os.close(directory)
+
+    def _reserve_journal_capacity(self, capacity: int) -> None:
+        if not self._journal_admission or capacity <= self._journal_capacity:
+            return
+        prior_deferred = self._journal_deferred
+        self._journal_deferred = True
+        try:
+            self.reserve_output_growth(capacity - self._journal_capacity)
+            self._journal_capacity = capacity
+        finally:
+            self._journal_deferred = prior_deferred
+
+    def _prepare_journal_exchange(self, maximum_frames: int) -> None:
+        if not self._journal_admission:
+            return
+        # Pre-fund the old file and the entire largest replacement before an
+        # operation enters a protocol phase where another reservation is illegal.
+        # This is a request to the existing accountant, never a local grant.
+        projected = 2 * (self._journal_used + maximum_frames * (MAX_BRIDGE_FRAME_BYTES + 128))
+        self._reserve_journal_capacity(projected)
+
+    @property
+    def retained_journal_bytes(self) -> int:
+        return self._journal_capacity - self._journal_used
 
     def _write_event(
         self,
@@ -310,6 +387,11 @@ class DuplexSupervisorPort:
     ) -> T:
         if call_id in self._call_states or call_id in self._in_flight:
             raise RemoteBridgeError("remote runtime call identity was reused")
+        validate_condition_call_ids(
+            self.endpoint.binding, self._call_sequence + 1, call_id, logical_call_id
+        )
+        self._prepare_journal_exchange(7)
+        self._call_sequence += 1
         self._in_flight.add(call_id)
         reserve_id = f"{call_id}.reserve"
         self._write_event(
@@ -444,6 +526,7 @@ class DuplexSupervisorPort:
         return result
 
     def browser_action(self, *, action_id: str, perform: Callable[[], T]) -> T:
+        self._prepare_journal_exchange(6)
         self._write_event(
             event_id=f"{action_id}.reserve",
             event_type="browser-action-reserve",
@@ -467,13 +550,50 @@ class DuplexSupervisorPort:
         )
         return result
 
-    def output_bytes(self, *, total_bytes: int) -> None:
+    def reserve_output_bytes(self, *, total_bytes: int) -> None:
+        if type(total_bytes) is not int or total_bytes < max(
+            self._output_total, self._output_allowance_total
+        ):
+            raise ValueError("runtime output allowance moved backward")
+        self._write_event(
+            event_id=f"output.allowance.{total_bytes}",
+            event_type="output-allowance-request",
+            payload={"total_bytes": total_bytes},
+        )
+        decision = self._read_event({"output-allowance-granted", "output-allowance-rejected"})
+        if decision.event_type == "output-allowance-rejected":
+            raise RemoteBridgeError("shared observer rejected output allowance")
+        if decision.payload != {"accepted": True, "total_bytes": total_bytes}:
+            raise RemoteBridgeError("shared output allowance differs from request")
+        self._output_allowance_total = total_bytes
+
+    def reserve_output_growth(self, count: int) -> None:
+        """Request new capacity without consuming a previous writer's grant.
+
+        A temporary publication may hold capacity that is not yet observed in
+        the event counter. Starting from observed bytes would reuse that grant
+        for a different writer. Only a matching shared reply advances this mirror;
+        a denied/lost reply cannot mint local capacity or claim observed output.
+        """
+        if type(count) is not int or count < 0:
+            raise ValueError("output growth must be a nonnegative integer")
+        self.reserve_output_bytes(
+            total_bytes=max(self._output_total, self._output_allowance_total) + count
+        )
+
+    def output_bytes(self, *, total_bytes: int, retained_output_bytes: int = 0) -> None:
         if type(total_bytes) is not int or total_bytes < self._output_total:
             raise ValueError("runtime output-byte total moved backward")
+        if type(retained_output_bytes) is not int or retained_output_bytes < 0:
+            raise ValueError("retained output capacity must be a nonnegative integer")
+        retained_output_bytes += self.retained_journal_bytes
+        payload = {"total_bytes": total_bytes}
+        if retained_output_bytes:
+            payload["retained_output_bytes"] = retained_output_bytes
         self._write_event(
             event_id=f"output.{total_bytes}",
             event_type="output-bytes-update",
-            payload={"total_bytes": total_bytes},
+            payload=payload,
         )
         decision = self._read_event({"output-bytes-admitted", "output-bytes-rejected"})
         if decision.event_type == "output-bytes-rejected":
@@ -544,6 +664,8 @@ class DuplexSupervisorPort:
 
         if self._terminalized:
             raise RemoteBridgeError("remote runtime already detached or terminalized")
+        # Do not request more after an output rejection: the previously granted
+        # journal capacity remains available to the bounded terminal exchange.
         prefix = self.endpoint.transcript_document(side="remote-mirror")
         self._write_event(
             event_id="runtime.client.complete",
@@ -725,6 +847,10 @@ def build_private_socket_supervisor_port(
         "remote_journal_relative_path",
     }
     binding_document = document.get("binding")
+    if "host_output_prefix" in document:
+        if document["host_output_prefix"] is not True:
+            raise RemoteBridgeError("private host output prefix selection is invalid")
+        expected_fields.add("host_output_prefix")
     deadline = document.get("deadline_monotonic")
     if (
         set(document) != expected_fields
@@ -767,7 +893,9 @@ def build_private_socket_supervisor_port(
         raise RemoteBridgeError("private duplex journal escaped the attempt root")
     channel = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        channel.connect(socket_path.as_posix())
+        channel.settimeout(max(0.001, float(deadline) - time.monotonic()))
+        with held_unix_socket_address(socket_path) as address:
+            channel.connect(address)
         reader = cast(BinaryIO, channel.makefile("rb", buffering=0))
         writer = cast(BinaryIO, channel.makefile("wb", buffering=0))
         endpoint = FramedDuplexEndpoint(
@@ -780,6 +908,8 @@ def build_private_socket_supervisor_port(
             endpoint,
             remote_journal_path=journal_path,
             closeables=(reader, writer, channel),
+            require_journal_admission=True,
+            host_output_prefix=document.get("host_output_prefix") is True,
         )
     except BaseException:
         channel.close()

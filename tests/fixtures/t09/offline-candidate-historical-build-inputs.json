@@ -1,0 +1,413 @@
+{
+  "archive_byte_limit": 5242880,
+  "archive_paths": [
+    "containers/sira-smoke/pragmatic/Containerfile.amd64",
+    "containers/sira-smoke/sira-immutable-model-routing.patch",
+    "containers/sira-smoke/container_entrypoint.py",
+    "containers/sira-smoke/bounded/model_preflight.py",
+    "containers/sira-smoke/bounded/browser_preflight.py",
+    "containers/sira-smoke/pragmatic/runtime_preflight.py",
+    "containers/sira-smoke/fixtures/static.html",
+    "src/giclab"
+  ],
+  "classification": "historical-build-sources-for-offline-candidate-test",
+  "decoded_byte_limit": 4194304,
+  "executed_as_runtime": false,
+  "member_limit": 128,
+  "member_manifest_sha256": "86975bd9715b2f03bd4297e5dc0e6dcb6c7b37a1028f479dcba34fedd9893da2",
+  "members": [
+    {
+      "bytes": 3309,
+      "git_blob": "6e56e1ec4c856e2bdeee8177511d05a1b413ba2d",
+      "path": "containers/sira-smoke/bounded/browser_preflight.py",
+      "sha256": "9a69d3f40e3931a817f7bf137f9fab36d14bebf93bab403511df5ffe3d34ba93"
+    },
+    {
+      "bytes": 3391,
+      "git_blob": "d38b18c58cba3164a89c1651f27d233995060594",
+      "path": "containers/sira-smoke/bounded/model_preflight.py",
+      "sha256": "fffd46ae0b325e37c692a36f9ad05481bb4901fef3810a9a4ff2d82f510d0729"
+    },
+    {
+      "bytes": 4526,
+      "git_blob": "bb9318e84c10cef7ceec75474c725bfc4d7df7d0",
+      "path": "containers/sira-smoke/container_entrypoint.py",
+      "sha256": "2696c3d9980a6d3c14dcb55fc5b540732a953fb388c8117af020b464dfacb4da"
+    },
+    {
+      "bytes": 237,
+      "git_blob": "2918f37b2a9afe95bbf314c72ad3c94edfa20563",
+      "path": "containers/sira-smoke/fixtures/static.html",
+      "sha256": "a290cab5ee17200acffe8b2f201460030816bff7e54a5ec007f6afd0a7e83a0d"
+    },
+    {
+      "bytes": 3239,
+      "git_blob": "6d364ef0501224b449a249b0130022d2f2d2d24c",
+      "path": "containers/sira-smoke/pragmatic/Containerfile.amd64",
+      "sha256": "7443af988256c6ce64e8f04d4797c7bae3bb3816c3d9f756d65d35ad5da3b4d8"
+    },
+    {
+      "bytes": 10711,
+      "git_blob": "a3c2df7308bb359b809dff6edcf66e0aeba2af85",
+      "path": "containers/sira-smoke/pragmatic/runtime_preflight.py",
+      "sha256": "0530b3ad25fac1d3f9372d31da8046bec67b6c74eea3cdd3c8d91353948f1b3d"
+    },
+    {
+      "bytes": 3111,
+      "git_blob": "ea71b40daff4058ad6e68e1a8f9b73b69de31a10",
+      "path": "containers/sira-smoke/sira-immutable-model-routing.patch",
+      "sha256": "4d7e2a25f4313fc754db0fa17aeda51cc5cd75a5653adaf13b01ce87a71cb8ed"
+    },
+    {
+      "bytes": 66,
+      "git_blob": "0ff175e7421f8daef32e29c250c17e24eca95db3",
+      "path": "src/giclab/__init__.py",
+      "sha256": "1ba2dce15386a0abda4d8c35e38158220523ecdb3523638c9790be13dabeb872"
+    },
+    {
+      "bytes": 3669,
+      "git_blob": "8bdc69f1c56a5a964b97003262f788c8ad7821bf",
+      "path": "src/giclab/harness/__init__.py",
+      "sha256": "9cb096df25019fbb4e6c61a55b46cf4bb38ebe6b650248f1f0623347cf568c97"
+    },
+    {
+      "bytes": 1749,
+      "git_blob": "9fa611827c29dc9933c36b6166024f964dd11671",
+      "path": "src/giclab/harness/adapters/__init__.py",
+      "sha256": "f241a205c6c4a616418b5ac6cd8fb25b6c3a135decb0e35dacb9954e540095af"
+    },
+    {
+      "bytes": 2430,
+      "git_blob": "f14f3720b29ead91b4ea8e2ee2bc9a2f434abebf",
+      "path": "src/giclab/harness/adapters/base.py",
+      "sha256": "22e6a4c84b0d8b583bd3055d115a4a2e61a9555e466f076d79a91520aa3b985e"
+    },
+    {
+      "bytes": 78826,
+      "git_blob": "07a8244bedccab93ffeb6a586cb276450299fa81",
+      "path": "src/giclab/harness/adapters/sira.py",
+      "sha256": "de07e73e67d9bcde2f77be42fb4994d203219043d0a8db97e65acdba9ded6beb"
+    },
+    {
+      "bytes": 19480,
+      "git_blob": "cd954f2b0af53de6fb2771f44c54e08fdd667d0d",
+      "path": "src/giclab/harness/artifacts.py",
+      "sha256": "77ae0eda278c8f24ce999c45349cddb8524b0f2e24b0b9703ff95aed2502f733"
+    },
+    {
+      "bytes": 4948,
+      "git_blob": "bda5f60e57269bb0eab918756d878351e44ed4d6",
+      "path": "src/giclab/harness/budget.py",
+      "sha256": "3339b45c84efb56652f75fc7f9b1900c5caa3f29aeb1847da09909e49fadd70d"
+    },
+    {
+      "bytes": 9640,
+      "git_blob": "44514a41b46f6ed975affd84a1c40d391c411dd2",
+      "path": "src/giclab/harness/cli.py",
+      "sha256": "d3439dd53336a2e74776453c5b7fcb5fe686cba6d71c1657c7925115d6413646"
+    },
+    {
+      "bytes": 12542,
+      "git_blob": "b4a92906254fa314a72194980c1f00cbcc9893ee",
+      "path": "src/giclab/harness/events.py",
+      "sha256": "b6a4c529d9bc3939c552891e75083bd0d7420744b5948a4739165c861992a29d"
+    },
+    {
+      "bytes": 68905,
+      "git_blob": "17f599163ddbf454f690b93291f04270322536c0",
+      "path": "src/giclab/harness/executor.py",
+      "sha256": "c56b415c3f3c9491eb36f2ee6b26e29a95489a2cd8fd25fa620ceb84751dabee"
+    },
+    {
+      "bytes": 27340,
+      "git_blob": "7bca297932e2b89f44fc269669b8098f0e60c760",
+      "path": "src/giclab/harness/lambda_archive.py",
+      "sha256": "2004f5c9b23a41a040baad766516e0f2d62e6edf440a4571b484ee061b2d1c4c"
+    },
+    {
+      "bytes": 38311,
+      "git_blob": "cacde5f85d1091e3fda0e5453f9498cfe2246964",
+      "path": "src/giclab/harness/lambda_archive_v2.py",
+      "sha256": "5ef7ab402784dc915461fa05af41c73977936b2f53daabfbfe14e1e442d93945"
+    },
+    {
+      "bytes": 43290,
+      "git_blob": "27122af49edbaaf354a9b3a3a77bafa9d94cff0d",
+      "path": "src/giclab/harness/lambda_archive_v3.py",
+      "sha256": "29e59e6c9e71c45211322b10c365d6044445658d7e3b317f4d0017b17d6b0f50"
+    },
+    {
+      "bytes": 103598,
+      "git_blob": "485364f239d3d3b2b7cdb26b61605f67997a6140",
+      "path": "src/giclab/harness/lambda_cloud.py",
+      "sha256": "69aa0c54e48f9f49f9dd7d297af12e41468ed6d0c7b9a36e89ba10d3d668c51c"
+    },
+    {
+      "bytes": 56507,
+      "git_blob": "ca87e3f5ca7f599ad6a32cc06f5be6e8496f83ea",
+      "path": "src/giclab/harness/lambda_cloud_v3.py",
+      "sha256": "4ffb4f649e6fdd3e3e2d058f7b009aa9f64d5c9e4d32874ff0e24754ec3dfae6"
+    },
+    {
+      "bytes": 108400,
+      "git_blob": "aa0994bee37f526ffadafc218e23a21181b6fba9",
+      "path": "src/giclab/harness/lambda_firewall_baseline.py",
+      "sha256": "fe736fb42136ce56ab1a81dc5a2face6e3c5be8855bba496878fe5ac2bd579e3"
+    },
+    {
+      "bytes": 31648,
+      "git_blob": "e5fd842416a8880bb2ae74b52214a4e8db53ad8c",
+      "path": "src/giclab/harness/lambda_inventory.py",
+      "sha256": "cc4da6a4c346c07a7a9e809dcaf214e83b9fdaee269068ca2f7701f2606f6f42"
+    },
+    {
+      "bytes": 32770,
+      "git_blob": "511613fb667cd37be5d41785bc5e74a0cfd311a2",
+      "path": "src/giclab/harness/lambda_inventory_plan.py",
+      "sha256": "c0f8d96433106162ecb90b6fc3e53f596f9f2db55e5b325794a5193e4a663083"
+    },
+    {
+      "bytes": 37867,
+      "git_blob": "0cf8cbead588b5bced0644ac8aaf257825346162",
+      "path": "src/giclab/harness/lambda_inventory_plan_v3.py",
+      "sha256": "80c3b39ec904b3a5cfb03118a1173b67b22ce0d7e4fb325fdc4195a308c57d1b"
+    },
+    {
+      "bytes": 48919,
+      "git_blob": "384a6bd7b9e1ab0265c20558250eeaebfd64a91a",
+      "path": "src/giclab/harness/lambda_inventory_v2.py",
+      "sha256": "14b0288f4a6e215077d40f6bb7053dac5f9d6ad87ed07d97383e4cd5a5abef90"
+    },
+    {
+      "bytes": 50720,
+      "git_blob": "8b6d629e239b8cd53a6c5024a5c3ed9b32ce55a9",
+      "path": "src/giclab/harness/lambda_inventory_v3.py",
+      "sha256": "f88f719c483863e2147e3dbe1055b6291e2963687e98e67382683247e2180253"
+    },
+    {
+      "bytes": 92347,
+      "git_blob": "aa5f24bb0dccc1121675f1f8a88ea0e061865377",
+      "path": "src/giclab/harness/lambda_l13_security.py",
+      "sha256": "be2fde90503071ec0849866496ce9bf940d5e31e85e0eeff3eba56fa742978e1"
+    },
+    {
+      "bytes": 128149,
+      "git_blob": "b946430b033bcb214001d57d8246fd41f9acd547",
+      "path": "src/giclab/harness/lambda_l20_plan.py",
+      "sha256": "e4c7ad2aa7c41520a47bd41c3faaaf204fc2e0a5ce6dc1299e688f1f8e98cc7c"
+    },
+    {
+      "bytes": 91667,
+      "git_blob": "27433a134ad7452d1850c6314f61b5af96a86a98",
+      "path": "src/giclab/harness/lambda_l23_manual_plan.py",
+      "sha256": "bf82ce5b0e938f55d2923945fefefc3917bcb5acf24646d9596f912075a911d8"
+    },
+    {
+      "bytes": 64296,
+      "git_blob": "856d0e7260ecf42100123ee1115380c287c5d002",
+      "path": "src/giclab/harness/lambda_l23_manual_supervisor.py",
+      "sha256": "6f67f81a79343dc977f5464cc415914bcc6a11d0f53028f25add6db7783b40cb"
+    },
+    {
+      "bytes": 16390,
+      "git_blob": "2568dfaa43085ef4b5dfef771b44f2ed10dea2ea",
+      "path": "src/giclab/harness/lambda_l2_evidence.py",
+      "sha256": "1e84e086659a19d29de119f7de613ab3ebb1c447c934a836d6357809044a62e0"
+    },
+    {
+      "bytes": 20866,
+      "git_blob": "9dd39f08fa6a2115f718cf816c63617885a408dc",
+      "path": "src/giclab/harness/lambda_l2_execution.py",
+      "sha256": "c862397207e6afc9373bee8b061f098e9e5d525eeda0a3d9c5ff12569be22397"
+    },
+    {
+      "bytes": 18040,
+      "git_blob": "88353c1749e5c06259a34f12d95e0a2601e174e7",
+      "path": "src/giclab/harness/lambda_l2_ownership.py",
+      "sha256": "bca8449939fa360a68532abd5035667235dd40baae190d3c7dd7401bc23d4065"
+    },
+    {
+      "bytes": 78277,
+      "git_blob": "f90afa3288772c7922b4e8b5f9176a08d07692fb",
+      "path": "src/giclab/harness/lambda_l2_supervisor.py",
+      "sha256": "c1c974dffc9a8c0d2b3dde52cf0f2437a5451479481166910dcc1dfe945b23e4"
+    },
+    {
+      "bytes": 31816,
+      "git_blob": "6f32080ed9d816503bdb2532d9ae6896c1562ac2",
+      "path": "src/giclab/harness/lambda_l2_watchdog.py",
+      "sha256": "ca28fd860267f5fdf4ae61ebdd324acc09e3f04c6ea373c70ab8756acd12e473"
+    },
+    {
+      "bytes": 33515,
+      "git_blob": "7d22f487f02a007101fd29f398431821ba97e4c9",
+      "path": "src/giclab/harness/lambda_l2m_checkpoints.py",
+      "sha256": "3c8ae545c4d39b633bdd9e02ae3d79a704d0eda5f0a70b0378dd3d32e6afe0f0"
+    },
+    {
+      "bytes": 317115,
+      "git_blob": "60b7604412dcf7ae35bb1c135603004154ee26d9",
+      "path": "src/giclab/harness/lambda_l2m_observer.py",
+      "sha256": "af104147c3c3f94d14e760f45da91e21455de2c96fef06e0607c36b2f08c887e"
+    },
+    {
+      "bytes": 52154,
+      "git_blob": "eb39c0400710f3f7c50199be99c5298de0872c28",
+      "path": "src/giclab/harness/lambda_request_ledger.py",
+      "sha256": "fc16790b01a291f5412b9dff31f56110793fd0e8593dfac808386975b51a0a64"
+    },
+    {
+      "bytes": 52146,
+      "git_blob": "e6468c96f0a1b9d5515e631472631f1d0f52bbfc",
+      "path": "src/giclab/harness/lambda_request_ledger_v3.py",
+      "sha256": "4e3f15c8d1651f18cc64d7c9dd47bc15d655bac5b3a348d74b364c12687dfd4c"
+    },
+    {
+      "bytes": 42077,
+      "git_blob": "dc84e74fa0caf1c3251985cc51ebb5e01ff2b4e5",
+      "path": "src/giclab/harness/lambda_ssh_key_archive.py",
+      "sha256": "568a191f1745d8861a1a8847e8bf9e7da81b4b1a36c7fb5de8f173364644ab90"
+    },
+    {
+      "bytes": 32360,
+      "git_blob": "2a3dc60fd4899d522e70db9fc9d597c95771aa47",
+      "path": "src/giclab/harness/lambda_ssh_key_executor.py",
+      "sha256": "7360939c1ee7cf7875d0425ff51c1354c3b5799463c1d76f95ad2eec5e73ecfd"
+    },
+    {
+      "bytes": 42587,
+      "git_blob": "923630c9aeaae7f74fd61ebb5bab916419b73c42",
+      "path": "src/giclab/harness/lambda_ssh_key_fingerprint.py",
+      "sha256": "89570f118d9bd860b1b251fdaa9b3b28e80e5a4476ccffe6607763643967320a"
+    },
+    {
+      "bytes": 26172,
+      "git_blob": "0f83fbc6ce1ffb47f8f59647cea11b4d0486a4a4",
+      "path": "src/giclab/harness/lambda_ssh_key_match.py",
+      "sha256": "8634e71383e4cfb39c8dfeb356f1da738e130a622ce4601239532733223f9c63"
+    },
+    {
+      "bytes": 30123,
+      "git_blob": "f01c7c9f1c99b72ee0f5479e72e484253955db1a",
+      "path": "src/giclab/harness/lambda_ssh_key_request_ledger.py",
+      "sha256": "19433aa77041365f20c4d43d25b3f1419380239d68a8893a18e15f0eaf4924e4"
+    },
+    {
+      "bytes": 49411,
+      "git_blob": "c3a12a7cfae684c1d28895b459416e3b57d58100",
+      "path": "src/giclab/harness/models.py",
+      "sha256": "c4419db2878f208e89685ec10f8cbf068e613ca61d02d91c657f3bd26464a57b"
+    },
+    {
+      "bytes": 12151,
+      "git_blob": "ecdfa6282d6a853f4decee0c0e7b34c837f391ca",
+      "path": "src/giclab/harness/plan.py",
+      "sha256": "b892a305faca7e597f94a39e3668be121d4668e2cb688fab3fe664768647d3c2"
+    },
+    {
+      "bytes": 29052,
+      "git_blob": "f77ea587829adc1cc5d1f3ec3eb2591b052e23dd",
+      "path": "src/giclab/harness/policy.py",
+      "sha256": "2562b9203752867635bef2dd615e446e28c96d5e0676d4ba13353092d0a0d12c"
+    },
+    {
+      "bytes": 17438,
+      "git_blob": "43484484249eb5c9f9291780d2d5829c63fc144c",
+      "path": "src/giclab/harness/regulation.py",
+      "sha256": "02418042e29678d05774f123f829daa85e94f09c3f5839acafa558bc921e7001"
+    },
+    {
+      "bytes": 5802,
+      "git_blob": "2183bf199408faa3feb8b45e1dac61d245253b06",
+      "path": "src/giclab/harness/safety.py",
+      "sha256": "12529af51aea206e02a531abea4959d80976bd271567f05c75e903654527d34c"
+    },
+    {
+      "bytes": 46831,
+      "git_blob": "22c6130990f687ea0476fa91c282a8f573fa0ed3",
+      "path": "src/giclab/harness/sira_colima.py",
+      "sha256": "b5c50dbe04f84de24aa1566603ae09f4c8cf8bf7a3d3398e3412ed7bbaf8c999"
+    },
+    {
+      "bytes": 147186,
+      "git_blob": "621ab135440fa1516e1b113106c5d01e8f1900a5",
+      "path": "src/giclab/harness/sira_container.py",
+      "sha256": "87efcd3f0d4ae327eade3c0005a3d4e42e331fe72c39ff6c398d7938383c302c"
+    },
+    {
+      "bytes": 38268,
+      "git_blob": "8ca65cfdc1ac4d23d1468b13b9d6b67e0660b334",
+      "path": "src/giclab/harness/sira_gate_a.py",
+      "sha256": "ddfe615ab0fbd6c5ddbd6e00af3d2782991185134858eae3be89b05c182a9d54"
+    },
+    {
+      "bytes": 15395,
+      "git_blob": "b72def5d8cd9d31b187becd0b70abdeeef8536ad",
+      "path": "src/giclab/harness/sira_gate_a_runtime.py",
+      "sha256": "c461dce20fea9e743135cad98b664213a393e46f35d1c1a8434212b2f0367dbb"
+    },
+    {
+      "bytes": 131263,
+      "git_blob": "668b746d182254f60f4a353419c51e7ae3d4cf5a",
+      "path": "src/giclab/harness/sira_storage.py",
+      "sha256": "0c8b111a657288278b519351d1a0973641c6897245bccc61228d90ddb5294c11"
+    },
+    {
+      "bytes": 79119,
+      "git_blob": "75fdfde1b1b452fa5a99c45688f90f8ed1405e7f",
+      "path": "src/giclab/harness/t07_bounded_smoke.py",
+      "sha256": "2ef4af297f7d1b8a577d9d6a970d5e678f4e852cd10c4dfa55fd836640f18e43"
+    },
+    {
+      "bytes": 372442,
+      "git_blob": "1405bcece3752594487568d616f249e0568ee116",
+      "path": "src/giclab/harness/t07_bounded_supervisor.py",
+      "sha256": "ae04aa08503366ac63fdd8a05553d63aa1ff5d6566d1cce3aafe69aa7410cc04"
+    },
+    {
+      "bytes": 34809,
+      "git_blob": "9b118b554c1c66ca169bb221f361f410ec8fcf2f",
+      "path": "src/giclab/harness/t07_high_assurance_closeout.py",
+      "sha256": "8234af2493824f914560cb9fd9a526d47a2a3795cc98609411c3c0c771b3987f"
+    },
+    {
+      "bytes": 601,
+      "git_blob": "efcf493166b19dc4fc1791107449f827fe2b5b09",
+      "path": "src/giclab/harness/task_source.py",
+      "sha256": "fb0631241e134c58914d4c6cf9c8617313dbdb5a3b5472af2333fc674052639b"
+    },
+    {
+      "bytes": 1742,
+      "git_blob": "8965154b913a9dfcfefa3be4185248c82bf20812",
+      "path": "src/giclab/plans.py",
+      "sha256": "797a84d0c0fa2f938a0e0c104e111e6e14e26ebad27ac1597b45818b3ef58814"
+    },
+    {
+      "bytes": 1,
+      "git_blob": "8b137891791fe96927ad78e64b0aad7bded08bdc",
+      "path": "src/giclab/py.typed",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+    },
+    {
+      "bytes": 4099,
+      "git_blob": "d03ab85a57d59f9664dab45451eb1cb5f1e2160e",
+      "path": "src/giclab/registry.py",
+      "sha256": "b71b8c979529e8530e9157069b3e765f649ee0349d8c6233d4244b98e3f658ad"
+    },
+    {
+      "bytes": 5645,
+      "git_blob": "2a0462ba280881c81ce4e8c9e74b46dbd1a14a75",
+      "path": "src/giclab/sitegen.py",
+      "sha256": "90e929340d53fdcdaa2ce113234d0bf6cc2eb28ff43bf6fe7385c180b03f5b97"
+    },
+    {
+      "bytes": 63022,
+      "git_blob": "1632ba643a292c2d0ba01ee0f503986b4ce160bd",
+      "path": "src/giclab/validation.py",
+      "sha256": "a27b58fd414c906cf0553644c1873e39f3b01dac911f7cc684ef0ac33a72cbb2"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "source_commit": "5698f04dfd08bc85a66d2355b0a4bd7d3ce24a23",
+  "source_tree": "02060afa138ccb74385775c36db7b745c79aa8cc"
+}

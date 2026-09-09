@@ -44,7 +44,12 @@
     },
     "terminal_goal": {"const": "evaluate simulative versus reactive SiRA"},
     "current_subgoal": {"type": "string", "minLength": 1},
-    "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"},
+    "next_technical_subgoal": {
+      "enum": [
+        "generate-package-only-v17-after-governance",
+        "close-r1-through-r6-with-integrated-retained-path-evidence"
+      ]
+    },
     "science": {
       "type": "object",
       "additionalProperties": false,
@@ -74,7 +79,8 @@
             "successor-package-bound-not-authorized",
             "live-capable-production-effects-repair-in-progress",
             "live-capable-production-effects-complete-external-governance",
-            "remote-execution-bridge-complete-external-governance"
+            "remote-execution-bridge-complete-external-governance",
+            "remote-execution-bridge-review-repair-blocked"
           ]
         },
         "registry_complete": {"type": "boolean"},
@@ -182,6 +188,34 @@
   "allOf": [
     {
       "if": {
+        "properties": {
+          "control_plane": {
+            "properties": {"status": {"const": "remote-execution-bridge-review-repair-blocked"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["control_plane"]
+      },
+      "then": {
+        "properties": {
+          "next_technical_subgoal": {"const": "close-r1-through-r6-with-integrated-retained-path-evidence"},
+          "blocking_incident": {"const": "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW"},
+          "control_plane": {
+            "properties": {
+              "live_method_viability_valid": {"const": false},
+              "remote_execution_bridge_conformance_valid": {"const": false}
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"}
+        }
+      }
+    },
+    {
+      "if": {
         "properties": {"schema_version": {"const": "4.0.0"}},
         "required": ["schema_version"]
       },
@@ -236,7 +270,10 @@
             "properties": {
               "revision": {"const": "T09-remote-execution-bridge"},
               "status": {
-                "const": "remote-execution-bridge-complete-external-governance"
+                "enum": [
+                  "remote-execution-bridge-complete-external-governance",
+                  "remote-execution-bridge-review-repair-blocked"
+                ]
               }
             }
           }

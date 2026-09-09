@@ -188,6 +188,7 @@ class CleanupTargetKind(StrEnum):
     TEMPORARY_LOCAL_CREDENTIAL = "temporary-local-secret"
     TEMPORARY_REMOTE_CREDENTIAL = "temporary-remote-secret"
     OWNED_CONTAINER = "owned-container"
+    SOURCE_PACKAGE_ARCHIVE = "source-package-archive"
 
 
 class CleanupTargetState(StrEnum):
@@ -229,6 +230,9 @@ _ALLOWED_TERMINAL_STATES: Final = {
         {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
     ),
     CleanupTargetKind.OWNED_CONTAINER: frozenset(
+        {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
+    ),
+    CleanupTargetKind.SOURCE_PACKAGE_ARCHIVE: frozenset(
         {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
     ),
 }
@@ -291,7 +295,10 @@ def _validate_locator(value: str, *, kind: CleanupTargetKind | None = None) -> N
             not path.is_absolute() or ".." in path.parts or path == Path(path.anchor)
         ):
             raise EarlyCleanupStateError("temporary-secret cleanup locator is not an exact path")
-    if kind is CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL:
+    if kind in {
+        CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        CleanupTargetKind.SOURCE_PACKAGE_ARCHIVE,
+    }:
         path = Path(value)
         if not path.is_absolute() or ".." in path.parts or path == Path(path.anchor):
             raise EarlyCleanupStateError("temporary-secret cleanup locator is not an exact path")
@@ -506,6 +513,8 @@ class EarlyCleanupState:
     targets: tuple[CleanupTarget, ...]
     cleanup_attempts: tuple[CleanupAttempt, ...]
     terminal_cleanup_disposition: TerminalCleanupDisposition
+    # None preserves an older journal whose writer did not track this boundary.
+    freeze_publication_started: bool | None = None
 
     def to_document(self) -> dict[str, object]:
         return {
@@ -533,6 +542,11 @@ class EarlyCleanupState:
             "targets": [target.to_document() for target in self.targets],
             "cleanup_attempts": [attempt.to_document() for attempt in self.cleanup_attempts],
             "terminal_cleanup_disposition": self.terminal_cleanup_disposition.value,
+            **(
+                {"freeze_publication_started": self.freeze_publication_started}
+                if self.freeze_publication_started is not None
+                else {}
+            ),
         }
 
     @classmethod
@@ -564,6 +578,10 @@ class EarlyCleanupState:
             "cleanup_attempts",
             "terminal_cleanup_disposition",
         }
+        if "freeze_publication_started" in document:
+            expected.add("freeze_publication_started")
+            if type(document["freeze_publication_started"]) is not bool:
+                raise EarlyCleanupStateError("freeze publication tracking is malformed")
         if set(document) != expected:
             raise EarlyCleanupStateError("early cleanup state fields drifted")
         if (
@@ -631,6 +649,9 @@ class EarlyCleanupState:
                 for item in _require_list(document["cleanup_attempts"], label="cleanup attempts")
             ),
             terminal_cleanup_disposition=disposition,
+            freeze_publication_started=cast(
+                bool | None, document.get("freeze_publication_started")
+            ),
         )
         state.validate()
         return state
@@ -787,6 +808,7 @@ class EarlyCleanupJournal:
             targets=tuple(targets),
             cleanup_attempts=(),
             terminal_cleanup_disposition=TerminalCleanupDisposition.PENDING,
+            freeze_publication_started=False,
         )
         state.validate()
         with journal._lock():
@@ -877,6 +899,7 @@ class EarlyCleanupJournal:
             targets=after.targets,
             cleanup_attempts=after.cleanup_attempts,
             terminal_cleanup_disposition=after.terminal_cleanup_disposition,
+            freeze_publication_started=after.freeze_publication_started,
         )
         if immutable_before != after:
             raise EarlyCleanupStateError("early cleanup immutable identity changed")
@@ -892,6 +915,11 @@ class EarlyCleanupJournal:
             and after.empirical_entry_status is not EmpiricalEntryStatus.ENTERED
         ):
             raise EarlyCleanupStateError("empirical entry status moved backwards")
+        if (
+            after.freeze_publication_started is not before.freeze_publication_started
+            and after.freeze_publication_started is not True
+        ):
+            raise EarlyCleanupStateError("freeze publication tracking moved backwards")
         before_targets = {target.target_id: target for target in before.targets}
         after_targets = {target.target_id: target for target in after.targets}
         if not before_targets.keys() <= after_targets.keys():
@@ -973,6 +1001,7 @@ class EarlyCleanupJournal:
         targets: tuple[CleanupTarget, ...] | None = None,
         cleanup_attempts: tuple[CleanupAttempt, ...] | None = None,
         terminal_cleanup_disposition: TerminalCleanupDisposition | None = None,
+        freeze_publication_started: bool | None = None,
     ) -> EarlyCleanupState:
         successor = replace(
             state,
@@ -989,6 +1018,11 @@ class EarlyCleanupJournal:
                 terminal_cleanup_disposition
                 if terminal_cleanup_disposition is not None
                 else state.terminal_cleanup_disposition
+            ),
+            freeze_publication_started=(
+                freeze_publication_started
+                if freeze_publication_started is not None
+                else state.freeze_publication_started
             ),
         )
         successor.validate()
@@ -1084,6 +1118,25 @@ class EarlyCleanupJournal:
             if imported != continuation_state:
                 raise EarlyCleanupStateError("cleanup continuation import was not exact")
             return imported
+
+    def begin_freeze_publication(
+        self, *, clock: Callable[[], float] = time.time
+    ) -> EarlyCleanupState:
+        """Record a durable intent before the first frozen-manifest publication."""
+        with self._lock():
+            state, previous_sha256 = self._load_unlocked()
+            if state.freeze_publication_started is True:
+                raise EarlyCleanupStateError("freeze publication cannot be repeated")
+            if state.lifecycle_stage in {
+                CleanupLifecycleStage.CLEANUP_IN_PROGRESS,
+                CleanupLifecycleStage.CLEANUP_FINISHED,
+            }:
+                raise EarlyCleanupStateError("cleanup does not authorize freeze publication")
+            successor = self._next_state(
+                state, previous_sha256, clock=clock, freeze_publication_started=True
+            )
+            self._append_unlocked(successor)
+            return successor
 
     def register_target(
         self,

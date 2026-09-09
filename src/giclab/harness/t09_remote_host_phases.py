@@ -30,6 +30,7 @@ from giclab.control.remote_bridge import (
     validate_full_dynamic_frozen_manifest,
     validate_postfreeze_receipt,
 )
+from giclab.harness.t09_cleanup_state import EarlyCleanupJournal, EarlyCleanupState
 from giclab.harness.t09_provider_contracts import T09ProviderContract
 from giclab.registry import load_json, local_schema_registry
 
@@ -143,6 +144,8 @@ class RemoteHostBinding:
     source_tree: str
     remote_root: str
     host_transfer_receipt_sha256: str | None
+    candidate_source_binding_sha256: str | None = None
+    offline_environment_sha256: str | None = None
 
     @classmethod
     def from_document(
@@ -176,6 +179,17 @@ class RemoteHostBinding:
                 and not _is_sha256(result.host_transfer_receipt_sha256)
             )
             or len(result.source_commit) != 40
+            or (
+                result.candidate_source_binding_sha256 is not None
+                and not _is_sha256(result.candidate_source_binding_sha256)
+            )
+            or (
+                result.offline_environment_sha256 is not None
+                and (
+                    result.candidate_source_binding_sha256 is None
+                    or not _is_sha256(result.offline_environment_sha256)
+                )
+            )
             or len(result.source_tree) != 40
             or not result.remote_root.startswith("/")
             or ".." in PurePosixPath(result.remote_root).parts
@@ -196,6 +210,16 @@ class RemoteHostBinding:
             "source_tree": self.source_tree,
             "remote_root": self.remote_root,
             "host_transfer_receipt_sha256": self.host_transfer_receipt_sha256,
+            **(
+                {"candidate_source_binding_sha256": self.candidate_source_binding_sha256}
+                if self.candidate_source_binding_sha256 is not None
+                else {}
+            ),
+            **(
+                {"offline_environment_sha256": self.offline_environment_sha256}
+                if self.offline_environment_sha256 is not None
+                else {}
+            ),
         }
 
 
@@ -239,11 +263,16 @@ def load_host_phase_request(
         raise HostPhaseError("host phase request was replayed at another phase")
     execution_mode = document.get("execution_mode")
     deterministic = document.get("deterministic_fixture")
-    if (execution_mode == "external-live" and deterministic is not False) or (
-        execution_mode == "deterministic-no-network" and deterministic is not True
-    ):
+    if (
+        execution_mode in {"external-live", "external-offline-candidate"}
+        and deterministic is not False
+    ) or (execution_mode == "deterministic-no-network" and deterministic is not True):
         raise HostPhaseError("host phase execution mode and channel are confused")
     binding = RemoteHostBinding.from_document(document.get("binding"), contract=contract)
+    if (execution_mode == "external-offline-candidate") != (
+        binding.candidate_source_binding_sha256 is not None
+    ):
+        raise HostPhaseError("candidate source binding and phase execution mode disagree")
     requested_wall = float(cast(float, document["requested_wall_time"]))
     requested_monotonic = float(cast(float, document["requested_monotonic"]))
     deadline_monotonic = float(cast(float, document["deadline_monotonic"]))
@@ -330,7 +359,10 @@ def bind_generated_host_phase_outputs(
 ) -> RemoteHostPhaseRequest:
     """Hold exact external-live outputs without rewriting the original request identity."""
 
-    if request.deterministic_fixture or request.execution_mode != "external-live":
+    if request.deterministic_fixture or request.execution_mode not in {
+        "external-live",
+        "external-offline-candidate",
+    }:
         raise HostPhaseError("generated host outputs are forbidden in deterministic mode")
     if set(generated) != set(request.output_paths):
         raise HostPhaseError("generated host outputs differ from their declared targets")
@@ -360,7 +392,10 @@ def begin_external_host_phase(
 ) -> RemoteHostPhaseRequest:
     """Translate the supervisor duration cap into the remote host clock domain."""
 
-    if request.deterministic_fixture or request.execution_mode != "external-live":
+    if request.deterministic_fixture or request.execution_mode not in {
+        "external-live",
+        "external-offline-candidate",
+    }:
         raise HostPhaseError("external host clock admission received a deterministic request")
     if (
         not math.isfinite(started_wall_time)
@@ -419,6 +454,37 @@ def validate_host_phase_predecessor(
     """Validate one predecessor before a later environmental phase can start."""
 
     return _load_previous(repository, request, expected_phase=expected_phase)
+
+
+def validate_host_cleanup_predecessor(
+    repository: Path, request: RemoteHostPhaseRequest
+) -> Mapping[str, object] | None:
+    """Check the latest supplied phase; durable ownership admits terminal cleanup."""
+    if request.phase != "host-cleanup":
+        raise HostPhaseError("terminal cleanup admission received a forward phase")
+    if request.previous_phase_receipt_path is None:
+        if (
+            request.previous_phase_receipt_sha256 is not None
+            or request.binding.host_transfer_receipt_sha256 is not None
+        ):
+            raise HostPhaseError("cleanup predecessor was omitted after acknowledged transfer")
+        return None
+    _path, raw = _private_regular(
+        request.previous_phase_receipt_path,
+        maximum_bytes=MAX_HOST_PHASE_RECEIPT_BYTES,
+        label="cleanup predecessor",
+    )
+    previous = strict_json_object(raw, label="cleanup predecessor")
+    phase = previous.get("phase")
+    if phase not in {
+        "host-transfer-verify",
+        "host-preflight",
+        "host-qualify",
+        "host-freeze",
+        "host-cleanup",
+    }:
+        raise HostPhaseError("cleanup predecessor names an unsupported phase")
+    return _load_previous(repository, request, expected_phase=phase)
 
 
 def _validate_receipt_schema(repository: Path, document: object) -> None:
@@ -628,7 +694,7 @@ def verify_host_transfer_phase(
             acknowledgement_file_sha,
         ),
         cleanup_state_sha256=cleanup_sha,
-        network_effects_performed=0 if request.deterministic_fixture else 1,
+        network_effects_performed=int(request.execution_mode == "external-live"),
     )
 
 
@@ -641,6 +707,8 @@ def validate_host_preflight_phase(
 ) -> dict[str, object]:
     previous = _load_previous(repository, request, expected_phase="host-transfer-verify")
     required = {"remote_path_qualification", "cleanup_state"}
+    if not request.deterministic_fixture:
+        required.add("provider_entry_receipt")
     if (
         request.phase != "host-preflight"
         or set(request.inputs) != required
@@ -649,6 +717,15 @@ def validate_host_preflight_phase(
         raise HostPhaseError("host preflight inputs are incomplete or unbound")
     path_receipt, path_sha = _json_input(request, "remote_path_qualification")
     _cleanup, cleanup_sha = _json_input(request, "cleanup_state")
+    if not request.deterministic_fixture:
+        entry, entry_sha = _json_input(request, "provider_entry_receipt")
+        if (
+            entry_sha != request.binding.provider_entry_receipt_sha256
+            or entry.get("host_run_id") != request.binding.host_run_id
+            or entry.get("owned_instance_identity_sha256")
+            != request.binding.provider_handle_identity
+        ):
+            raise HostPhaseError("host preflight provider entry identity drifted")
     if previous.get(
         "receipt_sha256"
     ) != request.binding.host_transfer_receipt_sha256 or path_receipt != {
@@ -720,7 +797,11 @@ def validate_host_qualification_phase(
     _load_previous(repository, request, expected_phase="host-preflight")
     required = {"qualification", "cleanup_state"}
     if not request.deterministic_fixture:
-        required.add("qualification_context")
+        required.update(
+            {"qualification_context", "provider_entry_receipt", "local_finalizer_qualification"}
+        )
+        if request.execution_mode == "external-offline-candidate":
+            required.add("offline_regression")
     if (
         request.phase != "host-qualify"
         or set(request.inputs) != required
@@ -731,7 +812,22 @@ def validate_host_qualification_phase(
     _cleanup, cleanup_sha = _json_input(request, "cleanup_state")
     context_sha: str | None = None
     if not request.deterministic_fixture:
+        entry, entry_sha = _json_input(request, "provider_entry_receipt")
+        if (
+            entry_sha != request.binding.provider_entry_receipt_sha256
+            or entry.get("host_run_id") != request.binding.host_run_id
+            or entry.get("owned_instance_identity_sha256")
+            != request.binding.provider_handle_identity
+        ):
+            raise HostPhaseError("host qualification provider entry identity drifted")
         context, context_sha = _json_input(request, "qualification_context")
+        local_qualification, _ = _json_input(request, "local_finalizer_qualification")
+        if context.get("local_finalizer_qualification") != local_qualification:
+            raise HostPhaseError("host qualification switched its local finalizer input")
+        if request.execution_mode == "external-offline-candidate":
+            _regression, regression_sha = _json_input(request, "offline_regression")
+            if local_qualification.get("real_evidence_regression_sha256") != regression_sha:
+                raise HostPhaseError("host qualification switched its offline regression input")
         if (
             context.get("schema_version") != HOST_PHASE_PROTOCOL_VERSION
             or context.get("provider_contract_version") != request.binding.provider_contract_version
@@ -894,7 +990,10 @@ def validate_host_cleanup_phase(
     completed_wall_time: float,
     completed_monotonic: float,
 ) -> dict[str, object]:
-    _load_previous(repository, request, expected_phase="host-freeze")
+    if request.deterministic_fixture:
+        _load_previous(repository, request, expected_phase="host-freeze")
+    else:
+        validate_host_cleanup_predecessor(repository, request)
     required = {"cleanup_terminal", "cleanup_state"}
     if not request.deterministic_fixture:
         required.add("provider_entry_receipt")
@@ -908,6 +1007,67 @@ def validate_host_cleanup_phase(
     _cleanup, cleanup_sha = _json_input(request, "cleanup_state")
     retained_sha = terminal.get("retained_cleanup_sha256")
     journal_sha = terminal.get("cleanup_journal_version_sha256")
+    if not request.deterministic_fixture:
+        version = terminal.get("cleanup_journal_state")
+        if not isinstance(version, dict):
+            raise HostPhaseError("cleanup terminal lacks its durable ownership version")
+        owned = PhaseFile.from_document(version, label="cleanup journal state")
+        encoded = owned.read(
+            maximum_bytes=MAX_HOST_PHASE_RECEIPT_BYTES, label="cleanup journal state"
+        )
+        state = EarlyCleanupState.from_document(
+            strict_json_object(encoded, label="cleanup journal state")
+        )
+        if (
+            owned.sha256 != journal_sha
+            or state.plan_id != request.binding.plan_id
+            or state.host_run_id != request.binding.host_run_id
+            or state.package_commit != request.binding.source_commit
+            or state.provider_instance_identity_sha256 != request.binding.provider_handle_identity
+            or _cleanup.get("journal_id") != state.journal_id
+            or _cleanup.get("sequence") != state.sequence
+            or _cleanup.get("journal_version_sha256") != owned.sha256
+            or _cleanup.get("terminal_cleanup_disposition")
+            != state.terminal_cleanup_disposition.value
+        ):
+            raise HostPhaseError("cleanup terminal ownership or lifecycle identity drifted")
+        retained_file = PhaseFile.from_document(
+            terminal.get("retained_cleanup_source"), label="retained cleanup source"
+        )
+        retained = strict_json_object(
+            retained_file.read(
+                maximum_bytes=MAX_HOST_PHASE_RECEIPT_BYTES, label="retained cleanup source"
+            ),
+            label="retained cleanup source",
+        )
+        observation = terminal.get("remote_cleanup_observation")
+        kind = terminal.get("retained_cleanup_kind")
+        if retained_file.sha256 != retained_sha or not isinstance(observation, dict):
+            raise HostPhaseError("retained cleanup source or observation drifted")
+        if kind == "pilot-cleanup":
+            if observation != retained:
+                raise HostPhaseError("pilot cleanup observation differs from retained source")
+        elif kind == "early-journal-closeout":
+            journal = EarlyCleanupJournal(owned.path.parent.parent)
+            if (
+                retained != journal.basic_closeout_receipt()
+                or state.freeze_publication_started is not False
+                or observation.get("plan_id") != state.plan_id
+                or observation.get("host_run_id") != state.host_run_id
+            ):
+                raise HostPhaseError("early cleanup observation lacks its exact journal source")
+        else:
+            raise HostPhaseError("retained cleanup source kind is unsupported")
+        if (
+            observation.get("remote_secret_removed") is not True
+            or observation.get("owned_container_residue") != []
+            or observation.get("owned_container_removal_errors") != []
+            or observation.get("owned_container_enumeration_errors") != []
+            or observation.get("global_secret_matching_paths") != []
+            or observation.get("structural_privacy_scan_passed") is not True
+            or observation.get("structural_privacy_violations") != []
+        ):
+            raise HostPhaseError("retained cleanup observation is not terminal clean")
     if (
         terminal.get("provider_contract_version") != request.binding.provider_contract_version
         or terminal.get("plan_id") != request.binding.plan_id
@@ -974,6 +1134,15 @@ def validate_condition_session_request(
 
     previous = _load_previous(repository, request, expected_phase="host-freeze")
     required = {"full_frozen_manifest", "command_manifest", "condition_plan"}
+    checkpoint = request.inputs.get("shared_first_pair_checkpoint")
+    checkpoint_sha = request.expected_projection.get("shared_first_pair_checkpoint_sha256")
+    if checkpoint is not None:
+        required.add("shared_first_pair_checkpoint")
+        if condition_run_id not in contract.run_ids[2:] or checkpoint.sha256 != checkpoint_sha:
+            raise HostPhaseError("shared checkpoint is not bound to this Task B request")
+        checkpoint.read(maximum_bytes=MAX_HOST_PHASE_RECEIPT_BYTES, label="shared checkpoint")
+    elif checkpoint_sha is not None:
+        raise HostPhaseError("shared checkpoint identity has no bound input")
     if request.phase != "condition-session" or set(request.inputs) != required:
         raise HostPhaseError("condition session inputs are incomplete or unbound")
     expected = {

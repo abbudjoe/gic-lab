@@ -84,6 +84,7 @@ from giclab.harness import t09_model_metadata_receipt as metadata
 from giclab.harness import t09_pragmatic_provider as provider
 from giclab.harness import t09_sira_pilot as pilot
 from giclab.harness.sira_gate_a import ModelRole, ProviderRequest, ProviderResponseUsage
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_cleanup_state import CleanupTargetState, EarlyCleanupJournal
 from giclab.harness.t09_provider_contracts import T09ProviderContract
 
@@ -388,8 +389,10 @@ class DeterministicLowLevelEffects:
         fault_plan: ShadowFaultPlan,
         fixed_tick: int,
         transaction_root: Path | None = None,
+        source_inputs: CandidateSourceSnapshot | None = None,
     ) -> None:
         self.repository = repository.resolve(strict=True)
+        self._source_inputs = source_inputs
         self.contract = contract
         self.provider_contract_version = contract.version
         self.fault_plan = fault_plan
@@ -450,11 +453,16 @@ class DeterministicLowLevelEffects:
         self._image_fixture.chmod(0o600)
         capability_root = self._root / "launch-capabilities"
         capability_root.mkdir(mode=0o700)
-        package_commit, _tree = _git_identity(self.repository)
+        package_commit, _tree = (
+            _git_identity(self.repository)
+            if source_inputs is None
+            else source_inputs.package_identity(self.repository)
+        )
         self._campaign_controls = provider._mint_shadow_campaign_low_level_controls(
             capability_root=capability_root,
             expected_package_commit=package_commit,
             image_fixture=self._image_fixture,
+            source_inputs=source_inputs,
         )
         self._last_answers: dict[str, str] = {}
 
@@ -1007,13 +1015,20 @@ class DeterministicLowLevelEffects:
         self,
         request: HostQualificationRequest,
     ) -> HostQualificationReceipt:
+        expected_candidate = None if self._source_inputs is None else self._source_inputs.digest
+        if request.binding.transfer.candidate_source_binding_sha256 != expected_candidate:
+            raise AdapterFailure("qualification candidate source binding differs from transfer")
         if self._declared_failure("host.qualify"):
             raise AdapterFailure("deterministic host qualification failure")
+        commit, _tree = (
+            _git_identity(self.repository)
+            if self._source_inputs is None
+            else self._source_inputs.package_identity(self.repository)
+        )
         host = _host_module(self.repository)
         host_file = getattr(host, "__file__", None)
         if not isinstance(host_file, str):
             raise AdapterFailure("deterministic host module lacks a source path")
-        commit, _tree = _git_identity(self.repository)
         role_sources = {
             host.DownstreamSourceRole.SELECTOR: Path(host_file).resolve(strict=True),
             host.DownstreamSourceRole.FINALIZER: (
@@ -1033,6 +1048,7 @@ class DeterministicLowLevelEffects:
                 role=role,
                 relative=host.DOWNSTREAM_SOURCE_CONTRACTS[role].relative_path,
                 source=path,
+                source_inputs=self._source_inputs,
             )
             for role, path in role_sources.items()
         }
@@ -2344,6 +2360,7 @@ def build_deterministic_effects(
     fault_plan: ShadowFaultPlan | None = None,
     fixed_tick: int = 1000,
     transaction_root: Path | None = None,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> DeterministicLowLevelEffects:
     """Factory used by public CI; optional authority arguments are never grants."""
 
@@ -2354,6 +2371,7 @@ def build_deterministic_effects(
         fault_plan=fault_plan or ShadowFaultPlan("happy-path"),
         fixed_tick=fixed_tick,
         transaction_root=transaction_root,
+        source_inputs=source_inputs,
     )
 
 
@@ -2366,19 +2384,30 @@ def build_production_shadow_assembly(
     control_binding_semantic_sha256: str | None = None,
     fixed_tick: int = 1000,
     transaction_root: Path | None = None,
+    source_inputs: CandidateSourceSnapshot | None = None,
+    low_level_effects: LowLevelEffects | None = None,
 ) -> ProductionCategory3World:
     """Bind deterministic effects to the exact same production assembly."""
 
-    effects = build_deterministic_effects(
+    effects = low_level_effects or build_deterministic_effects(
         repository=repository,
         contract=contract,
         fault_plan=fault_plan,
         fixed_tick=fixed_tick,
         transaction_root=transaction_root,
+        source_inputs=source_inputs,
     )
     held_transaction_root = hold_transaction_root(effects.transaction_root())
-    commit, tree = _git_identity(repository)
-    command_sha = contract.expected_command_manifest_sha256
+    commit, tree = (
+        _git_identity(repository)
+        if source_inputs is None
+        else source_inputs.package_identity(repository)
+    )
+    command_sha = (
+        contract.expected_command_manifest_sha256
+        if source_inputs is None
+        else source_inputs.command_package_sha256(repository)
+    )
     if command_sha is None:
         raise ValueError("deterministic production assembly requires a command package")
     binding_sha = (
@@ -2423,6 +2452,7 @@ def build_production_shadow_assembly(
         interpretation="descriptive-calibration-only",
         current_turn_scope="deterministic-shadow",
         campaign_count=1,
+        candidate_source_binding_sha256=(None if source_inputs is None else source_inputs.digest),
     )
     authority = mint_shadow_effect_authority(
         source="validated-deterministic-production-effects",
@@ -2435,6 +2465,7 @@ def build_production_shadow_assembly(
         authorization_context=context,
         authority=authority,
         held_transaction_root=held_transaction_root,
+        source_inputs=source_inputs,
     )
 
 

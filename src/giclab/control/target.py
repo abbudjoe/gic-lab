@@ -9,7 +9,7 @@ import re
 import stat
 import subprocess
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path, PurePosixPath
 from typing import Final
 
@@ -534,7 +534,14 @@ def validate_selected_runtime_target(
         explicit_provider_contract=explicit,
     )
     if expected != target:
-        raise TargetSelectionError("selected-runtime target differs from goal/package state")
+        mismatches = [
+            field.name
+            for field in fields(SelectedRuntimeTarget)
+            if getattr(expected, field.name) != getattr(target, field.name)
+        ]
+        raise TargetSelectionError(
+            "selected-runtime target differs from goal/package state: " + ", ".join(mismatches)
+        )
     return expected
 
 

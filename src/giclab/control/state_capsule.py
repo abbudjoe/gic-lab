@@ -21,6 +21,7 @@ from giclab.control.target import (
     resolve_selected_runtime_target,
     validate_selected_runtime_target,
 )
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.registry import load_json
 
 STATE_CAPSULE_SCHEMA_VERSION: Final = "5.0.0"
@@ -126,18 +127,22 @@ def generate_state_capsule(
     target: SelectedRuntimeTarget | None = None,
     deterministic: bool = True,
     generated_at: str | None = None,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> dict[str, object]:
     """Project machine-readable goal state and current control evidence."""
 
     root = repository.resolve(strict=True)
+    selection_root = root if source_inputs is None else source_inputs.template_repository()
     selected_target = (
-        resolve_selected_runtime_target(root)
+        resolve_selected_runtime_target(selection_root)
         if target is None
-        else validate_selected_runtime_target(root, target)
+        else validate_selected_runtime_target(selection_root, target)
     )
     goal = _load_goal(root)
     validate_goal_incident_consistency(root, goal)
-    commit, tree = repository_identity(root)
+    commit, tree = (
+        repository_identity(root) if source_inputs is None else source_inputs.package_identity(root)
+    )
     if deterministic:
         timestamp = generated_at or DETERMINISTIC_GENERATED_AT
         generated_at_policy = "deterministic-fixed"

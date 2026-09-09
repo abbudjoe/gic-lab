@@ -16,6 +16,7 @@ from giclab.harness.t09_remote_host_phases import (
     HostPhaseError,
     RemoteHostBinding,
     RemoteHostPhaseRequest,
+    bind_generated_host_phase_outputs,
     load_host_phase_request,
     validate_condition_session_request,
     validate_host_freeze_phase,
@@ -134,7 +135,7 @@ def _transfer_fixture(tmp_path: Path) -> tuple[RemoteHostBinding, Path, dict[str
         local_assembly_receipt_sha256=assembly_identity,
         source_commit=commit,
         source_tree=tree,
-        remote_root="/opt/giclab/t09",
+        remote_root=tmp_path.as_posix(),
         host_transfer_receipt_sha256=None,
     )
     acknowledgement = _write(
@@ -193,6 +194,21 @@ def _complete_transfer(tmp_path: Path) -> tuple[RemoteHostBinding, Path, Path]:
         receipt_path.resolve(strict=True),
         inputs["cleanup_state"],
     )
+
+
+def test_candidate_transfer_receipt_reports_no_real_network(tmp_path: Path) -> None:
+    binding, _entry, inputs = _transfer_fixture(tmp_path)
+    binding = replace(binding, candidate_source_binding_sha256="b" * 64)
+    document = _request_document(
+        phase="host-transfer-verify", binding=binding, inputs=inputs, deterministic=False
+    )
+    document["execution_mode"] = "external-offline-candidate"
+    request = _load(_write(tmp_path / "candidate-transfer.json", document), "host-transfer-verify")
+    receipt = verify_host_transfer_phase(
+        ROOT, request, completed_wall_time=101.0, completed_monotonic=51.0
+    )
+    assert receipt["network_effects_performed"] == 0
+    assert receipt["binding"]["candidate_source_binding_sha256"] == "b" * 64
 
 
 def _path_qualification(binding: RemoteHostBinding, path: Path) -> Path:
@@ -299,6 +315,68 @@ def _complete_qualification(tmp_path: Path) -> tuple[RemoteHostBinding, Path, Pa
     receipt_path = tmp_path / "qualification-receipt.json"
     write_phase_receipt(receipt_path, receipt)
     return binding, receipt_path.resolve(strict=True), cleanup
+
+
+@pytest.mark.parametrize("phase", ["host-preflight", "host-qualify"])
+def test_external_generated_outputs_retain_required_provider_entry(tmp_path: Path, phase: str):
+    """Component contract regression; fixtures here are not joined phase evidence."""
+    if phase == "host-preflight":
+        binding, previous, _cleanup = _complete_transfer(tmp_path)
+        generated = {
+            "remote_path_qualification": _path_qualification(
+                binding, tmp_path / "external-path.json"
+            ),
+            "cleanup_state": _write(tmp_path / "external-cleanup.json", {"initialized": True}),
+        }
+        validator = validate_host_preflight_phase
+    else:
+        binding, previous, _cleanup = _complete_preflight(tmp_path)
+        generated = {
+            "qualification": _qualification(binding, tmp_path / "external-qualification.json"),
+            "qualification_context": _write(
+                tmp_path / "external-context.json",
+                {
+                    "schema_version": "1.0.0",
+                    "provider_contract_version": binding.provider_contract_version,
+                    "plan_id": binding.plan_id,
+                    "host_run_id": binding.host_run_id,
+                    "provider_handle_identity": binding.provider_handle_identity,
+                    "model_request_count": 0,
+                    "task_browser_action_count": 0,
+                    "dynamic_manifest_published": False,
+                    "condition_entry_performed": False,
+                    "local_finalizer_qualification": {"fixture": "bound-component-input"},
+                },
+            ),
+            "cleanup_state": _write(tmp_path / "external-cleanup.json", {"initialized": True}),
+        }
+        validator = validate_host_qualification_phase
+    document = _request_document(
+        phase=phase,
+        binding=binding,
+        inputs={"provider_entry_receipt": tmp_path / "provider-entry.json"},
+        previous=previous,
+        deterministic=False,
+    )
+    if phase == "host-qualify":
+        local = _write(
+            tmp_path / "local-finalizer-input.json", {"fixture": "bound-component-input"}
+        )
+        document["inputs"]["local_finalizer_qualification"] = {
+            "path": str(local),
+            "bytes": local.stat().st_size,
+            "sha256": _sha(local),
+        }
+    document["output_paths"] = {name: str(path) for name, path in generated.items()}
+    request = _load(_write(tmp_path / "external-request.json", document), phase)
+    bound = bind_generated_host_phase_outputs(request, generated)
+    assert "provider_entry_receipt" in bound.inputs
+    receipt = validator(ROOT, bound, completed_wall_time=104.0, completed_monotonic=54.0)
+    assert receipt["complete"] is True
+    if phase == "host-qualify":
+        local.write_bytes(local.read_bytes() + b" ")
+        with pytest.raises(HostPhaseError, match="changed from its request binding"):
+            validator(ROOT, bound, completed_wall_time=104.0, completed_monotonic=54.0)
 
 
 def _full_manifest() -> tuple[dict[str, object], dict[str, object]]:
@@ -723,3 +801,55 @@ def test_condition_requires_exact_full_freeze_and_package_hashes(tmp_path: Path)
             command_argv_sha256="1" * 64,
             condition_plan_sha256=_sha(condition),
         )
+
+
+@pytest.mark.parametrize("predecessor", ["transfer", "preflight", "none"])
+def test_cleanup_predecessor_does_not_require_freeze(tmp_path: Path, predecessor: str) -> None:
+    from giclab.harness.t09_remote_host_phases import validate_host_cleanup_predecessor
+
+    if predecessor == "none":
+        binding, _entry, _inputs = _transfer_fixture(tmp_path)
+        previous = None
+    else:
+        builder = _complete_transfer if predecessor == "transfer" else _complete_preflight
+        binding, previous, _cleanup = builder(tmp_path)
+    request = _load(
+        _write(
+            tmp_path / "cleanup-request.json",
+            _request_document(
+                phase="host-cleanup",
+                binding=binding,
+                inputs={},
+                previous=previous,
+                deterministic=False,
+            ),
+        ),
+        "host-cleanup",
+    )
+    observed = validate_host_cleanup_predecessor(ROOT, request)
+    assert (observed is None) is (previous is None)
+    if previous is not None:
+        assert observed["phase"] == (
+            "host-transfer-verify" if predecessor == "transfer" else "host-preflight"
+        )
+        previous.write_bytes(previous.read_bytes() + b" ")
+        with pytest.raises(HostPhaseError, match="hash drifted"):
+            validate_host_cleanup_predecessor(ROOT, request)
+    assert not list(tmp_path.glob("*freeze*"))
+
+
+def test_cleanup_cannot_omit_acknowledged_transfer(tmp_path: Path) -> None:
+    from giclab.harness.t09_remote_host_phases import validate_host_cleanup_predecessor
+
+    binding, _previous, _cleanup = _complete_transfer(tmp_path)
+    request = _load(
+        _write(
+            tmp_path / "cleanup-request.json",
+            _request_document(
+                phase="host-cleanup", binding=binding, inputs={}, deterministic=False
+            ),
+        ),
+        "host-cleanup",
+    )
+    with pytest.raises(HostPhaseError, match="omitted after acknowledged transfer"):
+        validate_host_cleanup_predecessor(ROOT, request)

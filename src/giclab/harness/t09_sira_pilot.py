@@ -18,6 +18,7 @@ import re
 import stat
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -1462,10 +1463,17 @@ def transition_zero_usage_preflight_state(
     return next_state, next_aggregate
 
 
-def _write_json_atomic(path: Path, document: Mapping[str, object]) -> None:
+def _write_json_atomic(
+    path: Path,
+    document: Mapping[str, object],
+    *,
+    before_write: Callable[[Path, int], None] | None = None,
+) -> None:
     """Replace one mutable control document and durably commit its directory entry."""
 
     encoded = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    if before_write is not None:
+        before_write(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.parent / f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
@@ -1492,7 +1500,7 @@ def _write_json_atomic(path: Path, document: Mapping[str, object]) -> None:
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        if not published:
+        if not published and before_write is None:
             with contextlib.suppress(FileNotFoundError):
                 temporary.unlink()
 
@@ -1536,8 +1544,15 @@ def _selection_receipt_directory(
     return path.parent / "finalization-selections" / run_id
 
 
-def _write_json_exclusive(path: Path, document: Mapping[str, object]) -> None:
+def _write_json_exclusive(
+    path: Path,
+    document: Mapping[str, object],
+    *,
+    before_write: Callable[[Path, int], None] | None = None,
+) -> None:
     encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
+    if before_write is not None:
+        before_write(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor = os.open(
         path,
@@ -2427,6 +2442,7 @@ def mark_attempt_completed(
     semantic_projection_sha256: str,
     finalized_output_root: str,
     finalization_complete_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Select one downstream finalization without reopening the condition attempt."""
 
@@ -2486,7 +2502,7 @@ def mark_attempt_completed(
         ):
             state["first_pair_decision"] = "stop-before-task-b"
             state["first_pair_selection_drift_detected"] = True
-            _write_json_atomic(path, state)
+            _write_json_atomic(path, state, before_write=before_write)
             raise T09PilotError(
                 "post-checkpoint Task A finalization changed the bound semantic projection"
             )
@@ -2513,6 +2529,7 @@ def mark_attempt_completed(
                 "ordinal": ordinal,
                 "selection": selection,
             },
+            before_write=before_write,
         )
         retained_history.append(file_sha256(receipt_path))
     else:
@@ -2523,7 +2540,7 @@ def mark_attempt_completed(
     ]
     state["attempt_finalizations"] = finalizations
     state["attempt_finalization_history"] = history
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def record_first_pair_checkpoint(
@@ -2532,6 +2549,7 @@ def record_first_pair_checkpoint(
     execution_contract_sha256: str,
     decision: Mapping[str, object],
     decided_at_epoch: float,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Seal the one automatic checkpoint; only a passing decision opens Task B."""
 
@@ -2576,6 +2594,11 @@ def record_first_pair_checkpoint(
     ):
         raise T09PilotError("checkpoint pair-wall origin binding is invalid")
     decision_path = path.parent / "first-pair-checkpoint-decision.json"
+    if before_write is not None:
+        before_write(
+            decision_path,
+            len((json.dumps(decision, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()),
+        )
     _write_json_exclusive(decision_path, decision)
     decision_sha256 = canonical_sha256(decision)
     decision_file_sha256 = file_sha256(decision_path)
@@ -2610,6 +2633,9 @@ def record_first_pair_checkpoint(
     }
     if result == "continue-to-task-b":
         state["second_pair_started_at_epoch"] = decided_at_epoch
+    if before_write is not None:
+        # Reserve the full temporary file while the previous state still exists.
+        before_write(path, len((json.dumps(state, indent=2, sort_keys=True) + "\n").encode()))
     _write_json_atomic(path, state)
 
 
@@ -2993,11 +3019,34 @@ def structurally_redact(value: object) -> object:
 class EventWriter:
     """Append immutable causal events with bounded, structurally redacted payloads."""
 
-    def __init__(self, path: Path, *, max_event_bytes: int = 16 * 1024 * 1024) -> None:
+    def __init__(
+        self,
+        path: Path,
+        *,
+        max_event_bytes: int = 16 * 1024 * 1024,
+        require_output_admission: bool = False,
+    ) -> None:
         self.path = path
         self.max_event_bytes = max_event_bytes
+        self.require_output_admission = require_output_admission
         self.sequence = 0
+        self._write_lock = threading.RLock()
+        self._reserve_growth: Callable[[int], None] | None = None
+        self._observe_growth: Callable[[int], None] | None = None
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+    def bind_output_admission(
+        self,
+        *,
+        reserve_growth: Callable[[int], None],
+        observe_growth: Callable[[int], None],
+    ) -> None:
+        """Bind the existing writer to its runtime's shared admission port."""
+        with self._write_lock:
+            if self._reserve_growth is not None:
+                raise T09PilotError("event writer output admission is already bound")
+            self._reserve_growth = reserve_growth
+            self._observe_growth = observe_growth
 
     def append(
         self,
@@ -3006,28 +3055,54 @@ class EventWriter:
         *,
         parent_event_id: str | None = None,
     ) -> str:
+        with self._write_lock:
+            return self._append(kind, payload, parent_event_id=parent_event_id)
+
+    def _append(
+        self,
+        kind: str,
+        payload: Mapping[str, object],
+        *,
+        parent_event_id: str | None,
+    ) -> str:
+        if self.require_output_admission and self._reserve_growth is None:
+            raise T09PilotError("runtime event writer has no bound output admission")
         invalid_parent = (
             parent_event_id is not None and _SAFE_EVENT_ID.fullmatch(parent_event_id) is None
         )
         if not kind or invalid_parent:
             raise T09PilotError("event kind or causal parent is invalid")
-        self.sequence += 1
-        event_id = f"EVT-T09-{self.sequence:08d}"
+        sequence = self.sequence + 1
+        event_id = f"EVT-T09-{sequence:08d}"
         document = {
             "schema_version": "0.1.0",
             "event_id": event_id,
             "parent_event_id": parent_event_id,
-            "sequence": self.sequence,
+            "sequence": sequence,
             "kind": kind,
             "payload": structurally_redact(dict(payload)),
         }
         encoded = (json.dumps(document, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
         if len(encoded) > self.max_event_bytes:
             raise T09BudgetExceeded("one evidence event exceeds its byte cap")
-        with self.path.open("ab") as handle:
-            handle.write(encoded)
-            handle.flush()
-            os.fsync(handle.fileno())
+        if self._reserve_growth is not None:
+            self._reserve_growth(len(encoded))
+        # Unbuffered writes make a partial failure observable. The reservation
+        # remains an upper bound even if reconciliation itself is interrupted.
+        with self.path.open("ab", buffering=0) as handle:
+            start = os.fstat(handle.fileno()).st_size
+            try:
+                offset = 0
+                while offset < len(encoded):
+                    count = handle.write(encoded[offset:])
+                    if count is None or count <= 0:
+                        raise OSError("event writer made no progress")
+                    offset += count
+                os.fsync(handle.fileno())
+                self.sequence = sequence
+            finally:
+                if self._observe_growth is not None:
+                    self._observe_growth(os.fstat(handle.fileno()).st_size - start)
         return event_id
 
 

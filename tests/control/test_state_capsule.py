@@ -21,6 +21,42 @@ from giclab.registry import load_json
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_state_capsule_rejects_goal_changed_since_target_selection() -> None:
+    from giclab.control.state_capsule import repository_identity
+    from giclab.control.target import (
+        TargetSelectionError,
+        resolve_selected_runtime_target_from_goal_bytes,
+    )
+    from giclab.harness.t09_provider_contracts import PROVIDER_CONTRACTS
+
+    goal = (ROOT / "control/goals/EXP-0001.yaml").read_bytes()
+    commit, _ = repository_identity(ROOT)
+    # Even a semantically neutral edit after selection changes the bound input.
+    selected_before_edit = resolve_selected_runtime_target_from_goal_bytes(
+        ROOT,
+        goal + b"\n# previously selected goal snapshot\n",
+        bound_package_commit=commit,
+        bound_registered_contract_versions=frozenset(PROVIDER_CONTRACTS),
+    )
+    current = resolve_selected_runtime_target(ROOT)
+    assert selected_before_edit.selected_contract == current.selected_contract
+    assert (
+        selected_before_edit.selected_command_package_sha256
+        == current.selected_command_package_sha256
+    )
+    assert selected_before_edit.goal_record_sha256 != current.goal_record_sha256
+    with pytest.raises(TargetSelectionError, match=r"state: goal_record_sha256$"):
+        generate_state_capsule(
+            ROOT,
+            registry_complete=False,
+            composition_valid=False,
+            version_lint_valid=False,
+            shadow_happy_path=False,
+            failure_matrix_valid=False,
+            target=selected_before_edit,
+        )
+
+
 def _capsule() -> dict[str, object]:
     return generate_state_capsule(
         ROOT,

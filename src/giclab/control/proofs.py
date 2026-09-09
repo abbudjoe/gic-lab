@@ -22,10 +22,12 @@ from giclab.control.target import (
     GOAL_RECORD,
     SelectedRuntimeTarget,
     TargetSelectionError,
+    resolve_selected_runtime_target,
     validate_bound_selected_runtime_target_document,
     validate_selected_runtime_target,
     validate_selected_runtime_target_document,
 )
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_provider_contracts import T09ProviderContract
 from giclab.harness.t09_sira_pilot import load_execution_contract
 from giclab.registry import load_json, loads_json, local_schema_registry
@@ -663,17 +665,21 @@ def validate_shadow_rehearsal(
     version_lint_receipt: Mapping[str, object],
     composition_receipt: Mapping[str, object],
     state_capsule: Mapping[str, object],
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> ValidatedShadowRehearsal:
     """Validate the non-circular inputs used only to produce shadow receipts."""
 
     root = repository.resolve(strict=True)
-    completed = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD", "HEAD^{tree}"],
-        capture_output=True,
-        check=True,
-        text=True,
-    )
-    commit, tree = completed.stdout.splitlines()
+    if source_inputs is None:
+        completed = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD", "HEAD^{tree}"],
+            capture_output=True,
+            check=True,
+            text=True,
+        )
+        commit, tree = completed.stdout.splitlines()
+    else:
+        commit, tree = source_inputs.package_identity(root)
     for receipt in (registry_receipt, version_lint_receipt, composition_receipt):
         _semantic_sha256(receipt)
         if receipt.get("repository_commit") != commit or receipt.get("repository_tree") != tree:
@@ -698,6 +704,11 @@ def validate_shadow_rehearsal(
         expected_commit=commit,
         expected_tree=tree,
         selected_provider_contract_version=contract.version,
+        bound_target=(
+            None
+            if source_inputs is None
+            else resolve_selected_runtime_target(source_inputs.template_repository())
+        ),
     )
     staging = validate_deterministic_staging(
         root,

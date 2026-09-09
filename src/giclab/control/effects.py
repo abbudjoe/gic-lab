@@ -647,10 +647,17 @@ class EffectAuthorizationContext:
     interpretation: str
     current_turn_scope: str
     campaign_count: int
+    candidate_source_binding_sha256: str | None = None
     schema_version: str = EFFECT_AUTHORITY_SCHEMA_VERSION
     effect_protocol_version: str = EFFECT_PROTOCOL_VERSION
 
     def __post_init__(self) -> None:
+        if self.candidate_source_binding_sha256 is not None and (
+            self.authority_kind is not EffectAuthorityKind.SHADOW_ONLY
+            or self.execution_mode is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+            or _HEX64.fullmatch(self.candidate_source_binding_sha256) is None
+        ):
+            raise ValueError("candidate inputs require an exact offline shadow binding")
         if self.schema_version != EFFECT_AUTHORITY_SCHEMA_VERSION:
             raise ValueError("effect authority schema version is unsupported")
         if self.effect_protocol_version != EFFECT_PROTOCOL_VERSION:
@@ -724,6 +731,11 @@ class EffectAuthorizationContext:
             "interpretation": self.interpretation,
             "current_turn_scope": self.current_turn_scope,
             "campaign_count": self.campaign_count,
+            **(
+                {"candidate_source_binding_sha256": self.candidate_source_binding_sha256}
+                if self.candidate_source_binding_sha256 is not None
+                else {}
+            ),
         }
 
     def to_public_document(self) -> dict[str, object]:
@@ -755,6 +767,11 @@ class EffectAuthorizationContext:
             "interpretation": self.interpretation,
             "current_turn_scope": self.current_turn_scope,
             "campaign_count": self.campaign_count,
+            **(
+                {"candidate_source_binding_sha256": self.candidate_source_binding_sha256}
+                if self.candidate_source_binding_sha256 is not None
+                else {}
+            ),
         }
 
     @property
@@ -1529,6 +1546,7 @@ class HostTransferBinding:
     source_commit: str
     source_tree: str
     remote_root: str
+    candidate_source_binding_sha256: str | None = None
 
     def to_document(self) -> dict[str, object]:
         return {
@@ -1542,6 +1560,11 @@ class HostTransferBinding:
             "source_commit": self.source_commit,
             "source_tree": self.source_tree,
             "remote_root": self.remote_root,
+            **(
+                {"candidate_source_binding_sha256": self.candidate_source_binding_sha256}
+                if self.candidate_source_binding_sha256 is not None
+                else {}
+            ),
         }
 
 
@@ -1775,6 +1798,9 @@ class ConditionExecutionRequest:
     condition_started_wall_time: float
     condition_started_monotonic: float
     campaign_deadline_monotonic: float
+    # Exact shared-controller decision, carried to the retained state replica.
+    # The remote host validates it against its own sealed Task A selections.
+    first_pair_checkpoint: bytes | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1843,6 +1869,27 @@ class ConditionBridgeEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class ConditionBridgePrefixEvidence:
+    """Observed interrupted transport; grants no completion or scoring authority."""
+
+    session_id: str
+    shared_transcript_path: Path
+    remote_journal_path: Path
+    relay_prefix_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class RetainedConditionSource:
+    """Original sealed host evidence underlying a separate shared projection."""
+
+    authority: str
+    manifest_path: Path
+    receipt_path: Path
+    completion_path: Path
+    export_acknowledgement_path: Path
+
+
+@dataclass(frozen=True, slots=True)
 class ConditionFailurePreservationRequest:
     """Shared-accounted facts an effect must preserve after empirical entry."""
 
@@ -1863,6 +1910,10 @@ class ConditionFailurePreservationRequest:
     bridge_evidence: ConditionBridgeEvidence | None = None
     essential_failure_cap_bytes: int = MAX_ESSENTIAL_FAILURE_BYTES
     essential_failure_file_cap: int = MAX_ESSENTIAL_FAILURE_FILES
+    retained_source: RetainedConditionSource | None = None
+    partial_bridge_evidence: ConditionBridgePrefixEvidence | None = None
+    condition_manifest: Mapping[str, object] | None = None
+    output_observer: ConditionEventObserver | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1899,6 +1950,8 @@ class ConditionInfrastructureFailureOutcome:
     cleanup_ready: bool
     retry_count: int
     bridge_evidence: ConditionBridgeEvidence | None = None
+    retained_source: RetainedConditionSource | None = None
+    partial_bridge_evidence: ConditionBridgePrefixEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1912,6 +1965,7 @@ class ConditionFailureExportRequest:
     essential_file_count: int
     essential_total_bytes: int
     export_identity: str
+    output_observer: ConditionEventObserver | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1952,7 +2006,23 @@ class ConditionEventObserver(Protocol):
 
     def browser_action(self, *, action_id: str, perform: ConditionAction) -> None: ...
 
-    def output_bytes(self, *, total_bytes: int) -> None: ...
+    def output_bytes(self, *, total_bytes: int, retained_output_bytes: int = 0) -> None: ...
+
+    def reserve_output_bytes(self, *, total_bytes: int) -> None: ...
+
+    def reserve_controller_output_bytes(self, *, total_bytes: int) -> None: ...
+
+    def controller_output_bytes(self, *, total_bytes: int) -> None: ...
+
+    def retain_closed_remote_output(self, *, total_bytes: int) -> None: ...
+
+    def consume_failure_output_bytes(self, *, count: int) -> None: ...
+
+    def allocate_controller_output_bytes(self, *, count: int) -> None: ...
+
+    def observe_controller_output_bytes(self, *, count: int) -> None: ...
+
+    def terminal_accounting_document(self) -> Mapping[str, object]: ...
 
     def process_exit(self, *, exit_code: int) -> None: ...
 
@@ -1986,6 +2056,9 @@ class ConditionProcessOutcome:
     process_outcome_path: Path
     retry_count: int
     bridge_evidence: ConditionBridgeEvidence | None = None
+    retained_source: RetainedConditionSource | None = None
+    control_projection_path: Path | None = None
+    partial_bridge_evidence: ConditionBridgePrefixEvidence | None = None
 
 
 ConditionExecutionResult = ConditionProcessOutcome | ConditionInfrastructureFailureOutcome
@@ -2024,6 +2097,7 @@ class FinalizerExecutionRequest:
     evaluator_dependency_tree_sha256: str
     evaluator_contract_sha256: str
     package_commit: str
+    output_observer: ConditionEventObserver | None = None
 
 
 @dataclass(frozen=True, slots=True)

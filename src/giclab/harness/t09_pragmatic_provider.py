@@ -45,6 +45,7 @@ from giclab.harness.lambda_l2m_observer import (
     ObserverTransportFailure,
     observer_request,
 )
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot, reject_candidate_source
 from giclab.harness.t09_cleanup_state import (
     CleanupLifecycleStage,
     CleanupTargetKind,
@@ -465,6 +466,7 @@ class ShadowCampaignLowLevelControls:
     capability_root: Path
     expected_package_commit: str
     image_fixture: Path
+    source_inputs: CandidateSourceSnapshot | None
     _proof: object = field(repr=False, compare=False)
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
@@ -509,6 +511,10 @@ class ShadowCampaignLowLevelControls:
             raise T09ProviderError("shadow campaign controls are invalid")
         if package_commit != self.expected_package_commit:
             raise T09ProviderError("shadow campaign package identity drifted")
+        if self.source_inputs is not None:
+            if self.source_inputs.package_identity(repository)[0] != package_commit:
+                raise T09ProviderError("shadow candidate package identity drifted")
+            return
         observed = subprocess.run(
             ["git", "-C", str(repository), "rev-parse", "HEAD"],
             capture_output=True,
@@ -536,6 +542,7 @@ def _mint_shadow_campaign_low_level_controls(
     capability_root: Path,
     expected_package_commit: str,
     image_fixture: Path,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> ShadowCampaignLowLevelControls:
     """Mint fake low-level campaign seams; no live-authorized mint exists here."""
 
@@ -547,6 +554,7 @@ def _mint_shadow_campaign_low_level_controls(
     object.__setattr__(value, "capability_root", root)
     object.__setattr__(value, "expected_package_commit", expected_package_commit)
     object.__setattr__(value, "image_fixture", image)
+    object.__setattr__(value, "source_inputs", source_inputs)
     object.__setattr__(value, "_proof", _SHADOW_CAMPAIGN_CONTROLS_PROOF)
     return value
 
@@ -1280,6 +1288,7 @@ def load_campaign_lifecycle(
 
 
 def _verify_clean_package(repository: Path, package_commit: str) -> None:
+    reject_candidate_source(repository)
     if _HEX40.fullmatch(package_commit) is None:
         raise T09ProviderError("package commit is malformed")
     environment = {
@@ -1319,6 +1328,12 @@ def _verify_clean_package(repository: Path, package_commit: str) -> None:
 def _git_commit_tree(repository: Path, commit: str) -> str:
     if _HEX40.fullmatch(commit) is None:
         raise T09ProviderError("package commit is malformed")
+    controls = _SHADOW_CAMPAIGN_CONTROLS.get()
+    if controls is not None and controls.source_inputs is not None:
+        parent, tree = controls.source_inputs.package_identity(repository)
+        if parent != commit:
+            raise T09ProviderError("candidate template source ancestor drifted")
+        return tree
     result = subprocess.run(
         ["git", "-C", str(repository), "rev-parse", f"{commit}^{{tree}}"],
         env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")},
@@ -2071,6 +2086,14 @@ def _initial_preflight_cleanup_state(
         )
     )
     try:
+        controls = _SHADOW_CAMPAIGN_CONTROLS.get()
+        remote_secret_locator = "/home/ubuntu/.config/giclab/sira_api_key"
+        if controls is not None and controls.source_inputs is not None:
+            remote_secret_locator = (
+                controls.capability_root.parent
+                / "offline-credentials"
+                / f"remote-{launch_slot}-model-canary"
+            ).as_posix()
         cleanup_journal = EarlyCleanupJournal.initialize(
             private_root / "preflight-cleanup-state",
             plan_id=contract.plan_id,
@@ -2086,7 +2109,7 @@ def _initial_preflight_cleanup_state(
             replacement_eligibility_sha256=replacement_eligibility_sha256,
             firewall_baseline_identity_sha256=baseline_identity,
             temporary_local_secret_locator="openai-secret-upload",
-            temporary_remote_secret_locator=("/home/ubuntu/.config/giclab/sira_api_key"),
+            temporary_remote_secret_locator=remote_secret_locator,
             clock=clock,
         )
     except EarlyCleanupStateError as exc:
@@ -2177,6 +2200,7 @@ _REMOTE_CONTINUATION_TARGET_KINDS: Final = frozenset(
     {
         CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
         CleanupTargetKind.OWNED_CONTAINER,
+        CleanupTargetKind.SOURCE_PACKAGE_ARCHIVE,
     }
 )
 _PROVIDER_CLOSEOUT_TARGET_IDS: Final = (
@@ -2227,11 +2251,15 @@ def _cleanup_journal_for_closeout(
                         )
                 if any(
                     target_id not in local_targets
-                    and target.kind is not CleanupTargetKind.OWNED_CONTAINER
+                    and target.kind
+                    not in {
+                        CleanupTargetKind.OWNED_CONTAINER,
+                        CleanupTargetKind.SOURCE_PACKAGE_ARCHIVE,
+                    }
                     for target_id, target in remote_targets.items()
                 ):
                     raise EarlyCleanupStateError(
-                        "remote cleanup continuation added a non-container authority"
+                        "remote cleanup continuation added an unsupported resource authority"
                     )
                 for attempt in remote_state.cleanup_attempts[len(local_state.cleanup_attempts) :]:
                     target = remote_targets.get(attempt.target_id)

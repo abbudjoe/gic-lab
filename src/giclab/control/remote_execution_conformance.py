@@ -1105,7 +1105,17 @@ def _duplex_subprocess_session(
     )
     if process.stdin is None or process.stdout is None or process.stderr is None:
         process.kill()
+        process.wait(timeout=1)
         raise ValueError("local SSH stand-in lacks a complete duplex stream")
+    os.set_blocking(process.stderr.fileno(), False)
+    stderr_stream = process.stderr
+
+    def bounded_stderr() -> str:
+        try:
+            return os.read(stderr_stream.fileno(), 4096).decode("utf-8", errors="replace")
+        except BlockingIOError:
+            return ""
+
     boundary, observer = _observer_for(binding)
     deadline = time.monotonic() + 25.0
     endpoint = FramedDuplexEndpoint(
@@ -1123,19 +1133,17 @@ def _duplex_subprocess_session(
         try:
             terminal = supervisor.serve()
         except BaseException as exc:
-            with contextlib.suppress(subprocess.TimeoutExpired):
-                process.wait(timeout=2)
-            stderr = process.stderr.read().decode("utf-8", errors="replace")
+            stderr = bounded_stderr()
             raise ValueError("remote relay supervisor failed: " + stderr[-2000:]) from exc
         process.stdin.close()
-        exit_code = process.wait(timeout=10)
-        stderr = process.stderr.read().decode("utf-8", errors="replace")
+        exit_code = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+        stderr = bounded_stderr()
         if exit_code != 0:
             raise ValueError("remote relay subprocess failed: " + stderr[-2000:])
     finally:
         if process.poll() is None:
             process.kill()
-            process.wait(timeout=5)
+            process.wait(timeout=1)
         with contextlib.suppress(OSError):
             process.stdout.close()
         with contextlib.suppress(OSError):
@@ -1349,8 +1357,8 @@ def _accounting_incomplete_probe(root: Path, contract: T09ProviderContract) -> b
                     cast(ProviderResponseUsage, object()),
                 ),
                 before_send=None,
-                call_id="CALL-INCOMPLETE-PROBE",
-                logical_call_id="LOGICAL-INCOMPLETE-PROBE",
+                call_id=port.call_identity(1),
+                logical_call_id=port.call_identity(1),
                 classify_failure=lambda _exc: ProviderFailureDisposition.OUTCOME_UNKNOWN,
             )
         except ProviderResponseReceiptError:
@@ -1431,8 +1439,8 @@ def _ambiguous_send_probe(root: Path, contract: T09ProviderContract) -> bool:
                 request,
                 disconnected,
                 before_send=None,
-                call_id="CALL-AMBIGUOUS-PROBE",
-                logical_call_id="LOGICAL-AMBIGUOUS-PROBE",
+                call_id=port.call_identity(1),
+                logical_call_id=port.call_identity(1),
                 classify_failure=lambda _exc: ProviderFailureDisposition.OUTCOME_UNKNOWN,
             )
         except RemoteBridgeDisconnected:

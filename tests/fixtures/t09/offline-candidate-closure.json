@@ -1,0 +1,1420 @@
+{
+  "classification": "non-scientific-no-network-non-live",
+  "members": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "Makefile",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "containers/sira-smoke/bounded/browser_preflight.py",
+      "role": "retained-entrypoint"
+    },
+    {
+      "path": "containers/sira-smoke/bounded/model_preflight.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/container_entrypoint.py",
+      "role": "retained-entrypoint"
+    },
+    {
+      "path": "containers/sira-smoke/fixtures/static.html",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/Containerfile.amd64",
+      "role": "historical-template"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/materialize_openai_secret.py",
+      "role": "retained-entrypoint"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/python310_import_smoke.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/remote_runner.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/runtime_preflight.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_core_preflight.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_finalizer_projection.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_postrun_evidence_repair.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_prepare_v8.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_prepare_v9.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_provider_accounting_preflight.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_remote_runner.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "containers/sira-smoke/pragmatic/t09_secret_preflight.py",
+      "role": "retained-resource"
+    },
+    {
+      "path": "control/goals/EXP-0001.yaml",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-CONTROL-SECOND-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "docs/harness/T09_REMOTE_EXECUTION_BRIDGE_IMPLEMENTATION_LEDGER.md",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_PRAGMATIC_RETRY4_FINALIZER_REGRESSION.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json",
+      "role": "control-validation-input"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_COMMAND_MANIFESTS.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_DATASET_CONTRACT.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EVALUATOR_CONTRACT.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_EXECUTION_CONTRACT.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_HISTORICAL_RUNTIME_EVIDENCE.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_V8_SCIENCE_PROJECTION.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/T09_PILOT_V9_SCIENCE_PROJECTION.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V10.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V11.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V12.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V13.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V14.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V15.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V10.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V11.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V12.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V13.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V14.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V15.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V16.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V16.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0000-reactive.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0000-simulative.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0001-reactive.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/conditions/pilot-v16-task-0001-simulative.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/pilot.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V3.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V4.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V5.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V6.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V7.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/PLAN-EXP0001-PILOT-V8.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V10.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V11.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V12.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V13.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V14.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V15.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "experiments/EXP-0001-sira-simulative-vs-reactive/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.yaml",
+      "role": "historical-template"
+    },
+    {
+      "path": "pyproject.toml",
+      "role": "historical-template"
+    },
+    {
+      "path": "schemas/agent-incident.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/agent-state-capsule.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/artifact.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/attempt-close-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/cloud-run.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/compute.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/container-attempt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/container-image-provenance.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/container-materialization-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/container-platform-decision.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/docker-storage-placement-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/docker-storage-qualification-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/experiment.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/harness-event.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/manifest.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/pricing.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/run-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/run-profile.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/runtime-candidate-decision.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/runtime-rollback-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/sealed-artifact-copy.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-openai-secret-source.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-private-security-binding.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-authorization-v2.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-authorization-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-authorization.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-evidence-v2.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-evidence-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-observer-ledger-v2.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-observer-ledger-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-observer-ledger.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-plan-v2.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-plan-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-bounded-smoke-private-binding.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-audit-structural-report.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-assessment.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-baseline-capture-ledger.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-baseline.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-canonical-report.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-capture-adjudication.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-public-structural-report.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-firewall-restoration-payload.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-host-qualification-incident.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-host-qualification.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-image-identity-adjudication.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-inventory-v2.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-inventory-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-inventory.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-host-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-host-key-checkpoint.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-human-decision.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-incident.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-launch-recovery-decision.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-private-parameters.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-provider-ledger.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-transaction-journal.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2-watchdog-journal.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-checkpoint.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-host-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-human-decision.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-observer-journal.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-private-decision-seal-v2.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-private-decision-seal-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-l2m-private-decision-seal.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-owned-launch-marker.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-request-ledger-v3.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-request-ledger.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-resource-candidate-matrix.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-schema-extension-report.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-ssh-key-fingerprint.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-ssh-key-match.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-lambda-ssh-key-request-ledger.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t07-local-public-key-match.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t08-sira-smoke-adjudication.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t08-sira-smoke-pair-diff.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-active-version-lint-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-agent-check-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-anti-shadow-lint-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-category3-shadow-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-cleanup-export-handoff.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-condition-duplex-frame.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-condition-duplex-transcript.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-condition-host-terminal-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-condition-runtime-detachment.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-condition-session-terminal-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-control-composition-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-control-plane-source-binding.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-control-receipt-bindings.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-control-registry-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-control-target.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-early-cleanup-state.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-effect-authorization-context.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-essential-failure-complete.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-essential-failure-export-acknowledgement.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-essential-failure-manifest.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-full-dynamic-frozen-manifest.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-host-phase-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-host-phase-request.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-incident-completeness-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-live-effect-conformance-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-live-method-map.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-live-method-viability.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-model-metadata-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-offline-refinalization-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-private-condition-socket-binding.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-remote-execution-bridge-conformance.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-evidence.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-score.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v10-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v11-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v12-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v13-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v14-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v15-execution.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-sira-pilot-v16-execution.schema.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "schemas/t09-v10-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v11-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v12-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v13-model-metadata-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v13-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v14-model-metadata-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v14-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v15-model-metadata-receipt.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v15-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/t09-v16-model-metadata-receipt.schema.json",
+      "role": "historical-template"
+    },
+    {
+      "path": "schemas/t09-v16-plan.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/terminal-execution-control.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "schemas/transition.schema.json",
+      "role": "retained-resource"
+    },
+    {
+      "path": "scripts/ci/guarded_python.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "scripts/ci/local_container.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "scripts/ci/offline_guard.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "scripts/ci/sitecustomize.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/__init__.py",
+      "role": "import-package"
+    },
+    {
+      "path": "src/giclab/ci_pytest_parity.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/__init__.py",
+      "role": "import-package"
+    },
+    {
+      "path": "src/giclab/control/adapters.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/agent_check.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/anti_shadow_lint.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/category3.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/cli.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/composition.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/consumers.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/contracts.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/effects.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/incidents.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/live_conformance.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/live_method_viability.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/production.py",
+      "role": "retained-entrypoint"
+    },
+    {
+      "path": "src/giclab/control/proofs.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/registry_validation.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/remote_bridge.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/remote_execution_conformance.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/scenarios.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/shadow.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/control/shadow_effects.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/state_capsule.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/target.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/control/version_lint.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/__init__.py",
+      "role": "import-package"
+    },
+    {
+      "path": "src/giclab/harness/adapters/__init__.py",
+      "role": "import-package"
+    },
+    {
+      "path": "src/giclab/harness/adapters/base.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/adapters/sira.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/artifacts.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/budget.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/cli.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/events.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/executor.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_archive.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_archive_v2.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_archive_v3.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_cloud.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_cloud_v3.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_firewall_baseline.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_inventory.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_inventory_plan.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_inventory_plan_v3.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_inventory_v2.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_inventory_v3.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l13_security.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l20_plan.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l23_manual_plan.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l23_manual_supervisor.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2_evidence.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2_execution.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2_ownership.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2_supervisor.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2_watchdog.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2m_checkpoints.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_l2m_observer.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_request_ledger.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_request_ledger_v3.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_ssh_key_archive.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_ssh_key_executor.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_ssh_key_fingerprint.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/lambda_ssh_key_match.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/lambda_ssh_key_request_ledger.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/models.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/plan.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/policy.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/regulation.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/safety.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/sira_colima.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/sira_container.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/sira_gate_a.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/sira_gate_a_runtime.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/sira_storage.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t07_bounded_smoke.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/t07_bounded_supervisor.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/t07_high_assurance_closeout.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/t08_sira_smoke.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "src/giclab/harness/t09_candidate_inputs.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "src/giclab/harness/t09_cleanup_state.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t09_environment_fixture.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "src/giclab/harness/t09_model_metadata_receipt.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t09_pragmatic_provider.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t09_provider_contracts.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t09_qualification_fixture.py",
+      "role": "retained-entrypoint"
+    },
+    {
+      "path": "src/giclab/harness/t09_remote_host_phases.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t09_runtime_admission.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/t09_sira_pilot.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/task_source.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/plans.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/registry.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/sitegen.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/validation.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "tests/conftest.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/candidate_bootstrap.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/retained_candidate_effects.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_candidate_inputs.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_category3_shadow.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_checkpoint_review_repair.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_composition.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_effect_runtime_seams.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_essential_failure_evidence.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_held_identity_boundaries.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_historical_receipts.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_live_authority_transaction.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_live_effect_conformance.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_live_method_viability.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_local_container_ci.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_offline_effect_guard.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_package_effect_loader.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_production_coupling.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_qualification_fixture.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_remote_bridge.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_remote_execution_conformance.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_remote_host_phases.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_remote_terminal_review.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_remote_transaction_review.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/control/test_target_selection.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/control/test_version_lint.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/fixtures/t09/fanout-two-task-fixture.json",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/finalizer-raw-shape/host-cleanup-receipt.json",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/finalizer-raw-shape/normalized-events.jsonl",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/finalizer-raw-shape/provider-budget.json",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/finalizer-raw-shape/provider-call-lifecycle.json",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/finalizer-raw-shape/runtime-environment.json",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/finalizer-raw-shape/sira-output/PRIVACY-SAFE-FINALIZER-FIXTURE.json",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/offline-candidate-closure.json",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/fixtures/t09/offline-candidate-historical-build-inputs.json",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/fixtures/t09/offline-condition-runner.py",
+      "role": "candidate-binding-input"
+    },
+    {
+      "path": "tests/fixtures/t09/pinned-evaluator/evaluator.py",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/pinned-evaluator/run.py",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/pinned-evaluator/utils/helpers.py",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/pinned-evaluator/utils/models.py",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/fixtures/t09/pinned-evaluator/utils/norm.py",
+      "role": "qualification-fixture-input"
+    },
+    {
+      "path": "tests/test_t09_early_cleanup_state.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/test_t09_retry5.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "tests/test_t09_v14_cleanup_lifecycle.py",
+      "role": "active-validation-input"
+    },
+    {
+      "path": "uv.lock",
+      "role": "historical-template"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "scope": "offline-candidate-source-package",
+  "template_contract": "V16"
+}
