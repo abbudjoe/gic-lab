@@ -4060,3 +4060,58 @@ def test_remote_runner_uses_python310_compatible_utc_surface() -> None:
     assert "UTC" not in datetime_imports
     assert {"datetime", "timezone"}.issubset(datetime_imports)
     assert "UTC: Final = timezone.utc" in source
+
+
+@pytest.mark.parametrize("operation", ["reserve", "enter", "rollback"])
+@pytest.mark.parametrize("denied", [False, True])
+def test_campaign_entry_control_writers_admit_before_replacement(tmp_path, operation, denied):
+    from giclab.harness.t09_sira_pilot import rollback_never_started_condition_reservation
+
+    path = tmp_path / "pilot-state.json"
+    digest = "a" * 64
+    initialize_pilot_state(
+        path,
+        provider_contract=V11_PROVIDER_CONTRACT,
+        execution_contract_sha256=digest,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    reservation = dict(
+        execution_contract_sha256=digest, run_id=ATTEMPT_ORDER[0], start_intent_sha256="2" * 64
+    )
+    if operation != "reserve":
+        reserve_condition_start(path, **reservation)
+    original = path.read_bytes()
+    admitted = []
+
+    def admit(target, count):
+        assert target == path and path.read_bytes() == original
+        assert set(tmp_path.iterdir()) == {path}
+        assert type(count) is int and count > 0
+        admitted.append(count)
+        if denied:
+            raise RuntimeError("shared control capacity denied")
+
+    def write():
+        if operation == "reserve":
+            reserve_condition_start(path, **reservation, before_write=admit)
+        elif operation == "rollback":
+            rollback_never_started_condition_reservation(path, **reservation, before_write=admit)
+        else:
+            mark_empirical_entry(
+                path,
+                execution_contract_sha256=digest,
+                run_id=ATTEMPT_ORDER[0],
+                supervised_release_receipt_sha256="3" * 64,
+                before_write=admit,
+            )
+
+    if denied:
+        with pytest.raises(RuntimeError, match="shared control capacity"):
+            write()
+        assert path.read_bytes() == original
+    else:
+        write()
+        assert path.read_bytes() != original
+        assert admitted == [len(path.read_bytes())]
+    assert len(admitted) == 1 and set(tmp_path.iterdir()) == {path}

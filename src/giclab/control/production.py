@@ -18,8 +18,8 @@ import subprocess
 import tarfile
 import threading
 from collections import Counter
-from collections.abc import Mapping
-from contextlib import suppress
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager, suppress
 from dataclasses import asdict, replace
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
@@ -2552,15 +2552,24 @@ class ProductionCategory3World:
             if owned_started > end_wall:
                 raise AdapterFailure("provider ownership starts after the empirical freeze")
             campaign_wall, campaign_mono = self._frozen_campaign_origins(receipt)
-            pilot.initialize_pilot_state(
-                self._pilot_state,
-                provider_contract=self.contract,
-                execution_contract_sha256=self._execution_contract.sha256,
-                pilot_started_at_epoch=campaign_wall,
-                lambda_started_at_epoch=owned_started,
-                prior_campaign_lambda_duration_seconds=prior_duration,
-                prior_campaign_lambda_cost_usd=prior_cost,
+            self._campaign_started_monotonic = campaign_mono
+            self._campaign_deadline_monotonic = checked_deadline(
+                campaign_mono,
+                self._execution_contract.campaign.empirical_campaign_wall_seconds,
+                label="empirical campaign",
             )
+            with self._pilot_control_writer(self.contract.run_ids[0]) as (admit, observed):
+                pilot.initialize_pilot_state(
+                    self._pilot_state,
+                    provider_contract=self.contract,
+                    execution_contract_sha256=self._execution_contract.sha256,
+                    pilot_started_at_epoch=campaign_wall,
+                    lambda_started_at_epoch=owned_started,
+                    prior_campaign_lambda_duration_seconds=prior_duration,
+                    prior_campaign_lambda_cost_usd=prior_cost,
+                    before_write=admit,
+                    after_output_write=observed,
+                )
         except BaseException as exc:
             self._record(operation, handle.opaque_identity, "failed")
             if isinstance(exc, AdapterFailure):
@@ -2613,6 +2622,112 @@ class ProductionCategory3World:
             raise AdapterFailure("empirical campaign monotonic deadline expired")
         return now, self._campaign_deadline_monotonic - now
 
+    def _condition_accountant(self, run_id: str) -> _AccountingObserver:
+        """Establish the one condition accountant before its first control write."""
+        existing = self._condition_observers.get(run_id)
+        if existing is not None:
+            if existing._failure_output_remaining is None:
+                raise AdapterFailure("condition output admission failed before its first writer")
+            return existing
+        if self._runtime_budget is None or self._campaign_deadline_monotonic is None:
+            raise AdapterFailure("condition control writer lacks its frozen budget")
+        caps = self._runtime_budget.condition_caps.get(run_id)
+        if caps is None:
+            raise AdapterFailure("condition control writer has no exact run cap")
+        boundary = ProviderBudgetBoundary(
+            routing=ImmutableModelRouting.locked(),
+            aggregate_caps=self._runtime_budget.aggregate_caps,
+            condition_caps=caps,
+            monotonic=self.clock.monotonic,
+            initial_aggregate_usage=self._aggregate_usage,
+            initial_aggregate_observed_usage=self._aggregate_observed_usage,
+        )
+        observer = _AccountingObserver(
+            run_id=run_id,
+            model_revision=self._runtime_budget.model_revision,
+            service_tier=self._runtime_budget.service_tier,
+            boundary=boundary,
+            prior_call_ids=frozenset(self._seen_call_ids),
+            prior_logical_call_ids=frozenset(self._seen_logical_call_ids),
+            clock=self.clock,
+            campaign_deadline_monotonic=self._campaign_deadline_monotonic,
+        )
+        self._condition_observers[run_id] = observer
+        observer.prepare_failure_output()
+        return observer
+
+    @contextmanager
+    def _pilot_control_writer(
+        self, run_id: str, *, extra_paths: tuple[Path, ...] = (), failure: bool = False
+    ) -> Iterator[tuple[Callable[[Path, int], None], Callable[[int], None]]]:
+        """Fund before growth and count actual writes, including replaced state bytes.
+
+        Mutable state can shrink when a reservation is cleared. Its signed net
+        occupancy change is not this monotonic controller-write counter. Observe
+        each successful write syscall, including any retained partial temporary.
+        No capacity is returned by replacement and no observation admits bytes.
+        """
+        observer = self._condition_accountant(run_id)
+        host = _host_module(self.repository)
+        allowed = (self._pilot_state, *extra_paths)
+        if len(set(allowed)) != len(allowed) or any(
+            path.parent not in (self._pilot_state.parent, self.public_root) for path in extra_paths
+        ):
+            raise AdapterFailure("control writer has an undeclared publication path")
+
+        roots = tuple(dict.fromkeys(path.parent for path in allowed))
+        before_bytes = sum(host.full_attempt_tree_usage(root).bytes for root in roots)
+        before_files = {
+            path: path.stat(follow_symlinks=False) for path in allowed if os.path.lexists(path)
+        }
+        admitted: dict[Path, int] = {}
+        written_bytes = 0
+
+        def admit(path: Path, count: int) -> None:
+            if path not in allowed or any(part.is_symlink() for part in (path, *path.parents)):
+                raise AdapterFailure("pilot writer escaped its exact control path")
+            if path in admitted:
+                raise AdapterFailure("control publication was admitted twice in one operation")
+            if failure:
+                observer.consume_failure_output_bytes(count=count)
+            else:
+                observer.allocate_controller_output_bytes(count=count)
+            admitted[path] = count
+
+        def observed(count: int) -> None:
+            nonlocal written_bytes
+            if (
+                type(count) is not int
+                or count < 0
+                or written_bytes + count > sum(admitted.values())
+            ):
+                raise AdapterFailure("control write observation lacks its preceding admission")
+            observer.observe_controller_output_bytes(count=count)
+            written_bytes += count
+
+        try:
+            yield admit, observed
+        finally:
+            # Keep an independent signed occupancy check. Replacing an owned
+            # mutable state retires its previous file bytes; an interrupted
+            # temporary remains counted. This check never grants output or
+            # clamps a decrease away, and includes the whole declared roots.
+            try:
+                retired_bytes = 0
+                for path, before in before_files.items():
+                    after = path.stat(follow_symlinks=False)
+                    if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino):
+                        if path not in admitted:
+                            raise AdapterFailure("unadmitted control replacement")
+                        retired_bytes += before.st_size
+                growth = (
+                    sum(host.full_attempt_tree_usage(root).bytes for root in roots) - before_bytes
+                )
+                if growth != written_bytes - retired_bytes:
+                    raise AdapterFailure("control writer and retained occupancy do not reconcile")
+            finally:
+                self._record_boundary_state(run_id, observer)
+
     def reserve(self, run_id: str) -> str:
         operation = "condition.reserve"
         self._begin(operation, run_id)
@@ -2638,12 +2753,15 @@ class ProductionCategory3World:
             }
         )
         try:
-            pilot.reserve_condition_start(
-                self._pilot_state,
-                execution_contract_sha256=execution.sha256,
-                run_id=run_id,
-                start_intent_sha256=start_intent,
-            )
+            with self._pilot_control_writer(run_id) as (admit, observed):
+                pilot.reserve_condition_start(
+                    self._pilot_state,
+                    execution_contract_sha256=execution.sha256,
+                    run_id=run_id,
+                    start_intent_sha256=start_intent,
+                    before_write=admit,
+                    after_output_write=observed,
+                )
         except BaseException as exc:
             self._record(operation, run_id, "failed")
             raise AdapterFailure(f"condition reservation failed: {exc}") from exc
@@ -2665,12 +2783,15 @@ class ProductionCategory3World:
             }
         )
         try:
-            pilot.mark_empirical_entry(
-                self._pilot_state,
-                execution_contract_sha256=execution.sha256,
-                run_id=run_id,
-                supervised_release_receipt_sha256=release,
-            )
+            with self._pilot_control_writer(run_id) as (admit, observed):
+                pilot.mark_empirical_entry(
+                    self._pilot_state,
+                    execution_contract_sha256=execution.sha256,
+                    run_id=run_id,
+                    supervised_release_receipt_sha256=release,
+                    before_write=admit,
+                    after_output_write=observed,
+                )
         except BaseException as exc:
             self._record(operation, run_id, "failed")
             raise AdapterFailure(f"empirical entry failed: {exc}") from exc
@@ -3235,7 +3356,7 @@ class ProductionCategory3World:
             if (
                 retained_source is None
                 or retained_source.authority != "essential-infrastructure-failure"
-                or process_exit_code in (None, 0)
+                or process_exit_code is None
             ):
                 raise AdapterFailure(
                     "interrupted bridge requires an unscored retained essential source"
@@ -3652,13 +3773,16 @@ class ProductionCategory3World:
                 receipt,
                 label="essential failure completion receipt",
             )
-            pilot.mark_essential_failure_sealed(
-                self._pilot_state,
-                execution_contract_sha256=execution.sha256,
-                run_id=request.run_id,
-                manifest_sha256=manifest_sha,
-                receipt_sha256=receipt_sha,
-            )
+            with self._pilot_control_writer(request.run_id, failure=True) as (admit, observed):
+                pilot.mark_essential_failure_sealed(
+                    self._pilot_state,
+                    execution_contract_sha256=execution.sha256,
+                    run_id=request.run_id,
+                    manifest_sha256=manifest_sha,
+                    receipt_sha256=receipt_sha,
+                    before_write=admit,
+                    after_output_write=observed,
+                )
             export_identity = _identity(
                 {
                     "run_id": request.run_id,
@@ -3996,24 +4120,7 @@ class ProductionCategory3World:
                 else None
             ),
         )
-        boundary = ProviderBudgetBoundary(
-            routing=ImmutableModelRouting.locked(),
-            aggregate_caps=self._runtime_budget.aggregate_caps,
-            condition_caps=caps,
-            monotonic=self.clock.monotonic,
-            initial_aggregate_usage=self._aggregate_usage,
-            initial_aggregate_observed_usage=self._aggregate_observed_usage,
-        )
-        observer = _AccountingObserver(
-            run_id=run_id,
-            model_revision=request.model_revision,
-            service_tier=request.service_tier,
-            boundary=boundary,
-            prior_call_ids=frozenset(self._seen_call_ids),
-            prior_logical_call_ids=frozenset(self._seen_logical_call_ids),
-            clock=self.clock,
-            campaign_deadline_monotonic=self._campaign_deadline_monotonic,
-        )
+        observer = self._condition_accountant(run_id)
         started = self.clock.monotonic()
         if started < request.condition_started_monotonic:
             raise AdapterFailure("condition monotonic start moved backward")
@@ -4024,7 +4131,6 @@ class ProductionCategory3World:
         returned_bridge = None
         returned_partial_bridge = None
         try:
-            observer.prepare_failure_output()
             typed_outcome = self.low_level_effects.execute_condition(
                 request,
                 observer=observer,
@@ -4055,12 +4161,20 @@ class ProductionCategory3World:
                     record=record,
                 )
             outcome = typed_outcome
-            if outcome.exit_code != 0:
+            essential_source = (
+                outcome.retained_source is not None
+                and outcome.retained_source.authority == "essential-infrastructure-failure"
+            )
+            if outcome.exit_code != 0 or essential_source:
                 failure_preservation_started = True
                 record = self._validate_and_seal_condition_failure(
                     request=request,
                     observer=observer,
-                    failure_class=ConditionFailureClass.PROCESS_EXIT_NONZERO,
+                    failure_class=(
+                        ConditionFailureClass.PROCESS_EXIT_NONZERO
+                        if outcome.exit_code != 0
+                        else ConditionFailureClass.OUTCOME_VALIDATION
+                    ),
                     retained_source=outcome.retained_source,
                     bridge_evidence=outcome.bridge_evidence,
                     partial_bridge_evidence=outcome.partial_bridge_evidence,
@@ -4069,7 +4183,7 @@ class ProductionCategory3World:
                     answer=outcome.answer,
                 )
                 raise ConsumedConditionFailure(
-                    "nonzero condition process exit is infrastructure-invalid",
+                    "condition process or retained essential source is infrastructure-invalid",
                     record=record,
                 )
             completed = self.clock.monotonic()
@@ -4430,17 +4544,27 @@ class ProductionCategory3World:
                 "raw_file_count": outcome.raw_file_count,
                 "raw_total_bytes": outcome.raw_total_bytes,
             }
-            exported.write_bytes(_canonical_bytes(export_document))
-            exported.chmod(0o600)
-            if load_json(exported) != export_document:
-                raise AdapterFailure("off-host raw acknowledgement changed bytes")
-            pilot.mark_raw_attempt_complete(
-                self._pilot_state,
-                execution_contract_sha256=execution.sha256,
-                run_id=run_id,
-                raw_manifest_sha256=manifest_sha,
-                raw_receipt_sha256=receipt_sha,
-            )
+            with self._pilot_control_writer(run_id, extra_paths=(exported,)) as (admit, observed):
+                encoded_export = _canonical_bytes(export_document)
+                host = _host_module(self.repository)
+                token = host._HOST_OUTPUT_ADMISSION.set(admit)
+                try:
+                    host.write_bytes_exclusive(
+                        exported, encoded_export, after_output_write=observed
+                    )
+                finally:
+                    host._HOST_OUTPUT_ADMISSION.reset(token)
+                if load_json(exported) != export_document:
+                    raise AdapterFailure("off-host raw acknowledgement changed bytes")
+                pilot.mark_raw_attempt_complete(
+                    self._pilot_state,
+                    execution_contract_sha256=execution.sha256,
+                    run_id=run_id,
+                    raw_manifest_sha256=manifest_sha,
+                    raw_receipt_sha256=receipt_sha,
+                    before_write=admit,
+                    after_output_write=observed,
+                )
             self._raw_completed_run_ids.append(run_id)
             self._revalidate_artifacts(raw_artifacts)
         except BaseException as exc:
@@ -5606,12 +5730,18 @@ class ProductionCategory3World:
                 "provider_cost_receipt_sha256": provider_cost.receipt_sha256,
                 "provider_lifecycle_cost_proof_sha256": provider_cost.receipt_sha256,
             }
-            pilot.record_first_pair_checkpoint(
-                self._pilot_state,
-                execution_contract_sha256=execution.sha256,
-                decision=decision,
-                decided_at_epoch=decided,
-            )
+            decision_path = self._pilot_state.parent / "first-pair-checkpoint-decision.json"
+            with self._pilot_control_writer(
+                self.contract.run_ids[1], extra_paths=(decision_path,)
+            ) as (admit, observed):
+                pilot.record_first_pair_checkpoint(
+                    self._pilot_state,
+                    execution_contract_sha256=execution.sha256,
+                    decision=decision,
+                    decided_at_epoch=decided,
+                    before_write=admit,
+                    after_output_write=observed,
+                )
             retained_state = pilot.load_validated_pilot_state(
                 self._pilot_state,
                 execution_contract_sha256=execution.sha256,

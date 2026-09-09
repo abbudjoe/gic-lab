@@ -453,3 +453,34 @@ def test_legacy_journal_absence_is_unknown_and_roundtrips_without_relabelling(
     observed = EarlyCleanupState.from_document(legacy)
     assert observed.freeze_publication_started is None
     assert observed.to_document() == legacy
+
+
+@pytest.mark.parametrize("denied", [False, True])
+def test_cleanup_journal_versions_consume_admission_before_growth(tmp_path, denied):
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    prior = {p.name: p.read_bytes() for p in journal.versions.iterdir()}
+    grants = []
+
+    def admit(path, count):
+        assert path.parent == journal.versions and not path.exists()
+        assert {p.name: p.read_bytes() for p in journal.versions.iterdir()} == prior
+        grants.append((path, count))
+        if denied:
+            raise RuntimeError("cleanup shared allowance denied")
+
+    journal = EarlyCleanupJournal(journal.root, before_write=admit)
+    if denied:
+        with pytest.raises(RuntimeError, match="shared allowance"):
+            journal.advance_lifecycle(CleanupLifecycleStage.PACKAGE_TRANSITION, clock=clock)
+        assert {p.name: p.read_bytes() for p in journal.versions.iterdir()} == prior
+    else:
+        journal.advance_lifecycle(CleanupLifecycleStage.PACKAGE_TRANSITION, clock=clock)
+        assert len(grants) == 1
+        path, count = grants[0]
+        assert path.stat().st_size == count
+        assert (
+            sum(p.stat().st_size for p in journal.versions.iterdir())
+            == sum(map(len, prior.values())) + count
+        )
+    assert len(grants) == 1

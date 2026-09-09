@@ -4158,3 +4158,93 @@ and parity/static/privacy/site gates not started. Independent review remains pen
 New lane permission is limited to the owner's declared separate encrypted topology
 and finite budget. It is not a cure for the old I/O fault or physical redundancy.
 No live/scientific authority, V17, hosted CI, shared runtime, merge or self-approval.
+
+
+### Fresh lane and pilot/control writer repair checkpoint (2026-09-09 UTC)
+
+The ordinary checkpoint 80a6ed54db31d3346d4c4dff43e8b8353ef64c70 preserves the
+previous 68-path repair. A separate fresh encrypted gic-pr15-clean-ci lane passed
+operational storage and containment smoke. It uses native ARM64/VZ, 2 CPUs, 6 GiB
+VM memory, 20/32 GiB root/data settings and a non-root 2-CPU/4-GiB/512-PID offline
+container. Its checksum-bound bootstrap and measured runtime identities are limited
+CI assurance, not T07/live qualification, physical redundancy or an old-fault cure.
+Old images/keys/recovery tools remain retained and unused; Source109 stays UNKNOWN,
+excluded from successful validation claims, with recovery deferred and old resource
+absence unresolved. No original/copy integrity sweep or old runtime access occurred.
+
+Production now establishes one retained condition accountant before pilot start and
+empirical-entry state writers. Host admission covers declared pilot/journal roots
+plus attempt roots. Pilot state and early cleanup journal writers admit before
+mutation; denied writes preserve bytes. Unused capacity and bounded failure reserves
+carry forward under unchanged policy caps. The shared controller counter records
+actual successful write syscall bytes; an independent full-root signed census must
+equal written bytes minus the exact retired prior-file bytes of admitted replacements.
+The original red joined run ab0002edcf0f2bd0 failed because essential sealing clears
+a longer reservation and legitimately shrinks mutable state. Net occupancy is not
+a monotonic writer count. The correction neither retrospectively grants capacity
+nor clamps/ignores decreases; partial admitted temporaries remain accounted.
+
+Validated essential infrastructure failure now preserves actual exit status, including
+zero, without task acceptance or evaluator eligibility. Actual answer/None, source
+binding, held failure export and mutation assertions remain active. Attach-output
+denial no longer assumes a particular process termination code. Its actual retained
+status must agree across the source completion, returned outcome and failure summary.
+
+The explicit CI guard now allows real, tightly scoped scratch-Git fixture creation
+and detached switching to full commit identities, with hooks/signing/templates/
+protocols/automatic maintenance disabled and Git environment overrides removed.
+Foreign/network operations and caught forbidden dispatch still fail. Actual PathLike
+arguments are supported. The inner gate console now rejects over-cap growth and
+terminates/reaps its owned child on cap/timeout; previous runs lacked this inner-log
+pre-growth enforcement although their retained logs stayed below the limit. This is
+not arbitrary native-code containment or complete descendant-cleanup proof.
+
+These are separate source-bound development runs, not combined green counts:
+
+| Transaction | Passed | Failed/errors | Skipped | Input manifest SHA-256 |
+|---|---:|---:|---:|---|
+| `gic-pr15-ci-02f8b7bb6f62f169` | 366 | 0 | 0 | `af2ff8e0c951b6b9f6122cd5d99c37178c81198d2bbe127e8893d6448aff2d16` |
+| `gic-pr15-ci-1422d5dbe1b2b5a3` | 448 | 3 | 0 | `0ab2b1bc58cd4e70d7a3eb712cba62e2a87d1de24841a7777e5dd666fa22771b` |
+| `gic-pr15-ci-59693514fbcc7d4c` | 271 | 0 | 0 | `e8125d17bc2f39c857f35f6950e30c59b7bd156d1599fde642651e4fe34218b5` |
+| `gic-pr15-ci-6f69df84b547f406` | 265 | 1 | 0 | `f9338c6cc7c4430c64c76d7431e1d0ea902119f1a92b6cac8f04a1a5b6798410` |
+| `gic-pr15-ci-9e852336031aaf62` | 148 | 1 | 0 | `b23444d3ca1a07b80393779b9228bb973cf43379536869987bb6c332bb41e3b3` |
+| `gic-pr15-ci-ab0002edcf0f2bd0` | 366 | 2 | 0 | `42f7e3f0104a6eff3bc21043850173885d367a01b9a81d2da4f374520d177d01` |
+| `gic-pr15-ci-aeb66c00c38d3de2` | 362 | 0 | 0 | `360a22e9ab17069312d45a7bee61be1f6d71da5108db7218c5da6b970b7fa334` |
+| `gic-pr15-ci-b2cc3f41db2a577b` | 270 | 1 | 0 | `82e0f878f9a70530625894c12adff5e1f8a5b5f75cc34bc13de15e0109f7277a` |
+| `gic-pr15-ci-bd3ab8141fc393e4` | 205 | 0 | 0 | `59b677cbc9f6a1ef33ba86549bb76a7fb6eda5f85ff1343be245b6aa663182e8` |
+| `gic-pr15-ci-c01e446814a19af8` | 357 | 5 | 0 | `2ff46482114699d8a3980e6e69d82c7275d2f0b77c818242e048ed301482fe41` |
+
+The b2cc3f41db2a577b batch passed all five joined parameters (four-condition
+positive; intentional failed-condition export; no-answer/checkpoint stop; attach
+output denial; export output denial), but raw pytest remained failed by the scratch
+detached-switch denial. Four full closed trees and all five terminal/trace/candidate
+summaries were collected; the late additional fifth-tree capture stopped before
+Docker dispatch after normal completion. Earlier 1422d5dbe1b2b5a3 retains five full
+closed trees at its separate source binding. No missing original is reconstructed.
+The final 59693514fbcc7d4c component run passed 271 tests, zero skips, source unchanged,
+on image sha256:0928021614063435abaebc9771282edd681aa7dfe1e2960c1a86dda61b174a3a.
+The latest five joined passes used image
+sha256:159d676bb3d2f85a6167b5a0006137ac70cce5ef6585d13c9b6cc2cd42c96fcb.
+They are not exact-head validation of a later checkpoint or the newer image.
+Ruff/format/diff checks passed on 16 changed Python files and targeted mypy passed
+on three production modules; these are native source-only checks, not native product
+validation. Required Python/uv/Quarto and dependency locks remain unchanged.
+
+R1–R6 remain PARTIAL. Concrete next seam: campaign-wide provider-entry/final cleanup
+and control-journal publications outside the condition callback; CleanupExecutionRequest
+currently carries no writer observer, and retained cleanup_transaction/provider
+closeout_campaign need shared admission without another policy owner. Full controller
+cleanup-prefix/corruption/idempotence and timeout/disconnect/reaping matrices, plus
+causal phase/runtime hook-disable coverage, remain incomplete. The historical T07
+launch-request missing in the full pilot module stays explicit; it is not a new
+deselection and inherited status has not been established by exact-base parity.
+
+No final implementation ancestor, noncircular V16 receipt descendants, exact-commit
+make ci-check, full per-node parity, control/privacy/site or required native-only
+product gates are claimed. The exact five existing private deselections are unchanged.
+This next ordinary named-file checkpoint preserves engineering work; only its added
+ledger text differs from the final focused source snapshot. Product remote/PR remain
+a98b4b875ab4d101709d62bc7222b5c90681a893, draft/open/unmerged, auto-merge disabled;
+no product push is authorized by these partial results. Private handoff/closeout
+records remain outside this source identity. Independent review PENDING;
+t09_remote_execution_bridge_review_repair_blocked.

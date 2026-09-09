@@ -2363,6 +2363,16 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         )
         terminal = None
         error = None
+        from giclab.control.production import _host_module
+
+        host = _host_module(self.repository)
+        remote_root = Path(self.transfer_request.binding.remote_root)
+        control_roots = (
+            remote_root / self.contract.control_root_name,
+            self.transfer_request.provider_entry_receipt_path.parent.parent
+            / "preflight-cleanup-state",
+        )
+        control_before = sum(host.full_attempt_tree_usage(p).bytes for p in control_roots)
         with stderr_path.open("xb", buffering=0) as stderr:
             process = subprocess.Popen(
                 [
@@ -2466,7 +2476,12 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             Path(self.transfer_request.binding.remote_root) / Path(request.raw_output_root).parent
         )
         if remote_attempt.exists():
-            total = _host_module(self.repository).full_attempt_tree_usage(remote_attempt).bytes
+            control_after = sum(host.full_attempt_tree_usage(p).bytes for p in control_roots)
+            if control_after < control_before:
+                raise RuntimeError("retained condition removed control occupancy")
+            total = (
+                host.full_attempt_tree_usage(remote_attempt).bytes + control_after - control_before
+            )
             observer.retain_closed_remote_output(total_bytes=total)
 
         # Preserve the bounded carrier diagnostic separately from sealed raw.
@@ -2730,8 +2745,12 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             package_commit=request.package_commit,
             condition_manifest=manifest,
         )
-        if completion["process_exit_code"] == 0:
-            raise RuntimeError("interrupted carrier cannot promote a successful workload")
+        if (
+            completion["infrastructure_invalid"] is not True
+            or completion["evaluator_eligible"] is not False
+            or completion["evidence_authority"] != "essential-infrastructure-failure"
+        ):
+            raise RuntimeError("interrupted carrier lacks validated essential authority")
         self._export_retained_attempt(request, observer)
         attempt = (self._root / request.raw_output_root).parent
         retained = attempt / "essential-failure"

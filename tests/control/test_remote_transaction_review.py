@@ -92,6 +92,7 @@ def test_r6_essential_copy_consumes_prefunded_capacity_after_transport_failure(
     observer.reserve_output_bytes(total_bytes=512)
     bridge = object.__new__(host._ConditionSessionBridge)
     bridge.attempt_root = tmp_path
+    bridge.control_roots = ()
 
     def no_transport_retry(count):
         pytest.fail("cancelled host requested new capacity from the failed transport")
@@ -2097,3 +2098,283 @@ def test_retained_openat_guard_tracks_real_directory_dup(tmp_path, binding):
         if duplicate is not None:
             os.close(duplicate)
         os.close(root)
+
+
+@pytest.mark.parametrize("role", ["pilot-start", "cleanup-journal", "control-json"])
+@pytest.mark.parametrize("denied", [False, True])
+def test_r6_condition_bridge_admits_control_roots_before_actual_writers(tmp_path, role, denied):
+    from dataclasses import replace
+    from threading import Event
+    from types import SimpleNamespace
+
+    from giclab.control.production import _host_module
+    from giclab.harness.sira_gate_a import ProviderBudgetExceeded
+    from giclab.harness.t09_cleanup_state import CleanupLifecycleStage
+    from giclab.harness.t09_provider_contracts import V11_PROVIDER_CONTRACT
+    from giclab.harness.t09_sira_pilot import initialize_pilot_state
+    from tests.test_t09_early_cleanup_state import IncrementingClock, initialize_journal
+
+    host = _host_module(ROOT)
+    boundary, observer = conformance._observer_for(_binding())
+    if denied:
+        boundary.condition_caps = replace(boundary.condition_caps, max_output_bytes=1)
+    control = tmp_path / "pilot-v11"
+    control.mkdir(mode=0o700)
+    state = control / "pilot-state.json"
+    initialize_pilot_state(
+        state,
+        provider_contract=V11_PROVIDER_CONTRACT,
+        execution_contract_sha256="a" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    bridge = object.__new__(host._ConditionSessionBridge)
+    bridge.attempt_root = tmp_path / "attempt"
+    bridge.control_roots = (control, journal.root)
+    bridge.cancelled = Event()
+    grants = []
+
+    def reserve(count):
+        grants.append(count)
+        observer.reserve_output_bytes(total_bytes=observer._remote_output_allowance + count)
+
+    bridge.host_output = SimpleNamespace(handed_off=False, reserve=reserve)
+    prior = {
+        str(p.relative_to(tmp_path)): p.read_bytes()
+        for root in bridge.control_roots
+        for p in root.rglob("*")
+        if p.is_file()
+    }
+    token = host._HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+    try:
+
+        def publish():
+            if role == "pilot-start":
+                host.reserve_condition_start(
+                    state,
+                    execution_contract_sha256="a" * 64,
+                    run_id=V11_PROVIDER_CONTRACT.run_ids[0],
+                    start_intent_sha256="2" * 64,
+                    before_write=host._HOST_OUTPUT_ADMISSION.get(),
+                )
+            elif role == "cleanup-journal":
+                host.early_cleanup_journal(
+                    SimpleNamespace(early_cleanup_journal=journal.root)
+                ).advance_lifecycle(CleanupLifecycleStage.PACKAGE_TRANSITION, clock=clock)
+            else:
+                host.write_exclusive(control / "new-control.json", {"actual": "control-write"})
+
+        if denied:
+            with pytest.raises(ProviderBudgetExceeded):
+                publish()
+            assert {
+                str(p.relative_to(tmp_path)): p.read_bytes()
+                for root in bridge.control_roots
+                for p in root.rglob("*")
+                if p.is_file()
+            } == prior
+        else:
+            publish()
+            after = sum(host.full_attempt_tree_usage(p).bytes for p in bridge.control_roots)
+            growth = after - sum(map(len, prior.values()))
+            observer.output_bytes(
+                total_bytes=growth, retained_output_bytes=observer._remote_output_allowance - growth
+            )
+            assert boundary.condition_observed_usage.output_bytes == growth > 0
+            assert observer._remote_output_allowance == sum(grants)
+        assert len(grants) == 1
+        with pytest.raises(host.T09HostError, match="declared writer roots"):
+            host.write_exclusive(tmp_path / "foreign/denied.json", {"forbidden": True})
+        assert not (tmp_path / "foreign").exists()
+    finally:
+        host._HOST_OUTPUT_ADMISSION.reset(token)
+
+
+def test_r6_shared_pilot_entry_establishes_and_reuses_one_accountant(tmp_path):
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    from giclab.control.production import ProductionCategory3World
+    from giclab.harness.t09_sira_pilot import (
+        initialize_pilot_state,
+        mark_empirical_entry,
+        mark_essential_failure_sealed,
+        reserve_condition_start,
+    )
+
+    boundary, template = conformance._observer_for(_binding())
+    world = object.__new__(ProductionCategory3World)
+    world.repository = ROOT
+    world._pilot_state = tmp_path / "pilot-state.json"
+    world._condition_observers = {}
+    # This primitive invokes the real production failure reservation. Its
+    # allowance comes from the unchanged pinned execution contract, rather than
+    # the deliberately smaller conformance-only observer fixture. The separate
+    # insufficient-cap regression remains active and rejects that fixture.
+    execution = json.loads((ROOT / V16_PROVIDER_CONTRACT.execution_contract_path).read_bytes())
+    cap = execution["runtime_limits"]["max_output_bytes_per_attempt"]
+    world._runtime_budget = SimpleNamespace(
+        condition_caps={template.run_id: replace(boundary.condition_caps, max_output_bytes=cap)},
+        aggregate_caps=boundary.aggregate_caps,
+        model_revision=template.model_revision,
+        service_tier=template.service_tier,
+    )
+    world._campaign_deadline_monotonic = template.campaign_deadline_monotonic
+    world.clock = template.clock
+    world._seen_call_ids = {"prior-session-call"}
+    world._seen_logical_call_ids = {"prior-session-logical"}
+    world._aggregate_usage = boundary.aggregate_usage
+    world._aggregate_observed_usage = boundary.aggregate_observed_usage
+    world._accounting = {}
+    initialize_pilot_state(
+        world._pilot_state,
+        provider_contract=V16_PROVIDER_CONTRACT,
+        execution_contract_sha256="a" * 64,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    assert world._condition_observers == {}
+    with world._pilot_control_writer(template.run_id) as (admit, observed):
+        observer = world._condition_observers[template.run_id]
+        assert observer.prior_call_ids == frozenset({"prior-session-call"})
+        assert observer.prior_logical_call_ids == frozenset({"prior-session-logical"})
+        reserve_condition_start(
+            world._pilot_state,
+            execution_contract_sha256="a" * 64,
+            run_id=template.run_id,
+            start_intent_sha256="2" * 64,
+            before_write=admit,
+            after_output_write=observed,
+        )
+    written = world._pilot_state.stat().st_size
+    allowance = observer._controller_output_allowance
+    assert observer._controller_output_observed == written
+    assert world._condition_accountant(template.run_id) is observer
+    assert observer._controller_output_allowance == allowance
+    with world._pilot_control_writer(template.run_id) as (admit, observed):
+        mark_empirical_entry(
+            world._pilot_state,
+            execution_contract_sha256="a" * 64,
+            run_id=template.run_id,
+            supervised_release_receipt_sha256="3" * 64,
+            before_write=admit,
+            after_output_write=observed,
+        )
+    written += world._pilot_state.stat().st_size
+    assert world._condition_accountant(template.run_id) is observer
+    assert observer._controller_output_observed == written
+    assert world._aggregate_usage.output_bytes == observer._controller_output_allowance
+    assert world._aggregate_observed_usage.output_bytes == observer._controller_output_observed
+    assert observer._controller_output_allowance > observer._controller_output_observed
+
+    # The actual failure seal clears a longer start reservation. Occupancy
+    # shrinks, while the real write count remains positive and fully admitted.
+    before_seal = world._pilot_state.stat().st_size
+    with world._pilot_control_writer(template.run_id, failure=True) as (admit, observed):
+        mark_essential_failure_sealed(
+            world._pilot_state,
+            execution_contract_sha256="a" * 64,
+            run_id=template.run_id,
+            manifest_sha256="4" * 64,
+            receipt_sha256="5" * 64,
+            before_write=admit,
+            after_output_write=observed,
+        )
+    after_seal = world._pilot_state.stat().st_size
+    assert after_seal < before_seal
+    written += after_seal
+    assert observer._controller_output_observed == written
+    assert world._aggregate_observed_usage.output_bytes == written
+    assert observer._controller_output_allowance > written
+    # Inject a writer bypass to prove the independent census still rejects
+    # uncovered growth. This is detection coverage, not pre-growth prevention.
+    from giclab.control.adapters import AdapterFailure
+
+    with (
+        pytest.raises(AdapterFailure, match="occupancy do not reconcile"),
+        world._pilot_control_writer(template.run_id),
+    ):
+        (tmp_path / "injected-unadmitted.json").write_bytes(b"{}")
+
+
+def test_r6_failed_initial_control_reserve_cannot_be_reused(tmp_path):
+    from types import SimpleNamespace
+
+    from giclab.control.adapters import AdapterFailure
+    from giclab.control.production import ProductionCategory3World
+    from giclab.harness.sira_gate_a import ProviderBudgetExceeded
+
+    boundary, template = conformance._observer_for(_binding())
+    world = object.__new__(ProductionCategory3World)
+    world._condition_observers = {}
+    world._runtime_budget = SimpleNamespace(
+        condition_caps={template.run_id: boundary.condition_caps},
+        aggregate_caps=boundary.aggregate_caps,
+        model_revision=template.model_revision,
+        service_tier=template.service_tier,
+    )
+    world._campaign_deadline_monotonic = template.campaign_deadline_monotonic
+    world.clock = template.clock
+    world._seen_call_ids = set()
+    world._seen_logical_call_ids = set()
+    world._aggregate_usage = boundary.aggregate_usage
+    world._aggregate_observed_usage = boundary.aggregate_observed_usage
+    with pytest.raises(ProviderBudgetExceeded):
+        world._condition_accountant(template.run_id)
+    observed = world._condition_observers[template.run_id]
+    before = observed.boundary.accounting_document()
+    with pytest.raises(AdapterFailure, match="failed before its first writer"):
+        world._condition_accountant(template.run_id)
+    assert observed.boundary.accounting_document() == before
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("fault", ["none", "deny", "partial"])
+def test_r6_mutable_control_counts_actual_writes_instead_of_signed_occupancy(
+    tmp_path, monkeypatch, fault
+):
+    from giclab.harness import t09_sira_pilot as pilot
+
+    path = tmp_path / "state.json"
+    original = b"x" * 4096
+    path.write_bytes(original)
+    grants, writes = [], []
+
+    def admit(candidate, count):
+        assert candidate == path
+        assert path.read_bytes() == original
+        assert list(tmp_path.iterdir()) == [path]
+        if fault == "deny":
+            raise RuntimeError("synthetic pre-growth denial")
+        grants.append(count)
+
+    actual_write = pilot.os.write
+
+    def write(fd, data):
+        if fault == "partial":
+            if writes:
+                raise OSError("synthetic interrupted admitted write")
+            data = data[:7]
+        return actual_write(fd, data)
+
+    monkeypatch.setattr(pilot.os, "write", write)
+    if fault == "none":
+        pilot._write_json_atomic(
+            path, {"small": True}, before_write=admit, after_output_write=writes.append
+        )
+        assert len(path.read_bytes()) < len(original)
+        assert sum(writes) == path.stat().st_size == sum(grants)
+    else:
+        with pytest.raises((RuntimeError, OSError), match="synthetic"):
+            pilot._write_json_atomic(
+                path, {"small": True}, before_write=admit, after_output_write=writes.append
+            )
+        assert path.read_bytes() == original
+        temporary = list(tmp_path.glob(".state.json.*.tmp"))
+        if fault == "deny":
+            assert not temporary and not grants and not writes
+        else:
+            assert len(temporary) == 1
+            assert temporary[0].stat().st_size == sum(writes) == 7 < sum(grants)

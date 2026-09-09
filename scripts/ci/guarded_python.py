@@ -30,6 +30,7 @@ environment.update(selected_environment)
 environment["COVERAGE_FILE"] = str(results / "coverage")
 environment["QUARTO_LOG"] = str(results / "quarto.log")
 environment["GICLAB_CI_GUARD_JOURNAL"] = str(journal)
+environment["GICLAB_CI_GIT_FIXTURE_ROOT"] = str(run / "pytest")
 environment["PYTHONPATH"] = os.pathsep.join(
     [str(Path(__file__).resolve().parent), environment.get("PYTHONPATH", "")]
 )

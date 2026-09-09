@@ -699,7 +699,10 @@ class EarlyCleanupState:
 class EarlyCleanupJournal:
     """Hash-chained version store for one exact provider ownership scope."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self, root: Path, *, before_write: Callable[[Path, int], None] | None = None
+    ) -> None:
+        self.before_write = before_write
         self.root = root
         self.versions = root / "versions"
         self.lock_path = root / ".lock"
@@ -722,6 +725,7 @@ class EarlyCleanupJournal:
         temporary_local_secret_locator: str | None = None,
         temporary_remote_secret_locator: str | None = None,
         clock: Callable[[], float] = time.time,
+        before_write: Callable[[Path, int], None] | None = None,
     ) -> EarlyCleanupJournal:
         if root.exists():
             raise EarlyCleanupStateError("early cleanup journal already exists")
@@ -730,7 +734,7 @@ class EarlyCleanupJournal:
         versions = root / "versions"
         versions.mkdir(mode=0o700, exist_ok=False)
         cls._fsync_directory(root)
-        journal = cls(root)
+        journal = cls(root, before_write=before_write)
         created = clock()
         provider_target = CleanupTarget(
             target_id="provider-instance",
@@ -942,6 +946,8 @@ class EarlyCleanupJournal:
         pending_name = f".{final_name}.pending.{uuid.uuid4().hex}"
         pending_path = self.versions / pending_name
         final_path = self.versions / final_name
+        if self.before_write is not None:
+            self.before_write(final_path, len(encoded))
         descriptor = os.open(
             pending_path,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -1320,6 +1326,8 @@ class EarlyCleanupJournal:
             if path.is_symlink() or path.read_bytes() != encoded:
                 raise EarlyCleanupStateError("basic cleanup closeout receipt drifted")
             return path
+        if self.before_write is not None:
+            self.before_write(path, len(encoded))
         descriptor = os.open(
             path,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),

@@ -57,6 +57,23 @@ def test_r2_actual_host_terminal_preserves_session_answer(
         run_id=run_id,
         package_commit="a98b4b875ab4d101709d62bc7222b5c90681a893",
     )
+    # The terminal-only producer still supplies real, exact campaign control
+    # ownership; adding writer admission must not bypass this retained loader.
+    journal = host.EarlyCleanupJournal.initialize(
+        tmp_path / "preflight-cleanup-state",
+        plan_id=contract.plan_id,
+        host_run_id=contract.host_run_id,
+        package_commit=args.package_commit,
+        plan_sha256="b" * 64,
+        provider_instance_id="terminal-fixture-instance",
+        provider_instance_identity_sha256="c" * 64,
+        provider_started_at_epoch=1.0,
+        launch_slot=1,
+        replacement_eligibility_sha256=None,
+        firewall_baseline_identity_sha256="d" * 64,
+        clock=lambda: 2.0,
+    )
+    args.early_cleanup_journal = journal.root
     request = SimpleNamespace(
         deterministic_fixture=False,
         inputs={},
@@ -284,7 +301,10 @@ def test_restoration_creates_private_intermediate_directories(terminal_host, tmp
 
 
 @pytest.mark.parametrize("answer", ["retained partial answer", None])
-def test_retained_essential_terminal_uses_sealed_process_and_session(tmp_path, monkeypatch, answer):
+@pytest.mark.parametrize("exit_code", [0, 9])
+def test_retained_essential_terminal_uses_sealed_process_and_session(
+    tmp_path, monkeypatch, answer, exit_code
+):
     # Reuse only the existing source-fixture builder; seal/terminal validation run.
     spec = importlib.util.spec_from_file_location(
         "retained_failure_sources", ROOT / "tests/test_t09_retry5.py"
@@ -332,7 +352,7 @@ def test_retained_essential_terminal_uses_sealed_process_and_session(tmp_path, m
         condition_plan_sha256="2" * 64,
         condition_argv_sha256="3" * 64,
         empirical_entry_crossed=True,
-        returncode=9,
+        returncode=exit_code,
         stop_reason="synthetic-infrastructure-stop",
         hard_cap_breached=False,
         tree_bytes_before_security_cleanup=0,
@@ -355,7 +375,7 @@ def test_retained_essential_terminal_uses_sealed_process_and_session(tmp_path, m
         package_commit="4" * 40,
         frozen_run_manifest_sha256="5" * 64,
         execution_contract_sha256="1" * 64,
-        returncode=9,
+        returncode=exit_code,
         stop_reason="synthetic-infrastructure-stop",
         hard_cap_breached=False,
         tree_bytes_before_security_cleanup=0,
@@ -371,7 +391,7 @@ def test_retained_essential_terminal_uses_sealed_process_and_session(tmp_path, m
     result = host.retained_essential_condition_completion(
         attempt_root=attempt, run_id=run_id, package_commit="4" * 40, condition_manifest=manifest
     )
-    assert result["process_exit_code"] == 9
+    assert result["process_exit_code"] == exit_code
     assert result["completed"] is (answer is not None)
     assert result["answer"] == answer
     assert result["infrastructure_invalid"] is True

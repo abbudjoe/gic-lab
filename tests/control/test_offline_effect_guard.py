@@ -170,3 +170,74 @@ else:
     assert result.returncode == 90
     assert result.stdout.strip() == "bound bulk mount unavailable; no internal fallback"
     assert not output.exists()
+
+
+def test_real_scratch_git_fixture_and_pathlike_arguments_keep_hooks_disabled(tmp_path):
+    from pathlib import Path
+
+    import offline_guard
+
+    assert tmp_path.is_relative_to(offline_guard._git_fixture_root)
+    repo = tmp_path / "repository"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", repo], check=True, timeout=5)
+    for key, value in (("user.name", "Guard Test"), ("user.email", "guard@example.invalid")):
+        subprocess.run(["git", "-C", repo, "config", key, value], check=True, timeout=5)
+    sentinel = tmp_path / "hook-executed"
+    hooks = repo / ".git/hooks"
+    hooks.mkdir()
+    hook = hooks / "post-commit"
+    hook.write_text("#!/bin/sh\nprintf escaped > '" + str(sentinel) + "'\n")
+    hook.chmod(0o700)
+    (repo / "source.txt").write_text("actual local fixture bytes\n")
+    subprocess.run(["git", "-C", repo, "add", repo / "source.txt"], check=True, timeout=5)
+    environment = dict(os.environ)
+    environment["GIT_INDEX_FILE"] = str(tmp_path / "foreign-index")
+    subprocess.run(
+        ["git", "-C", repo, "commit", "-q", "-m", "fixture"], env=environment, check=True, timeout=5
+    )
+    observed = subprocess.run(
+        ["git", "-C", repo, "show", "HEAD:source.txt"], capture_output=True, check=True, timeout=5
+    )
+    assert observed.stdout == b"actual local fixture bytes\n"
+    snapshot = subprocess.run(
+        ["git", "-C", repo, "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    ).stdout.strip()
+    checkout_hook = hooks / "post-checkout"
+    checkout_hook.write_bytes(hook.read_bytes())
+    checkout_hook.chmod(0o700)
+    subprocess.run(
+        ["git", "-C", repo, "switch", "--quiet", "--detach", snapshot], check=True, timeout=5
+    )
+    assert not sentinel.exists() and not Path(environment["GIT_INDEX_FILE"]).exists()
+
+
+@pytest.mark.parametrize(
+    "operation", ["fetch", "config-hook", "alternate-gitdir", "outside-root", "branch-switch"]
+)
+def test_scratch_git_guard_rejects_unbound_mutation_before_dispatch(tmp_path, operation):
+    from pathlib import Path
+
+    import offline_guard
+    from offline_guard import EffectDenied, expected_denial
+
+    repo = tmp_path / "repository"
+    repo.mkdir()
+    subprocess.run(["git", "-C", repo, "init", "-q"], check=True, timeout=5)
+    commands = {
+        "fetch": ["git", "-C", repo, "fetch", "https://example.invalid/never"],
+        "config-hook": ["git", "-C", repo, "config", "core.hooksPath", str(tmp_path)],
+        "alternate-gitdir": ["git", "--git-dir=" + str(repo / ".git"), "commit", "-m", "never"],
+        "outside-root": ["git", "-C", offline_guard._git_fixture_root.parent, "init", "-q"],
+        "branch-switch": ["git", "-C", repo, "switch", "--quiet", "main"],
+    }
+    with expected_denial("scratch-git-" + operation, "process:git"), pytest.raises(EffectDenied):
+        subprocess.run(commands[operation], check=False, timeout=5)
+    assert not (repo / ".git/FETCH_HEAD").exists()
+    assert not (repo / ".git/refs/heads/master").exists()
+    assert not (repo / ".git/refs/heads/main").exists()
+    assert Path(repo / ".git/config").read_text().find("hooksPath") == -1

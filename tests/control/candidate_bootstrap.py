@@ -671,7 +671,32 @@ def main() -> None:
                     assert transaction["condition_identities_consumed"] == [run_id]
                     assert not world._evaluations
                     failure = world._condition_failures[run_id]
-                    assert failure.process_exit_code != 0
+                    assert failure.retained_source is not None
+                    assert failure.retained_source.authority == "essential-infrastructure-failure"
+                    source = json.loads(failure.retained_source.completion_path.read_bytes())
+                    summary = json.loads(
+                        (
+                            failure.retained_source.manifest_path.parent
+                            / "essential-failure/failure-summary.json"
+                        ).read_bytes()
+                    )
+                    # Attach output denial is infrastructure-invalid even when
+                    # the workload has already exited zero. Preserve the actual
+                    # status/answer instead of manufacturing a nonzero exit.
+                    assert type(failure.process_exit_code) is int
+                    assert (
+                        failure.process_exit_code
+                        == source["process_exit_code"]
+                        == summary["process_exit_code"]
+                    )
+                    assert source["answer"] == failure.answer
+                    assert source["completed"] is failure.completed
+                    assert source["infrastructure_invalid"] is True
+                    assert source["evaluator_eligible"] is False
+                    assert summary["attempt_state"] == "consumed-infrastructure-invalid-unscored"
+                    assert summary["task_score"] is None
+                    assert summary["campaign_continuation_permitted"] is False
+                    assert not world._finalizations
                     assert world._essential_failure_exports[run_id].export_complete is True
                     assert (
                         world._essential_failure_exports[run_id].essential_total_bytes

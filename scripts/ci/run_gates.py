@@ -9,10 +9,12 @@ import argparse
 import hashlib
 import json
 import os
+import selectors
 import shutil
 import subprocess
 import sys
 import tarfile
+import time
 from pathlib import Path
 
 
@@ -37,7 +39,59 @@ def offline_paths(scratch: Path, results: Path) -> dict[str, str]:
     }
 
 
-def run(argv, *, cwd, output=None):
+def run(argv, *, cwd, output=None, output_cap=256 * 1024**2, timeout=21600):
+    if output is not None:
+        # Enforce the console ceiling before growth, not when exporting a log
+        # which may already have filled the declared results storage.
+        if type(output_cap) is not int or output_cap < 0:
+            raise ValueError("invalid gate console cap")
+        deadline = time.monotonic() + timeout
+        child = subprocess.Popen(
+            argv,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        assert child.stdout is not None
+        written = 0
+        try:
+            os.set_blocking(child.stdout.fileno(), False)
+            with selectors.DefaultSelector() as selector:
+                selector.register(child.stdout, selectors.EVENT_READ)
+                while selector.get_map():
+                    if time.monotonic() >= deadline:
+                        raise subprocess.TimeoutExpired(argv, timeout)
+                    for _key, _mask in selector.select(
+                        min(0.1, max(0, deadline - time.monotonic()))
+                    ):
+                        try:
+                            block = os.read(child.stdout.fileno(), 65536)
+                        except (BlockingIOError, InterruptedError):
+                            continue
+                        if not block:
+                            selector.unregister(child.stdout)
+                            continue
+                        if written + len(block) > output_cap:
+                            raise RuntimeError("gate console exceeds admitted byte cap")
+                        output.write(block)
+                        written += len(block)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(argv, timeout)
+            status = child.wait(timeout=remaining)
+            if status:
+                raise subprocess.CalledProcessError(status, argv)
+            return subprocess.CompletedProcess(argv, status)
+        finally:
+            if child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait(timeout=2)
+            child.stdout.close()
     return subprocess.run(
         argv,
         cwd=cwd,
@@ -45,7 +99,7 @@ def run(argv, *, cwd, output=None):
         stdout=output,
         stderr=subprocess.STDOUT,
         check=True,
-        timeout=21600,
+        timeout=timeout,
     )
 
 
@@ -164,6 +218,7 @@ def main():
     environment_guard = scratch / "guard-denials"
     environment_guard.mkdir(mode=0o700)
     os.environ["GICLAB_CI_GUARD_JOURNAL"] = str(environment_guard)
+    os.environ["GICLAB_CI_GIT_FIXTURE_ROOT"] = str(scratch / "pytest")
     os.environ["PYTHONPATH"] = "/opt/local-ci"
     if development:
         if any(

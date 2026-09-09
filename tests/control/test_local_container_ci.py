@@ -538,3 +538,96 @@ def test_inner_gate_checks_source_and_retains_failed_outcome(tmp_path, exit_code
     assert receipt["source_unchanged"] is not mutate
     assert receipt["gate"] == ("failed" if exit_code or mutate else "passed")
     assert (results / "gate.log").read_text().strip() == "bounded local gate output"
+
+
+@pytest.mark.parametrize("outcome", ["pass", "cap", "nonzero", "stall"])
+def test_gate_console_admits_before_growth_and_reaps_owned_child(tmp_path, outcome):
+    import os
+    import subprocess
+
+    spec = importlib.util.spec_from_file_location(
+        "bounded_ci_gate", SOURCE.with_name("run_gates.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    pid = tmp_path / "child-pid"
+    script = (
+        "import os,sys,time; from pathlib import Path; "
+        "Path('child-pid').write_text(str(os.getpid())); "
+        + {
+            "pass": "os.write(1,b'x'*64)",
+            "cap": "os.write(1,b'x'*65); time.sleep(5)",
+            "nonzero": "os.write(1,b'x'*3); sys.exit(7)",
+            "stall": "time.sleep(5)",
+        }[outcome]
+    )
+    log = tmp_path / "console"
+    with log.open("xb") as output:
+        if outcome == "pass":
+            assert (
+                module.run(
+                    [sys.executable, "-c", script],
+                    cwd=tmp_path,
+                    output=output,
+                    output_cap=64,
+                    timeout=2,
+                ).returncode
+                == 0
+            )
+        else:
+            expected = {
+                "cap": RuntimeError,
+                "nonzero": subprocess.CalledProcessError,
+                "stall": subprocess.TimeoutExpired,
+            }[outcome]
+            with pytest.raises(expected) as error:
+                module.run(
+                    [sys.executable, "-c", script],
+                    cwd=tmp_path,
+                    output=output,
+                    output_cap=64,
+                    timeout=0.5,
+                )
+            if outcome == "nonzero":
+                assert error.value.returncode == 7
+    assert log.stat().st_size <= 64
+    if outcome == "pass":
+        assert log.read_bytes() == b"x" * 64
+    elif outcome == "cap":
+        assert log.read_bytes() == b"x" * log.stat().st_size
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid.read_text()), 0)
+
+
+@pytest.mark.parametrize("profile", ["gic-pr15-ci", "gic-pr15-clean-ci"])
+def test_profile_selection_binds_all_private_management_sockets(tmp_path, monkeypatch, profile):
+    for name in ("home", "colima", "colima/_lima", "docker", "cache", "tmp"):
+        (tmp_path / name).mkdir(mode=0o700, parents=True, exist_ok=True)
+    monkeypatch.setattr(ci.os, "fsencode", lambda _: b"short-test-socket")
+    env = ci.colima_environment(tmp_path, tmp_path / "tools", profile=profile)
+    assert env["DOCKER_HOST"] == "unix://" + str(tmp_path / "colima" / profile / "docker.sock")
+    assert ci.colima_argv(Path("/protected/colima"), "ssh", profile=profile)[1:3] == [
+        "--profile",
+        profile,
+    ]
+    rules = [*ci.lima_isolation_override()["portForwards"]]
+    for guest, name in (
+        ("/var/run/docker.sock", "docker.sock"),
+        ("/var/run/containerd/containerd.sock", "containerd.sock"),
+    ):
+        rules.append(
+            {"guestSocket": guest, "hostSocket": str(tmp_path / "colima" / profile / name)}
+        )
+    value = {
+        "ssh": {"loadDotSSHPubKeys": False, "forwardAgent": False},
+        "mounts": [],
+        "portForwards": rules,
+    }
+    ci.validate_lima_isolation(value, tmp_path, profile=profile)
+    rules[1]["hostSocket"] = str(tmp_path / "colima/unselected/docker.sock")
+    with pytest.raises(ci.LocalCIError, match="management socket"):
+        ci.validate_lima_isolation(value, tmp_path, profile=profile)
+    with pytest.raises(ci.LocalCIError):
+        ci.colima_environment(tmp_path, tmp_path / "tools", profile="unapproved")
+    with pytest.raises(ci.LocalCIError):
+        ci.colima_argv(Path("/protected/colima"), "ssh", profile="unapproved")

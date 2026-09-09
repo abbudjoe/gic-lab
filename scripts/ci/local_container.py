@@ -66,19 +66,20 @@ class Limits:
 DEFAULT_LIMITS = Limits()
 
 
-def colima_argv(binary: Path, operation: str, arguments=()):
+def colima_argv(binary: Path, operation: str, arguments=(), *, profile=GIC_PROFILE):
     """Use Colima's global selector for every GIC operation, including SSH.
 
     Positional names are not profile selectors for all Colima subcommands.
     No caller may supply another selector or silently use the default profile.
     """
     if (
-        not binary.is_absolute()
+        profile not in {GIC_PROFILE, "gic-pr15-clean-ci"}
+        or not binary.is_absolute()
         or operation not in {"start", "stop", "status", "ssh"}
         or any(a in {"--profile", "-p"} or a.startswith("--profile=") for a in arguments)
     ):
         raise LocalCIError("explicit GIC profile operation required")
-    return [str(binary), "--profile", GIC_PROFILE, operation, *arguments]
+    return [str(binary), "--profile", profile, operation, *arguments]
 
 
 def colima_configuration():
@@ -154,20 +155,22 @@ def lima_isolation_override():
     }
 
 
-def validate_lima_isolation(value, protected_root: Path):
+def validate_lima_isolation(value, protected_root: Path, *, profile=GIC_PROFILE):
     """Inspect Lima's effective config, not just Colima's requested 'none'."""
     if value.get("mounts") or value.get("ssh", {}).get("loadDotSSHPubKeys") is not False:
         raise LocalCIError("Lima host mount or personal-key loading is forbidden")
     if value.get("ssh", {}).get("forwardAgent") is not False:
         raise LocalCIError("Lima agent forwarding is forbidden")
+    if profile not in {GIC_PROFILE, "gic-pr15-clean-ci"}:
+        raise LocalCIError("unapproved GIC profile")
     expected = lima_isolation_override()["portForwards"][0]
     blocked = False
     sockets = set()
     allowed = {
-        "/var/run/docker.sock": protected_root / "colima" / GIC_PROFILE / "docker.sock",
+        "/var/run/docker.sock": protected_root / "colima" / profile / "docker.sock",
         "/var/run/containerd/containerd.sock": protected_root
         / "colima"
-        / GIC_PROFILE
+        / profile
         / "containerd.sock",
     }
     for rule in value.get("portForwards", []):
@@ -188,8 +191,10 @@ def validate_lima_isolation(value, protected_root: Path):
         raise LocalCIError("Lima forwarding policy or management sockets incomplete")
 
 
-def colima_environment(protected_root: Path, tools: Path):
+def colima_environment(protected_root: Path, tools: Path, *, profile=GIC_PROFILE):
     """Explicit private homes; never inherit the owner's Docker/SSH environment."""
+    if profile not in {GIC_PROFILE, "gic-pr15-clean-ci"}:
+        raise LocalCIError("unapproved GIC profile")
     _assert_no_symlink_components(protected_root, allow_missing_leaf=False)
     for relative in ("home", "colima", "colima/_lima", "docker", "cache", "tmp"):
         path = protected_root / relative
@@ -202,7 +207,7 @@ def colima_environment(protected_root: Path, tools: Path):
             or meta.st_dev != protected_root.stat().st_dev
         ):
             raise LocalCIError("GIC runtime requires private protected homes")
-    socket_path = protected_root / "colima" / GIC_PROFILE / "docker.sock"
+    socket_path = protected_root / "colima" / profile / "docker.sock"
     if len(os.fsencode(socket_path)) >= 104:
         raise LocalCIError("GIC runtime Unix endpoint exceeds supported length")
     return {

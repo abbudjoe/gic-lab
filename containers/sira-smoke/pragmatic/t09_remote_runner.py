@@ -3772,6 +3772,7 @@ def mark_artifact_root_core_safety_stop(artifact_root: Path) -> None:
     mark_core_safety_stop(
         state_path,
         execution_contract_sha256=execution_contract_sha256,
+        before_write=_HOST_OUTPUT_ADMISSION.get(),
     )
 
 
@@ -4290,6 +4291,7 @@ def record_preflight_credential_scan(
         mark_actual_credential_exposure(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=execution_contract_sha256,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     removed: list[dict[str, object]] = []
     for relative in hits:
@@ -4365,7 +4367,9 @@ def early_cleanup_journal(args: argparse.Namespace) -> EarlyCleanupJournal:
     raw_path = getattr(args, "early_cleanup_journal", None)
     if not isinstance(raw_path, Path):
         raise T09HostError("early cleanup journal path is required")
-    journal = EarlyCleanupJournal(raw_path.resolve(strict=True))
+    journal = EarlyCleanupJournal(
+        raw_path.resolve(strict=True), before_write=_HOST_OUTPUT_ADMISSION.get()
+    )
     try:
         state = journal.load()
     except EarlyCleanupStateError as exc:
@@ -11102,6 +11106,7 @@ class _ConditionSessionBridge:
         binding: ConditionSessionBinding,
         transaction_root_identity: str,
         attempt_root: Path | None = None,
+        control_roots: tuple[Path, ...] = (),
     ) -> None:
         self.request = request
         self.binding = binding
@@ -11115,6 +11120,19 @@ class _ConditionSessionBridge:
         self.finished = False
         self.cancelled = threading.Event()
         self.attempt_root = attempt_root
+        self.control_roots = control_roots
+        roots = ((attempt_root,) if attempt_root is not None else ()) + control_roots
+        if len(set(roots)) != len(roots) or any(
+            not root.is_absolute()
+            or any(item.is_symlink() for item in (root, *root.parents))
+            or any(
+                root.is_relative_to(other) or other.is_relative_to(root)
+                for other in roots
+                if other is not root
+            )
+            for root in roots
+        ):
+            raise T09HostError("condition output roots overlap or changed ownership path")
         self.host_output: HostOutputAdmission | None = None
         self._relay_publication_remaining = 0
         self._host_publication_remaining = 0
@@ -11129,8 +11147,11 @@ class _ConditionSessionBridge:
             )
 
     def admit_path(self, path: Path, count: int) -> None:
-        if self.attempt_root is None or not path.is_relative_to(self.attempt_root):
-            return
+        if self.attempt_root is None:
+            return  # Component-only bridge without a host output channel.
+        roots = (self.attempt_root, *self.control_roots)
+        if not any(path.is_relative_to(root) for root in roots):
+            raise T09HostError("condition host output escaped its declared writer roots")
         if any(parent.is_symlink() for parent in (path, *path.parents)):
             raise T09HostError("host output path changed before admission")
         if self.host_output is None:
@@ -11770,6 +11791,7 @@ def publish_condition_start_reservation(
         execution_contract_sha256=execution_contract_sha256,
         run_id=run_id,
         start_intent_sha256=file_sha256(path),
+        before_write=_HOST_OUTPUT_ADMISSION.get(),
     )
     return path
 
@@ -12598,6 +12620,7 @@ def record_preentry_condition_failure(
         mark_actual_credential_exposure(
             pilot_state_path,
             execution_contract_sha256=execution_contract_sha256,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     removed: list[str] = []
     for relative in matching:
@@ -12616,11 +12639,13 @@ def record_preentry_condition_failure(
         mark_credential_cleanup_integrity_failure(
             pilot_state_path,
             execution_contract_sha256=execution_contract_sha256,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     if core_safety_stop_detected:
         mark_core_safety_stop(
             pilot_state_path,
             execution_contract_sha256=execution_contract_sha256,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     residue = [container_name] if container_absence_uncertain else []
     privacy = privacy_violations(attempt_root)
@@ -13657,6 +13682,7 @@ def seal_essential_failure(
             run_id=run_id,
             manifest_sha256=file_sha256(manifest_path),
             receipt_sha256=file_sha256(receipt_path),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         return manifest_path, receipt_path
     if receipt_path.exists() and not manifest_path.exists():
@@ -14188,6 +14214,7 @@ def seal_essential_failure(
         run_id=run_id,
         manifest_sha256=file_sha256(manifest_path),
         receipt_sha256=file_sha256(receipt_path),
+        before_write=_HOST_OUTPUT_ADMISSION.get(),
     )
     return manifest_path, receipt_path
 
@@ -15049,6 +15076,7 @@ def seal_raw_attempt(
         run_id=run_id,
         raw_manifest_sha256=file_sha256(raw_manifest_path),
         raw_receipt_sha256=file_sha256(raw_receipt_path),
+        before_write=_HOST_OUTPUT_ADMISSION.get(),
     )
     return raw_manifest_path, raw_receipt_path
 
@@ -15427,6 +15455,7 @@ def sealing_primitives_preflight(
         failure_state,
         execution_contract_sha256=execution_contract_sha256,
         run_id=qualification_run_id,
+        before_write=_HOST_OUTPUT_ADMISSION.get(),
     )
     _write_synthetic_runtime_cleanup(failure_raw)
     failure_detection = failure_supervisor / "core-artifact-detection.json"
@@ -15822,10 +15851,12 @@ def recover_condition_start_reservation(
             mark_core_safety_stop(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             mark_credential_cleanup_integrity_failure(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             uncertainty_recorded_at = utc_now()
             if uncertainty_path.is_file() and not uncertainty_path.is_symlink():
@@ -15956,6 +15987,7 @@ def recover_condition_start_reservation(
             mark_core_safety_stop(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
         credential = validate_secret(secret_file.resolve(strict=True))
         supplemental_detection_sha256 = retained_supplemental_sha256
@@ -15996,10 +16028,12 @@ def recover_condition_start_reservation(
                 mark_core_safety_stop(
                     state_path,
                     execution_contract_sha256=execution_contract_sha256,
+                    before_write=_HOST_OUTPUT_ADMISSION.get(),
                 )
                 mark_credential_cleanup_integrity_failure(
                     state_path,
                     execution_contract_sha256=execution_contract_sha256,
+                    before_write=_HOST_OUTPUT_ADMISSION.get(),
                 )
                 raise T09HostError(
                     "a second supervisor recovery core census drifted after publication"
@@ -16037,6 +16071,7 @@ def recover_condition_start_reservation(
                 mark_actual_credential_exposure(
                     state_path,
                     execution_contract_sha256=execution_contract_sha256,
+                    before_write=_HOST_OUTPUT_ADMISSION.get(),
                 )
             for relative in hits:
                 target = artifact_root / relative
@@ -16111,11 +16146,13 @@ def recover_condition_start_reservation(
             mark_credential_cleanup_integrity_failure(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
         if runtime_core_records or runtime_core_scan_integrity_failure:
             mark_core_safety_stop(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
         refreshed_state = load_object(state_path, label="recovery terminal state")
         actual_exposure = refreshed_state.get(
@@ -16272,6 +16309,7 @@ def recover_condition_start_reservation(
             state_path,
             execution_contract_sha256=execution_contract_sha256,
             run_id=run_id,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
 
 
@@ -16317,6 +16355,7 @@ def reclassify_unreleased_condition_transaction(
             run_id=run_id,
             start_intent_sha256=file_sha256(intent_path),
             supervised_release_receipt_sha256=file_sha256(release_receipt_path),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     elif simple_reservation:
         consume_published_unreleased_condition(
@@ -16325,6 +16364,7 @@ def reclassify_unreleased_condition_transaction(
             run_id=run_id,
             start_intent_sha256=file_sha256(intent_path),
             supervised_release_receipt_sha256=file_sha256(release_receipt_path),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     else:
         raise T09HostError("unreleased condition transaction phase is invalid")
@@ -16427,10 +16467,12 @@ def record_fresh_recovery_security_census(
             mark_core_safety_stop(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             mark_credential_cleanup_integrity_failure(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             raise T09HostError(
                 "a second post-terminal core census drifted after supplemental publication"
@@ -16453,6 +16495,7 @@ def record_fresh_recovery_security_census(
         mark_core_safety_stop(
             state_path,
             execution_contract_sha256=execution_contract_sha256,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     core_outcome = cleanup_core_artifacts(artifact_root, core_records)
     effective_destruction = (
@@ -16480,6 +16523,7 @@ def record_fresh_recovery_security_census(
             mark_actual_credential_exposure(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
         for relative in hits:
             target = artifact_root / relative
@@ -16502,6 +16546,7 @@ def record_fresh_recovery_security_census(
             mark_credential_cleanup_integrity_failure(
                 state_path,
                 execution_contract_sha256=execution_contract_sha256,
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
     finally:
         credential = b""
@@ -16712,6 +16757,7 @@ def recover_attempt_seal(args: argparse.Namespace) -> dict[str, object]:
             run_id=args.run_id,
             raw_manifest_sha256=file_sha256(raw_manifest_path),
             raw_receipt_sha256=file_sha256(raw_receipt_path),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         return {
             "run_id": args.run_id,
@@ -17354,6 +17400,7 @@ def execute_condition(
                     execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
                     run_id=args.run_id,
                     start_intent_sha256=file_sha256(intent_path),
+                    before_write=_HOST_OUTPUT_ADMISSION.get(),
                 )
             record_preentry_condition_failure(
                 pilot_state_path=_pilot_root(artifact_root, runtime_contract) / "pilot-state.json",
@@ -17400,6 +17447,7 @@ def execute_condition(
                     execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
                     run_id=args.run_id,
                     start_intent_sha256=file_sha256(intent_path),
+                    before_write=_HOST_OUTPUT_ADMISSION.get(),
                 )
         recover_condition_start_reservation(
             artifact_root=artifact_root,
@@ -17450,12 +17498,14 @@ def execute_condition(
             mark_core_safety_stop(
                 _pilot_root(artifact_root) / "pilot-state.json",
                 execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             raise T09HostError("pre-release core scan was not reconstructable") from None
         if pre_release_cores:
             mark_core_safety_stop(
                 _pilot_root(artifact_root) / "pilot-state.json",
                 execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             raise T09HostError("a prohibited core artifact blocked condition release")
         credential = validate_secret(args.secret_file.resolve(strict=True))
@@ -17468,6 +17518,7 @@ def execute_condition(
             mark_actual_credential_exposure(
                 _pilot_root(artifact_root) / "pilot-state.json",
                 execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+                before_write=_HOST_OUTPUT_ADMISSION.get(),
             )
             for relative in pre_release_hits:
                 target = artifact_root / relative
@@ -17526,6 +17577,7 @@ def execute_condition(
             supervised_release_receipt_sha256=file_sha256(
                 supervisor_root / "supervised-release.json"
             ),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         cleanup_journal.advance_lifecycle_at_least(CleanupLifecycleStage.EMPIRICAL_ENTRY)
         write_bytes_exclusive(raw_root / ".giclab-release", b"release\n")
@@ -17684,10 +17736,12 @@ def execute_condition(
         mark_core_safety_stop(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         mark_credential_cleanup_integrity_failure(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         write_exclusive(
             supervisor_root / "container-removal-uncertain.json",
@@ -17752,6 +17806,7 @@ def execute_condition(
         mark_core_safety_stop(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     core_destruction_verified = not core_scan_integrity_failure
     core_cleanup_error_type: str | None = None
@@ -17766,6 +17821,7 @@ def execute_condition(
         mark_core_safety_stop(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         core_cleanup_outcome = cleanup_core_artifacts(artifact_root, core_records)
         core_destruction_verified = core_cleanup_outcome.destruction_verified
@@ -17848,6 +17904,7 @@ def execute_condition(
         mark_core_safety_stop(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         infrastructure_stop_requires_essential_seal = True
         stop_reason = stop_reason or "runtime-writable-root-core-incident"
@@ -17864,6 +17921,7 @@ def execute_condition(
         mark_actual_credential_exposure(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     removed_secret_artifacts: list[str] = []
     for relative in hits:
@@ -17904,11 +17962,13 @@ def execute_condition(
         mark_actual_credential_exposure(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     if runtime_secret_cleanup_malformed:
         mark_credential_cleanup_integrity_failure(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     try:
         residue = _owned_containers_for(prefix, runtime_contract)
@@ -18090,6 +18150,7 @@ def execute_condition(
             _pilot_root(artifact_root) / "pilot-state.json",
             execution_contract_sha256=cast(str, state["execution_contract_sha256"]),
             run_id=args.run_id,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         seal_essential_failure(
             artifact_root=artifact_root,
@@ -18979,6 +19040,7 @@ def reject_and_remove_finalized_core_artifacts(
         mark_core_safety_stop(
             _pilot_root(artifact_root, contract) / "pilot-state.json",
             execution_contract_sha256=execution_contract_sha256,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
         receipt_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         detection_sha256 = persist_core_detection_before_cleanup(
@@ -19013,6 +19075,7 @@ def reject_and_remove_finalized_core_artifacts(
     mark_core_safety_stop(
         _pilot_root(artifact_root, contract) / "pilot-state.json",
         execution_contract_sha256=execution_contract_sha256,
+        before_write=_HOST_OUTPUT_ADMISSION.get(),
     )
     detection_sha256 = persist_core_detection_before_cleanup(
         receipt_path=receipt_path.with_name("core-artifact-detection.json"),
@@ -22046,6 +22109,7 @@ def restore_verified_attempt_export(
             run_id=run_id,
             raw_manifest_sha256=file_sha256(attempt_root / "raw-attempt-manifest.json"),
             raw_receipt_sha256=file_sha256(attempt_root / "raw-attempt-complete.json"),
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     else:
         validate_essential_failure_seal(
@@ -22061,6 +22125,7 @@ def restore_verified_attempt_export(
             run_id=run_id,
             manifest_sha256=restored_essential_binding["manifest_sha256"],
             receipt_sha256=restored_essential_binding["receipt_sha256"],
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     require_attempt_export_acknowledgement(
         restoration_root,
@@ -25195,6 +25260,7 @@ def cleanup(args: argparse.Namespace) -> Path | None:
         mark_core_safety_stop(
             state_path,
             execution_contract_sha256=execution_for_core,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     global_supplemental_detection_sha256 = retained_global_supplemental_sha256
     if global_detection_path.is_file():
@@ -25250,6 +25316,7 @@ def cleanup(args: argparse.Namespace) -> Path | None:
         mark_core_safety_stop(
             state_path,
             execution_contract_sha256=execution_for_core,
+            before_write=_HOST_OUTPUT_ADMISSION.get(),
         )
     image_removed = False
     image_absent_after_cleanup = False
@@ -25429,6 +25496,7 @@ def cleanup(args: argparse.Namespace) -> Path | None:
                 mark_actual_credential_exposure(
                     state_path,
                     execution_contract_sha256=execution_sha256,
+                    before_write=_HOST_OUTPUT_ADMISSION.get(),
                 )
                 retained_actual_exposure = True
                 retained_safety_stop = True
@@ -25463,6 +25531,7 @@ def cleanup(args: argparse.Namespace) -> Path | None:
                     mark_credential_cleanup_integrity_failure(
                         state_path,
                         execution_contract_sha256=execution_sha256,
+                        before_write=_HOST_OUTPUT_ADMISSION.get(),
                     )
         remaining_hits = ["<redacted-exact-secret-bearing-artifact>"] if remaining_hits_raw else []
         hits = ["<redacted-exact-secret-bearing-artifact>"] * len(hits_raw)
@@ -27341,10 +27410,9 @@ def preserve_retained_condition_failure(
     if source is None or (bridge is None) == (partial is None) or request.retry_count != 0:
         raise T09HostError("retained failure requires one original source and transport role")
     if partial is not None and (
-        source.authority != "essential-infrastructure-failure"
-        or request.process_exit_code in (None, 0)
+        source.authority != "essential-infrastructure-failure" or request.process_exit_code is None
     ):
-        raise T09HostError("interrupted transport cannot authorize successful evidence")
+        raise T09HostError("interrupted transport requires its original essential process status")
     held_root = hold_transaction_root(execution.transaction_root)
     held: tuple[HeldArtifact, ...] = ()
     transport_held: tuple[HeldArtifact, ...] = ()
@@ -28220,6 +28288,10 @@ def condition_session(args: argparse.Namespace) -> None:
         ),
         transaction_root_identity=transaction_identity,
         attempt_root=attempt_root,
+        control_roots=(
+            _pilot_root(artifact_root, contract),
+            early_cleanup_journal(args).root,
+        ),
     )
     admission_token = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
     try:

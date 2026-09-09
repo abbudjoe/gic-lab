@@ -1336,6 +1336,8 @@ def initialize_pilot_state(
     lambda_started_at_epoch: float,
     prior_campaign_lambda_duration_seconds: float = 0.0,
     prior_campaign_lambda_cost_usd: float = 0.0,
+    before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Create the one sequential attempt ledger during an authorized preflight."""
 
@@ -1387,8 +1389,9 @@ def initialize_pilot_state(
         "core_safety_stop_detected": False,
         "essential_failure_seals": {},
     }
-    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-    _write_json_atomic(path, document)
+    _write_json_atomic(
+        path, document, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 def transition_zero_usage_preflight_state(
@@ -1468,6 +1471,7 @@ def _write_json_atomic(
     document: Mapping[str, object],
     *,
     before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Replace one mutable control document and durably commit its directory entry."""
 
@@ -1486,6 +1490,8 @@ def _write_json_atomic(
             if written <= 0:
                 raise OSError("atomic control write made no progress")
             offset += written
+            if after_output_write is not None:
+                after_output_write(written)
         os.fsync(descriptor)
         os.close(descriptor)
         descriptor = -1
@@ -1549,6 +1555,7 @@ def _write_json_exclusive(
     document: Mapping[str, object],
     *,
     before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
     if before_write is not None:
@@ -1566,6 +1573,8 @@ def _write_json_exclusive(
             if written <= 0:
                 raise T09PilotError("selection receipt write made no progress")
             offset += written
+            if after_output_write is not None:
+                after_output_write(written)
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
@@ -2003,6 +2012,8 @@ def mark_empirical_entry(
     execution_contract_sha256: str,
     run_id: str,
     supervised_release_receipt_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Consume one identity before releasing its credential-free entrypoint."""
 
@@ -2072,7 +2083,9 @@ def mark_empirical_entry(
         "phase": "empirical-state-committed",
         "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
     }
-    _write_json_atomic(path, state)
+    _write_json_atomic(
+        path, state, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 def reserve_condition_start(
@@ -2081,6 +2094,8 @@ def reserve_condition_start(
     execution_contract_sha256: str,
     run_id: str,
     start_intent_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Durably reserve one identity immediately before Docker start."""
 
@@ -2101,7 +2116,9 @@ def reserve_condition_start(
         "run_id": run_id,
         "start_intent_sha256": start_intent_sha256,
     }
-    _write_json_atomic(path, state)
+    _write_json_atomic(
+        path, state, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 def rollback_never_started_condition_reservation(
@@ -2110,6 +2127,7 @@ def rollback_never_started_condition_reservation(
     execution_contract_sha256: str,
     run_id: str,
     start_intent_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Clear only an exact reservation after Docker absence and non-start are proven."""
 
@@ -2129,7 +2147,7 @@ def rollback_never_started_condition_reservation(
     ):
         raise T09PilotError("never-started reservation rollback authority drifted")
     state["condition_start_reservation"] = None
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def confirm_supervised_empirical_entry(
@@ -2166,6 +2184,7 @@ def mark_nonempirical_infrastructure_attempt_consumed(
     *,
     execution_contract_sha256: str,
     run_id: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Consume a started condition identity whose cap failed before a task action."""
 
@@ -2190,7 +2209,7 @@ def mark_nonempirical_infrastructure_attempt_consumed(
         raise T09BudgetExceeded("non-empirical failure would violate frozen attempt order")
     state["nonempirical_infrastructure_attempts_consumed"] = [run_id]
     state["condition_start_reservation"] = None
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def reclassify_unreleased_empirical_entry(
@@ -2200,6 +2219,7 @@ def reclassify_unreleased_empirical_entry(
     run_id: str,
     start_intent_sha256: str,
     supervised_release_receipt_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Close the crash window where state committed but release never became visible."""
 
@@ -2242,7 +2262,7 @@ def reclassify_unreleased_empirical_entry(
         "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
     }
     state["unreleased_supervised_release_reclassifications"] = reclassifications
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def consume_published_unreleased_condition(
@@ -2252,6 +2272,7 @@ def consume_published_unreleased_condition(
     run_id: str,
     start_intent_sha256: str,
     supervised_release_receipt_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Consume a started condition whose release receipt preceded a failed state commit."""
 
@@ -2285,13 +2306,14 @@ def consume_published_unreleased_condition(
         "supervised_release_receipt_sha256": supervised_release_receipt_sha256,
     }
     state["unreleased_supervised_release_reclassifications"] = reclassifications
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def mark_actual_credential_exposure(
     path: Path,
     *,
     execution_contract_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Monotonically close campaign admission after an exact secret match."""
 
@@ -2303,13 +2325,14 @@ def mark_actual_credential_exposure(
         return
     state["actual_credential_exposure_detected"] = True
     state["credential_safety_stop_detected"] = True
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def mark_credential_cleanup_integrity_failure(
     path: Path,
     *,
     execution_contract_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Stop admission when credential cleanup cannot be reconstructed."""
 
@@ -2317,13 +2340,14 @@ def mark_credential_cleanup_integrity_failure(
     if state.get("credential_safety_stop_detected") is True:
         return
     state["credential_safety_stop_detected"] = True
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def mark_core_safety_stop(
     path: Path,
     *,
     execution_contract_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
 ) -> None:
     """Monotonically close campaign admission after any prohibited core artifact."""
 
@@ -2331,7 +2355,7 @@ def mark_core_safety_stop(
     if state.get("core_safety_stop_detected") is True:
         return
     state["core_safety_stop_detected"] = True
-    _write_json_atomic(path, state)
+    _write_json_atomic(path, state, before_write=before_write)
 
 
 def mark_essential_failure_sealed(
@@ -2341,6 +2365,8 @@ def mark_essential_failure_sealed(
     run_id: str,
     manifest_sha256: str,
     receipt_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Bind one reconstructable failure seal without making it evaluator-valid."""
 
@@ -2369,7 +2395,9 @@ def mark_essential_failure_sealed(
         if release_transaction.get("phase") != "empirical-state-committed":
             raise T09PilotError("essential seal found an incomplete condition-start transaction")
         state["condition_start_reservation"] = None
-    _write_json_atomic(path, state)
+    _write_json_atomic(
+        path, state, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 def mark_raw_attempt_complete(
@@ -2379,6 +2407,8 @@ def mark_raw_attempt_complete(
     run_id: str,
     raw_manifest_sha256: str,
     raw_receipt_sha256: str,
+    before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Seal the consumed condition as reconstructable before downstream processing."""
 
@@ -2422,7 +2452,9 @@ def mark_raw_attempt_complete(
     ):
         raise T09PilotError("raw completion lacks its empirical release transaction")
     state["condition_start_reservation"] = None
-    _write_json_atomic(path, state)
+    _write_json_atomic(
+        path, state, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 def mark_attempt_completed(
@@ -2550,6 +2582,7 @@ def record_first_pair_checkpoint(
     decision: Mapping[str, object],
     decided_at_epoch: float,
     before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Seal the one automatic checkpoint; only a passing decision opens Task B."""
 
@@ -2594,12 +2627,9 @@ def record_first_pair_checkpoint(
     ):
         raise T09PilotError("checkpoint pair-wall origin binding is invalid")
     decision_path = path.parent / "first-pair-checkpoint-decision.json"
-    if before_write is not None:
-        before_write(
-            decision_path,
-            len((json.dumps(decision, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()),
-        )
-    _write_json_exclusive(decision_path, decision)
+    _write_json_exclusive(
+        decision_path, decision, before_write=before_write, after_output_write=after_output_write
+    )
     decision_sha256 = canonical_sha256(decision)
     decision_file_sha256 = file_sha256(decision_path)
     state["first_pair_decision"] = result
@@ -2633,10 +2663,9 @@ def record_first_pair_checkpoint(
     }
     if result == "continue-to-task-b":
         state["second_pair_started_at_epoch"] = decided_at_epoch
-    if before_write is not None:
-        # Reserve the full temporary file while the previous state still exists.
-        before_write(path, len((json.dumps(state, indent=2, sort_keys=True) + "\n").encode()))
-    _write_json_atomic(path, state)
+    _write_json_atomic(
+        path, state, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 @dataclass(frozen=True, slots=True)
