@@ -27,6 +27,7 @@ from giclab.harness.campaign_output import (
     CampaignWriterRole,
     admit_campaign_write,
     observe_campaign_write,
+    prepare_campaign_temporary,
     verify_campaign_write,
 )
 
@@ -522,6 +523,7 @@ class EarlyCleanupState:
     terminal_cleanup_disposition: TerminalCleanupDisposition
     # None preserves an older journal whose writer did not track this boundary.
     freeze_publication_started: bool | None = None
+    freeze_publication_aborted: bool | None = None
 
     def to_document(self) -> dict[str, object]:
         return {
@@ -552,6 +554,11 @@ class EarlyCleanupState:
             **(
                 {"freeze_publication_started": self.freeze_publication_started}
                 if self.freeze_publication_started is not None
+                else {}
+            ),
+            **(
+                {"freeze_publication_aborted": self.freeze_publication_aborted}
+                if self.freeze_publication_aborted is not None
                 else {}
             ),
         }
@@ -589,6 +596,10 @@ class EarlyCleanupState:
             expected.add("freeze_publication_started")
             if type(document["freeze_publication_started"]) is not bool:
                 raise EarlyCleanupStateError("freeze publication tracking is malformed")
+        if "freeze_publication_aborted" in document:
+            expected.add("freeze_publication_aborted")
+            if type(document["freeze_publication_aborted"]) is not bool:
+                raise EarlyCleanupStateError("freeze publication abort tracking is malformed")
         if set(document) != expected:
             raise EarlyCleanupStateError("early cleanup state fields drifted")
         if (
@@ -659,6 +670,9 @@ class EarlyCleanupState:
             freeze_publication_started=cast(
                 bool | None, document.get("freeze_publication_started")
             ),
+            freeze_publication_aborted=cast(
+                bool | None, document.get("freeze_publication_aborted")
+            ),
         )
         state.validate()
         return state
@@ -675,6 +689,11 @@ class EarlyCleanupState:
             or self.recorded_at_epoch < self.created_at_epoch
         ):
             raise EarlyCleanupStateError("early cleanup state identity or chronology drifted")
+        if self.freeze_publication_aborted is True and (
+            self.freeze_publication_started is not True
+            or self.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+        ):
+            raise EarlyCleanupStateError("aborted publication contradicts freeze/entry history")
         target_ids = [target.target_id for target in self.targets]
         if len(target_ids) != len(set(target_ids)) or "provider-instance" not in target_ids:
             raise EarlyCleanupStateError("cleanup targets are duplicated or lack the provider")
@@ -911,6 +930,7 @@ class EarlyCleanupJournal:
             cleanup_attempts=after.cleanup_attempts,
             terminal_cleanup_disposition=after.terminal_cleanup_disposition,
             freeze_publication_started=after.freeze_publication_started,
+            freeze_publication_aborted=after.freeze_publication_aborted,
         )
         if immutable_before != after:
             raise EarlyCleanupStateError("early cleanup immutable identity changed")
@@ -931,6 +951,11 @@ class EarlyCleanupJournal:
             and after.freeze_publication_started is not True
         ):
             raise EarlyCleanupStateError("freeze publication tracking moved backwards")
+        if after.freeze_publication_aborted is not before.freeze_publication_aborted and (
+            after.freeze_publication_aborted is not True
+            or before.freeze_publication_started is not True
+        ):
+            raise EarlyCleanupStateError("freeze publication abort tracking moved backwards")
         before_targets = {target.target_id: target for target in before.targets}
         after_targets = {target.target_id: target for target in after.targets}
         if not before_targets.keys() <= after_targets.keys():
@@ -958,6 +983,7 @@ class EarlyCleanupJournal:
         )
         if allowance is None and self.before_write is not None:
             self.before_write(final_path, len(encoded))
+        prepare_campaign_temporary(allowance, pending_path)
         descriptor = os.open(
             pending_path,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -1020,6 +1046,7 @@ class EarlyCleanupJournal:
         cleanup_attempts: tuple[CleanupAttempt, ...] | None = None,
         terminal_cleanup_disposition: TerminalCleanupDisposition | None = None,
         freeze_publication_started: bool | None = None,
+        freeze_publication_aborted: bool | None = None,
     ) -> EarlyCleanupState:
         successor = replace(
             state,
@@ -1041,6 +1068,11 @@ class EarlyCleanupJournal:
                 freeze_publication_started
                 if freeze_publication_started is not None
                 else state.freeze_publication_started
+            ),
+            freeze_publication_aborted=(
+                freeze_publication_aborted
+                if freeze_publication_aborted is not None
+                else state.freeze_publication_aborted
             ),
         )
         successor.validate()
@@ -1152,6 +1184,35 @@ class EarlyCleanupJournal:
                 raise EarlyCleanupStateError("cleanup does not authorize freeze publication")
             successor = self._next_state(
                 state, previous_sha256, clock=clock, freeze_publication_started=True
+            )
+            self._append_unlocked(successor)
+            return successor
+
+    def abort_unpublished_freeze(
+        self, *, clock: Callable[[], float] = time.time
+    ) -> EarlyCleanupState:
+        """Publisher-only failure continuation; a missing file alone is no proof.
+
+        The exclusive writer calls this only before successful publication. An
+        abrupt loss without this durable continuation remains unresolved.
+        """
+        with self._lock():
+            state, previous_sha256 = self._load_unlocked()
+            if (
+                state.freeze_publication_started is not True
+                or state.freeze_publication_aborted is True
+                or state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+                or state.lifecycle_stage
+                in {
+                    CleanupLifecycleStage.CLEANUP_IN_PROGRESS,
+                    CleanupLifecycleStage.CLEANUP_FINISHED,
+                }
+            ):
+                raise EarlyCleanupStateError(
+                    "unpublished freeze abort lacks a live publication intent"
+                )
+            successor = self._next_state(
+                state, previous_sha256, clock=clock, freeze_publication_aborted=True
             )
             self._append_unlocked(successor)
             return successor

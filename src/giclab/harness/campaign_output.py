@@ -32,6 +32,65 @@ class CampaignWriterRole(StrEnum):
     PHASE_CONTROL = "phase-control"
 
 
+@dataclass(frozen=True, slots=True)
+class CampaignFileIdentity:
+    device: int
+    inode: int
+    size: int
+    mtime_ns: int
+    ctime_ns: int
+
+
+def _campaign_file_identity(path: Path) -> CampaignFileIdentity | None:
+    """Hold every parent; do not dereference a replacement name or final link."""
+    if not path.is_absolute() or ".." in path.parts:
+        raise RuntimeError("campaign census path is not canonical")
+    directory = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        for component in path.parts[1:-1]:
+            child = os.open(
+                component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
+            )
+            os.close(directory)
+            directory = child
+        named = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+        if not stat.S_ISREG(named.st_mode) or named.st_nlink != 1 or named.st_uid != os.getuid():
+            raise RuntimeError("campaign publication has unsafe ownership")
+        descriptor = os.open(
+            path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory
+        )
+        try:
+            metadata = os.fstat(descriptor)
+            named = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
+            if (metadata.st_dev, metadata.st_ino) != (named.st_dev, named.st_ino):
+                raise RuntimeError("campaign file changed while held")
+        finally:
+            os.close(descriptor)
+    except FileNotFoundError:
+        return None
+    finally:
+        os.close(directory)
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_uid != os.getuid()
+    ):
+        raise RuntimeError("campaign publication has unsafe ownership")
+    return CampaignFileIdentity(
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
+
+
+def _bind_campaign_initial(lease: CampaignWriteAllowance) -> None:
+    lease.initial_identity = _campaign_file_identity(lease.path)
+    if lease.role is CampaignWriterRole.PROVIDER_JOURNAL and lease.initial_identity is not None:
+        lease.initial_bytes = lease.initial_identity.size
+
+
 @dataclass
 class CampaignWriteAllowance:
     path: Path
@@ -43,6 +102,11 @@ class CampaignWriteAllowance:
     closed: bool = False
     verify: Callable[[Path, int], None] | None = None
     initial_bytes: int = 0
+    initial_identity: CampaignFileIdentity | None = None
+    final_identity: CampaignFileIdentity | None = None
+    retired_bytes: int = 0
+    temporary_path: Path | None = None
+    register_temporary: Callable[[Path], None] | None = None
 
     def observe(self, count: int) -> None:
         if (
@@ -99,11 +163,7 @@ def admit_campaign_write(
     if admission is None:
         return None
     lease = admission(path, size, role)
-    if role is CampaignWriterRole.PROVIDER_JOURNAL:
-        try:
-            lease.initial_bytes = path.lstat().st_size
-        except FileNotFoundError:
-            lease.initial_bytes = 0
+    _bind_campaign_initial(lease)
     return lease
 
 
@@ -229,11 +289,7 @@ class CleanupOutputAuthority:
         lease = self.admission(path, size, role)
         if not lease.cleanup:
             raise RuntimeError("cleanup child did not consume the prefunded reserve")
-        if role is CampaignWriterRole.PROVIDER_JOURNAL:
-            try:
-                lease.initial_bytes = path.lstat().st_size
-            except FileNotFoundError:
-                lease.initial_bytes = 0
+        _bind_campaign_initial(lease)
         self.leases.append(lease)
         return lease
 
@@ -255,31 +311,63 @@ def verify_campaign_write(allowance: CampaignWriteAllowance | None, path: Path) 
     if allowance.verify is not None:
         allowance.verify(path, allowance.observed)
         return
-    # Hold every parent through no-follow descriptors. A last-moment symlink
-    # replacement cannot redirect the independent occupancy observation.
-    if not path.is_absolute() or ".." in path.parts:
-        raise RuntimeError("campaign census path is not canonical")
-    directory = os.open(path.anchor, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        for component in path.parts[1:-1]:
-            child = os.open(
-                component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=directory
-            )
-            os.close(directory)
-            directory = child
-        descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
-        try:
-            metadata = os.fstat(descriptor)
-        finally:
-            os.close(descriptor)
-    finally:
-        os.close(directory)
-    if (
-        not stat.S_ISREG(metadata.st_mode)
-        or metadata.st_nlink != 1
-        or metadata.st_size != allowance.observed + allowance.initial_bytes
-    ):
+    if path != allowance.path or allowance.final_identity is not None:
+        raise RuntimeError("campaign publication identity or single-use verification changed")
+    metadata = _campaign_file_identity(path)
+    if metadata is None or metadata.size != allowance.observed + allowance.initial_bytes:
         raise RuntimeError("campaign publication occupancy does not reconcile")
+    initial = allowance.initial_identity
+    if initial is not None:
+        replaced = (initial.device, initial.inode) != (metadata.device, metadata.inode)
+        if allowance.role is CampaignWriterRole.PROVIDER_JOURNAL:
+            if replaced:
+                raise RuntimeError("campaign append changed its owned inode")
+        elif not replaced or allowance.temporary_path is None:
+            raise RuntimeError("campaign replacement lacks its admitted temporary")
+        else:
+            allowance.retired_bytes = initial.size
+    allowance.final_identity = metadata
+
+
+def prepare_campaign_temporary(allowance: CampaignWriteAllowance | None, temporary: Path) -> None:
+    """Bind a single fresh staging name before it can receive any granted byte."""
+    if allowance is None:
+        return
+    if (
+        allowance.closed
+        or allowance.observed
+        or allowance.temporary_path is not None
+        or temporary == allowance.path
+        or temporary.parent != allowance.path.parent
+        or _campaign_file_identity(temporary) is not None
+    ):
+        raise RuntimeError("campaign temporary is not an exclusive admitted output")
+    if allowance.register_temporary is not None:
+        allowance.register_temporary(temporary)
+    allowance.temporary_path = temporary
+
+
+def replace_campaign_write(
+    allowance: CampaignWriteAllowance | None, temporary: Path, path: Path
+) -> None:
+    """Check the exact retiring inode immediately before the real replacement.
+
+    Neither replacement nor verification refunds any reservation. Interrupted
+    staging remains an admitted, counted file and is never disguised as a commit.
+    """
+    if allowance is not None:
+        if (
+            allowance.closed
+            or allowance.path != path
+            or allowance.temporary_path != temporary
+            or allowance.final_identity is not None
+            or _campaign_file_identity(path) != allowance.initial_identity
+        ):
+            raise RuntimeError("campaign replacement retirement identity changed")
+        staged = _campaign_file_identity(temporary)
+        if staged is None or staged.size != allowance.observed:
+            raise RuntimeError("campaign replacement staging bytes do not reconcile")
+    os.replace(temporary, path)
 
 
 class CleanupOutputChannel:
@@ -367,7 +455,12 @@ class CleanupOutputChannel:
         def verify(path: Path, count: int) -> None:
             self.request("verify", lease=lease_id, path=str(path), count=count)
 
-        return CampaignWriteAllowance(path, role, size, observe, cleanup=True, verify=verify)
+        def temporary(value: Path) -> None:
+            self.request("temporary", lease=lease_id, path=str(value))
+
+        return CampaignWriteAllowance(
+            path, role, size, observe, cleanup=True, verify=verify, register_temporary=temporary
+        )
 
     def finish(self) -> None:
         self.request("close")
@@ -400,6 +493,14 @@ class CleanupOutputChannel:
                     leases[sequence] = authority.admit(
                         Path(payload["path"]), payload["size"], CampaignWriterRole(payload["role"])
                     )
+                elif operation == "temporary" and set(payload) == {"lease", "path"}:
+                    if (
+                        type(payload["lease"]) is not int
+                        or not isinstance(payload["path"], str)
+                        or payload["lease"] in verified
+                    ):
+                        raise RuntimeError("invalid cleanup temporary binding")
+                    prepare_campaign_temporary(leases[payload["lease"]], Path(payload["path"]))
                 elif operation in {"observe", "verify"}:
                     expected = {"lease", "count"} | ({"path"} if operation == "verify" else set())
                     if (
@@ -498,14 +599,26 @@ def reconcile_cleanup_output(
     after: dict[str, tuple[int, ...]],
     authority: CleanupOutputAuthority,
     *,
-    parent_paths: tuple[Path, ...] = (),
+    parent_leases: tuple[CampaignWriteAllowance, ...] = (),
 ) -> dict[str, object]:
     """Independently detect writes that bypassed the admitted producer path."""
     root = Path(authority.binding.transaction_root)
-    admitted = {str(lease.path.relative_to(root)) for lease in authority.leases}
-    parent = {str(path.relative_to(root)) for path in parent_paths}
+    admitted = {
+        str(path.relative_to(root))
+        for lease in authority.leases
+        for path in (lease.path, lease.temporary_path)
+        if path is not None
+    }
+    parent = {str(lease.path.relative_to(root)) for lease in parent_leases}
     changed = {name for name in after if after[name] != before.get(name)}
     uncovered = changed - admitted - parent
+    leases = (*authority.leases, *parent_leases)
+    removed = set(before) - set(after)
+    retired = sum(lease.retired_bytes for lease in leases)
+    writes = sum(lease.observed for lease in leases)
+    removed_bytes = sum(before[name][2] for name in removed)
+    growth = sum(row[2] for row in after.values()) - sum(row[2] for row in before.values())
+    discrepancy = growth - (writes - retired - removed_bytes)
     result: dict[str, object] = {
         "before_files": len(before),
         "after_files": len(after),
@@ -515,11 +628,33 @@ def reconcile_cleanup_output(
         "uncovered_writes": sorted(uncovered),
         "removed_files": sorted(set(before) - set(after)),
         "parent_capture_paths": sorted(parent),
-        "interpretation": "snapshot occupancy separate from cumulative written-byte consumption",
+        "actual_written_bytes": writes,
+        "exact_replaced_old_bytes": retired,
+        "removed_baseline_bytes": removed_bytes,
+        "occupancy_delta_bytes": growth,
+        "unreconciled_bytes": discrepancy,
+        "retirements": [
+            {
+                "path": str(lease.path.relative_to(root)),
+                "old_bytes": lease.retired_bytes,
+                "old": asdict(lease.initial_identity),
+                "new": asdict(lease.final_identity),
+            }
+            for lease in leases
+            if lease.retired_bytes
+            and lease.initial_identity is not None
+            and lease.final_identity is not None
+        ],
+        "interpretation": (
+            "occupancy delta equals actual writes minus exact retirements "
+            "and baseline deletions; no grant refund"
+        ),
     }
     if uncovered:
         raise RuntimeError(
             "cleanup census found writes without prior admission: "
             + ", ".join(sorted(uncovered)[:8])
         )
+    if discrepancy:
+        raise RuntimeError(f"cleanup census byte equation differs by {discrepancy}")
     return result

@@ -5983,6 +5983,7 @@ class ProductionCategory3World:
         self._begin(operation, subject)
         self._cleanup_calls += 1
         execution = self._execution_contract
+        interrupted = False
         try:
             state: dict[str, object]
             if self._root_identity_mismatch:
@@ -6150,6 +6151,7 @@ class ProductionCategory3World:
             ):
                 raise AdapterFailure("cleanup receipt did not reach exact zero/security state")
         except CleanupInterrupted:
+            interrupted = True
             self._record(operation, subject, "interrupted-resumable")
             raise
         except BaseException as exc:
@@ -6161,7 +6163,11 @@ class ProductionCategory3World:
                 raise
             raise AdapterFailure(f"retained cleanup handler failed: {exc}") from exc
         finally:
-            self._destroy_secret_file(self._dotenv)
+            # The bounded controller continuation still needs its exact held
+            # credential for retained closeout. Final release covers an abandoned
+            # continuation; no replacement credential or renewed grant is minted.
+            if not interrupted:
+                self._destroy_secret_file(self._dotenv)
         self._cleanup_receipt = receipt
         self._primitive("immutable_cleanup_export_handoff")
         self._primitive("validate_cleanup_execution_receipt")
@@ -6592,6 +6598,10 @@ class ProductionCategory3World:
         if self._resources_released:
             return
         failures: list[BaseException] = []
+        try:
+            self._destroy_secret_file(self._dotenv)
+        except BaseException as exc:
+            failures.append(exc)
         artifact_groups = (
             self._raw_artifacts,
             self._finalized_artifacts,

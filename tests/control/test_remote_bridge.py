@@ -1672,3 +1672,63 @@ def test_r6_journal_overgrowth_cannot_extend_its_allocation(tmp_path):
         )
     finally:
         session.close()
+
+
+@pytest.mark.parametrize("peer", ["client", "supervisor"])
+def test_same_session_completed_call_cannot_reenter_either_peer(tmp_path, peer):
+    """Replay an actually completed call; keep its authoritative history intact."""
+    from giclab.control.remote_bridge import provider_request_document
+
+    session = _open_session(tmp_path)
+    sends = []
+    try:
+        call_id = session.port.call_identity(1)
+        request = _request(ModelRole.DEFAULT)
+        answer = session.port.model_call(
+            request,
+            lambda _: (sends.append("one actual fixture send") or "answer", _usage()),
+            before_send=None,
+            call_id=call_id,
+            logical_call_id=call_id,
+            classify_failure=lambda _: ProviderFailureDisposition.OUTCOME_UNKNOWN,
+        )
+        assert answer == "answer" and session.boundary.condition_usage.model_call_attempts == 1
+        before = session.boundary.accounting_document()
+        admitted = sum(
+            e.frame.event_type == "model-call-admitted" for e in session.server_endpoint.entries
+        )
+        if peer == "client":
+            frames = len(session.client_endpoint.entries)
+            with pytest.raises(RemoteBridgeError, match="reused"):
+                session.port.model_call(
+                    request,
+                    lambda _: (sends.append("forbidden replay") or "wrong", _usage()),
+                    before_send=None,
+                    call_id=call_id,
+                    logical_call_id=call_id,
+                    classify_failure=lambda _: ProviderFailureDisposition.OUTCOME_UNKNOWN,
+                )
+            assert len(session.client_endpoint.entries) == frames
+        else:
+            session.client_endpoint.write_event(
+                event_id="negative.completed-call-replay",
+                event_type="model-call-reserve",
+                payload={
+                    "call_id": call_id,
+                    "logical_call_id": call_id,
+                    "request": provider_request_document(request),
+                },
+            )
+            with pytest.raises(RemoteBridgeReplay):
+                session.future.result(timeout=2)
+        assert sends == ["one actual fixture send"]
+        assert session.boundary.accounting_document() == before
+        assert (
+            sum(
+                e.frame.event_type == "model-call-admitted" for e in session.server_endpoint.entries
+            )
+            == admitted
+            == 1
+        )
+    finally:
+        session.close()

@@ -484,3 +484,54 @@ def test_cleanup_journal_versions_consume_admission_before_growth(tmp_path, deni
             == sum(map(len, prior.values())) + count
         )
     assert len(grants) == 1
+
+
+@pytest.mark.parametrize("fault", ["create", "link", "published-then-missing"])
+def test_freeze_abort_is_bound_to_actual_exclusive_publisher(tmp_path, monkeypatch, fault):
+    from giclab.control.production import _host_module
+
+    host = _host_module(ROOT)
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    path = tmp_path / "frozen-run-manifest.json"
+    with pytest.raises(EarlyCleanupStateError):
+        journal.abort_unpublished_freeze(clock=clock)
+    journal.begin_freeze_publication(clock=clock)
+    original_open, original_link = host.os.open, host.os.link
+
+    def fail_open(target, flags, *args, **kwargs):
+        if target == host._atomic_publication_temporary(path) and flags & host.os.O_CREAT:
+            raise OSError("injected publication create failure")
+        return original_open(target, flags, *args, **kwargs)
+
+    def fail_link(source, destination, **kwargs):
+        if destination == path:
+            raise OSError("injected publication link failure")
+        return original_link(source, destination, **kwargs)
+
+    if fault == "create":
+        monkeypatch.setattr(host.os, "open", fail_open)
+    elif fault == "link":
+        monkeypatch.setattr(host.os, "link", fail_link)
+    if fault != "published-then-missing":
+        with pytest.raises(OSError, match="injected publication"):
+            host.write_exclusive(
+                path,
+                {"actual": "publication"},
+                on_unpublished=lambda: journal.abort_unpublished_freeze(clock=clock),
+            )
+        assert not path.exists()
+        assert journal.load().freeze_publication_aborted is True
+        with pytest.raises(EarlyCleanupStateError):
+            journal.abort_unpublished_freeze(clock=clock)
+    else:
+        host.write_exclusive(
+            path, {"actual": "publication"}, on_unpublished=journal.abort_unpublished_freeze
+        )
+        path.unlink()  # Explicit negative: disappearance supplies no abort proof.
+        assert journal.load().freeze_publication_aborted is None
+    state = journal.load()
+    assert state.freeze_publication_started is True
+    Draft202012Validator(json.loads(SCHEMA_PATH.read_bytes())).validate(state.to_document())
+    with pytest.raises(EarlyCleanupStateError):
+        journal.begin_freeze_publication(clock=clock)

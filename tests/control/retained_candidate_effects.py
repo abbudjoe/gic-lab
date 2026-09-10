@@ -51,7 +51,9 @@ from giclab.harness.campaign_output import (
     campaign_output_scope,
     cleanup_output_inventory,
     observe_campaign_write,
+    prepare_campaign_temporary,
     reconcile_cleanup_output,
+    replace_campaign_write,
     verify_campaign_write,
 )
 from giclab.harness.t09_candidate_inputs import (
@@ -972,7 +974,7 @@ class ImageCommandChannel:
         )
 
     def save_state(self, path):
-        if not path.parent.resolve(strict=True).is_relative_to(self.transaction_root):
+        if not path.parent.resolve(strict=False).is_relative_to(self.transaction_root):
             raise RuntimeError("environment state escaped transaction")
         document = {
             "environment_sha256": self.binding.digest,
@@ -987,7 +989,9 @@ class ImageCommandChannel:
         if len(data) > 65536:
             raise RuntimeError("environment state cap exceeded")
         allowance = admit_campaign_write(path, len(data), CampaignWriterRole.PHASE_CONTROL)
+        path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         temporary = path.with_suffix(".next")
+        prepare_campaign_temporary(allowance, temporary)
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         try:
             offset = 0
@@ -1000,7 +1004,7 @@ class ImageCommandChannel:
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
-        os.replace(temporary, path)
+        replace_campaign_write(allowance, temporary, path)
         verify_campaign_write(allowance, path)
 
     def load_state(self, path):
@@ -1784,6 +1788,60 @@ def bound(path):
     return {"path": str(path), "bytes": len(data), "sha256": sha(data)}
 
 
+def instrument_bound_io(read_fd, write_fd, *, inject_continuations):
+    """Test-only OS leaf faults on two held descriptors; all transport code is real."""
+    original_read, original_write = os.read, os.write
+    identities = {fd: (os.fstat(fd).st_dev, os.fstat(fd).st_ino) for fd in (read_fd, write_fd)}
+    counts = {
+        name: {"calls": 0, "eintr": 0, "eagain": 0, "bytes": 0, "short": 0}
+        for name in ("read", "write")
+    }
+
+    def selected(fd, expected):
+        if fd != expected:
+            return False
+        metadata = os.fstat(fd)
+        return (metadata.st_dev, metadata.st_ino) == identities[fd]
+
+    def step(name):
+        counter = counts[name]
+        counter["calls"] += 1
+        if inject_continuations and counter["calls"] == 1:
+            counter["eintr"] += 1
+            raise InterruptedError("bound synthetic EINTR")
+        if inject_continuations and counter["calls"] == 2:
+            counter["eagain"] += 1
+            raise BlockingIOError("bound synthetic EAGAIN")
+        return counter
+
+    def read(fd, count):
+        if not selected(fd, read_fd):
+            return original_read(fd, count)
+        counter = step("read")
+        limit = min(count, 3) if inject_continuations and counter["calls"] == 3 else count
+        value = original_read(fd, limit)
+        counter["bytes"] += len(value)
+        counter["short"] += int(0 < len(value) < count)
+        return value
+
+    def write(fd, data):
+        if not selected(fd, write_fd):
+            return original_write(fd, data)
+        counter = step("write")
+        part = data[:3] if inject_continuations and counter["calls"] == 3 else data
+        count = original_write(fd, part)
+        counter["bytes"] += count
+        counter["short"] += int(0 < count < len(data))
+        return count
+
+    os.read, os.write = read, write
+
+    def restore():
+        os.read, os.write = original_read, original_write
+
+    return counts, restore
+
+
 class RetainedCandidateEffects(DeterministicLowLevelEffects):
     def __init__(
         self, *, source_inputs, qualification_source_root=None, environment_binding=None, **kwargs
@@ -1796,6 +1854,9 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         self.phase_events = []
         self.retained_closeouts = {}
         self.condition_invocations = {}
+        self.condition_ownership = {}
+        self.condition_io = {}
+        self.wire_faults = []
         self.retained_exports = {}
         self.retained_export_attempts = set()
         self.qualification_source_root = qualification_source_root
@@ -2128,6 +2189,13 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             stream.write(self.read_model_secret())
         secret.chmod(0o600)
         archive = root / "source-package.tar"
+        if self.fault_plan.fail_operation == "matrix-transfer-partial":
+            with (
+                request.local_assembly.archive_path.open("rb") as source,
+                archive.open("xb") as target,
+            ):
+                target.write(source.read(1024))
+            raise RuntimeError("matrix partial SSH archive transfer")
         shutil.copyfile(request.local_assembly.archive_path, archive)
         archive.chmod(0o600)
         members = [m.to_document() for m in request.local_assembly.members]
@@ -2418,7 +2486,9 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         shared_root = (
             request.transaction_root / "control-private/condition-bridges" / request.run_id
         )
-        deadline = time.monotonic() + 60
+        fault = self.fault_plan.fail_operation
+        backpressure = fault in {"matrix-ipc-neverread", "matrix-ipc-midframe"}
+        deadline = time.monotonic() + (15 if backpressure else 60)
         stderr_path = invocation_path.with_suffix(".stderr")
         carrier_output = SharedCarrierOutput(
             observer,
@@ -2441,6 +2511,7 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         owner = RetainedProcessOwner(deadline)
         process = None
         endpoint = None
+        restore_io = None
         try:
             stderr_fd = owner.own_descriptor(
                 os.open(stderr_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -2479,6 +2550,31 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                 deadline_monotonic=owner.work_deadline,
                 cancelled=owner.cancelled,
             )
+            if fault == "matrix-terminal-ack":
+                original_event = endpoint.write_event
+
+                def refused_ack(**kwargs):
+                    if kwargs["event_type"] == "condition-session-terminal-ack":
+                        self.wire_faults.append("terminal-ack-rejected")
+                        kwargs["payload"] = {**kwargs["payload"], "accepted": False}
+                    return original_event(**kwargs)
+
+                endpoint.write_event = refused_ack
+            if fault == "transaction-io-continuation" or backpressure:
+                counts, restore_io = instrument_bound_io(
+                    process.stdout.fileno(),
+                    process.stdin.fileno(),
+                    inject_continuations=not backpressure,
+                )
+                self.condition_io[request.run_id] = counts
+            if backpressure:
+                # The bound carrier peer consumes zero bytes or one 4096-byte
+                # prefix. The real pipe must fill, then stop on the owner's
+                # original deadline. These are fault bytes, not a phase receipt.
+                from giclab.control.remote_bridge import _write_deadline
+
+                _write_deadline(process.stdin.fileno(), b"x" * 524288, endpoint._remaining)
+                raise AssertionError("backpressured peer unexpectedly accepted the whole probe")
             terminal = ConditionSessionSupervisor(
                 endpoint,
                 observer,
@@ -2489,7 +2585,10 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
         except Exception as exc:
             error = type(exc).__name__ + ": " + str(exc)
         finally:
+            if restore_io is not None:
+                restore_io()
             ownership = owner.close()
+            self.condition_ownership[request.run_id] = ownership
             if ownership["errors"]:
                 error = error or "retained condition ownership failed: " + "; ".join(
                     ownership["errors"]
@@ -2963,7 +3062,7 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                         inventory_before,
                         inventory_after,
                         authority,
-                        parent_paths=tuple(item[0] for item in streams),
+                        parent_leases=tuple(item[1] for item in streams),
                     )
                 except BaseException as exc:
                     inventory_error = type(exc).__name__ + ": " + str(exc)
@@ -2991,6 +3090,8 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                         "role": x.role.value,
                         "granted": x.granted,
                         "observed": x.observed,
+                        "retired_bytes": x.retired_bytes,
+                        "temporary_path": str(x.temporary_path) if x.temporary_path else None,
                     }
                     for x in authority.leases
                 ],
@@ -3678,6 +3779,37 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         "wall_time": time.time,
         "monotonic": time.monotonic,
     }
+    runtime_io = None
+    restore_runtime_io = None
+    original_port_builder = runtime.build_private_socket_supervisor_port
+
+    def instrument_port(**kwargs):
+        nonlocal runtime_io, restore_runtime_io
+        port = original_port_builder(**kwargs)
+        if invocation["fault_operation"] == "transaction-io-continuation":
+            runtime_io, restore_runtime_io = instrument_bound_io(
+                port.endpoint.reader.fileno(),
+                port.endpoint.writer.fileno(),
+                inject_continuations=True,
+            )
+        if invocation["fault_operation"] == "matrix-runtime-halfclose":
+            original_event = port._write_event
+
+            def halfclose_after_send_start(**kwargs):
+                value = original_event(**kwargs)
+                if kwargs["event_type"] == "model-send-start":
+                    channels = [
+                        item for item in port._closeables if isinstance(item, socket.socket)
+                    ]
+                    assert len(channels) == 1
+                    channels[0].shutdown(socket.SHUT_WR)
+                    raise ConnectionError("bound runtime half-close after possible send")
+                return value
+
+            port._write_event = halfclose_after_send_start
+        return port
+
+    runtime.build_private_socket_supervisor_port = instrument_port
     condition_mode = runtime_argv[runtime_argv.index("--gate-mode") + 1]
     upstream_boundary = runtime_argv.index("--")
     task_argv = runtime_argv[upstream_boundary + 1 :]
@@ -3693,6 +3825,21 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         "cleanup.descendant-interruption",
         "condition.attach-output-denial",
         "export.output-denial",
+        "matrix-raw-export-hook",
+        "matrix-finalizer-hook",
+        "matrix-evaluator-hook",
+        "matrix-checkpoint-hook",
+        "matrix-terminal-answer",
+        "matrix-terminal-status",
+        "matrix-raw-reference",
+        "matrix-cross-session-journal",
+        "matrix-finalizer-reference",
+        "matrix-evaluator-mutation",
+        "matrix-selected-reference",
+        "transaction-io-continuation",
+        "matrix-model-send-loss",
+        "matrix-runtime-halfclose",
+        "matrix-terminal-ack",
     ):
         raise RuntimeError("unbound runtime fixture scenario")
     selected = ModuleType("giclab_offline_condition_inputs")
@@ -3735,6 +3882,8 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
             if kwargs.get("service_tier") != "default" or kwargs.get("max_completion_tokens") != 64:
                 raise RuntimeError("fixture request policy drifted")
             response_count += 1
+            if fault == "matrix-model-send-loss":
+                raise ConnectionError("bound response lost after one actual fixture send")
             return {
                 "id": f"offline-response-{response_count}",
                 "service_tier": "default",
@@ -3768,8 +3917,15 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
             raise RuntimeError("entrypoint failed its retained credential mapping")
         os.environ["SIRA_API_KEY"] = environment["SIRA_API_KEY"]
         result = runtime.run(runtime_argv)
-        if response_count != 2:
-            raise RuntimeError("retained runtime did not execute both fixture model effects")
+        expected_responses = (
+            1
+            if fault == "matrix-model-send-loss"
+            else 0
+            if fault == "matrix-runtime-halfclose"
+            else 2
+        )
+        if response_count != expected_responses:
+            raise RuntimeError("retained runtime fixture effect count differs")
         raise SystemExit(result)
 
     module.os = SimpleNamespace(
@@ -3813,12 +3969,16 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
     try:
         module.run(entry["command"][1:])
     finally:
+        if restore_runtime_io is not None:
+            restore_runtime_io()
         runtime.ResourceGuard._tree_bytes = staticmethod(retained_tree_bytes)
         diagnostic = {
             "schema_version": "1.0.0",
             "classification": "offline-read-only-census-diagnostic",
             "candidate_binding_sha256": snapshot.digest,
             "run_id": entry["run_id"],
+            "runtime_io": runtime_io,
+            "actual_model_response_count": response_count,
             "runtime_process_id": os.getpid(),  # Private diagnostic; publish only distinct count.
             "executed_runtime_source_sha256": sha(Path(runtime.__file__).read_bytes()),
             "observations": census_records,
@@ -3916,6 +4076,7 @@ def _main(invocation):
         "register_target",
         "record_result",
         "begin_freeze_publication",
+        "abort_unpublished_freeze",
         "cleanup",
     ):
         method = getattr(EarlyCleanupJournal, name)
@@ -4514,6 +4675,53 @@ def _main(invocation):
             }
         )
 
+    matrix_fault = invocation.get("fault_operation")
+    hooks = {
+        "matrix-transfer-verify-hook": ("host-transfer-verify", "host_transfer_verify"),
+        "matrix-preflight-hook": ("host-preflight", "host_preflight"),
+        "matrix-qualification-hook": ("host-qualify", "host_qualify"),
+        "matrix-runtime-hook": ("condition-session", "condition_session"),
+        "matrix-raw-export-hook": ("retained-attempt-export", "export_attempt"),
+        "matrix-finalizer-hook": ("condition-finalizer", "finalize_attempt"),
+        "matrix-cleanup-terminal-hook": ("host-cleanup", "_publish_bridge_phase"),
+    }
+    selected_hook = hooks.get(matrix_fault)
+    # Finalizer/export subcommands retain their own invocation phase names.
+    active = selected_hook is not None and (
+        invocation["phase"] == selected_hook[0]
+        or (matrix_fault == "matrix-finalizer-hook" and "postcondition_finalizer" in invocation)
+        or (matrix_fault == "matrix-raw-export-hook" and "postcondition_export" in invocation)
+    )
+    if active:
+
+        def missing_retained_hook(*args, **kwargs):
+            raise RuntimeError("matrix required retained hook withheld: " + selected_hook[1])
+
+        setattr(host, selected_hook[1], missing_retained_hook)
+    if matrix_fault == "matrix-freeze-unpublished" and invocation["phase"] == "host-freeze":
+        original_open = host.os.open
+
+        def fail_frozen_publication(path, flags, *args, **kwargs):
+            if (
+                Path(path).name == ".frozen-run-manifest.json.giclab-publication.tmp"
+                and flags & os.O_CREAT
+            ):
+                raise OSError("matrix freeze publication withheld after durable begin")
+            return original_open(path, flags, *args, **kwargs)
+
+        host.os.open = fail_frozen_publication
+
+    if invocation["phase"] == "condition-session" and matrix_fault in {
+        "matrix-ipc-neverread",
+        "matrix-ipc-midframe",
+    }:
+        if matrix_fault == "matrix-ipc-midframe":
+            prefix = os.read(0, 4096)
+            if len(prefix) != 4096:
+                raise RuntimeError("bound carrier prefix was short")
+        time.sleep(120)  # Owner terminates/reaps this exact child inside 15 seconds.
+        raise RuntimeError("bound carrier stall unexpectedly returned")
+
     sys.setprofile(profile)
     try:
         if "postcondition_finalizer" in invocation:
@@ -4673,6 +4881,7 @@ def _main(invocation):
                 environment_binding=environment_binding,
             )
     finally:
+        phase_exception = sys.exc_info()[1]
         sys.setprofile(None)
         write(
             transaction
@@ -4687,6 +4896,22 @@ def _main(invocation):
                 "resource_observations": resource_observations,
                 "environment_events": image_channel.events if image_channel else observations,
                 "classification": "execution-trace-not-success-receipt",
+                "failure": None
+                if phase_exception is None
+                else {
+                    "type": type(phase_exception).__name__,
+                    "message": str(phase_exception)[:1024],
+                    "frames": [
+                        {
+                            "file": Path(frame.filename).name,
+                            "line": frame.lineno,
+                            "function": frame.name,
+                        }
+                        for frame in __import__("traceback").extract_tb(
+                            phase_exception.__traceback__
+                        )[-20:]
+                    ],
+                },
             },
         )
     snapshot.validate()

@@ -14,6 +14,196 @@ import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
+# Finite negative coupling cases. These replace/withhold one required operation;
+# no case supplies a successful receipt or changes the controller's decisions.
+MATRIX_CASES = {
+    "matrix-transfer-partial": ("host-package-transfer", 0, False),
+    "matrix-transfer-verify-hook": ("host-package-transfer", 0, False),
+    "matrix-preflight-hook": ("host-preflight", 0, False),
+    "matrix-qualification-hook": ("image-finalizer-qualification", 0, False),
+    "matrix-freeze-unpublished": ("scientific-freeze", 0, False),
+    "matrix-postfreeze-zero": ("condition-reservation", 0, False),
+    "matrix-runtime-hook": ("condition-execution", 1, False),
+    "matrix-raw-export-hook": ("condition-execution", 1, True),
+    "matrix-finalizer-hook": ("finalization", 1, False),
+    "matrix-evaluator-hook": ("evaluation", 1, False),
+    "matrix-checkpoint-hook": ("first-pair-checkpoint", 2, False),
+    "matrix-cleanup-terminal-hook": ("condition-reservation", 0, True),
+    "matrix-ownership-missing": ("condition-reservation", 0, True),
+    "matrix-ownership-corrupt": ("condition-reservation", 0, True),
+    "matrix-cleanup-resume": ("condition-reservation", 0, False),
+    "matrix-cleanup-interrupt-exhausted": ("condition-reservation", 0, True),
+    "matrix-terminal-answer": ("condition-execution", 1, False),
+    "matrix-terminal-status": ("condition-execution", 1, False),
+    "matrix-raw-reference": ("condition-execution", 1, False),
+    "matrix-cross-session-journal": ("condition-execution", 2, False),
+    "matrix-finalizer-reference": ("finalization", 1, False),
+    "matrix-evaluator-mutation": ("evaluation", 1, False),
+    "matrix-selected-reference": ("first-pair-checkpoint", 2, False),
+    "matrix-ipc-neverread": ("condition-execution", 1, True),
+    "matrix-ipc-midframe": ("condition-execution", 1, True),
+    "matrix-model-send-loss": ("condition-execution", 1, False),
+    "matrix-runtime-halfclose": ("condition-execution", 1, True),
+    "matrix-terminal-ack": ("condition-execution", 1, True),
+}
+
+
+def install_matrix_parent_hooks(world, effects, mode):
+    from giclab.control import production
+    from giclab.control.adapters import AdapterFailure, CleanupInterrupted
+
+    events = []
+    effects.matrix_events = events
+    if mode in {
+        "matrix-postfreeze-zero",
+        "matrix-cleanup-terminal-hook",
+        "matrix-ownership-missing",
+        "matrix-ownership-corrupt",
+        "matrix-cleanup-resume",
+        "matrix-cleanup-interrupt-exhausted",
+    }:
+
+        def stop_before_reservation(run_id):
+            assert not world._condition_requests
+            assert not world._condition_outcomes
+            events.append({"hook": "reserve", "run_id": run_id, "effect": "withheld"})
+            raise AdapterFailure("matrix post-freeze stop before reservation")
+
+        world.reserve = stop_before_reservation
+    if mode == "matrix-checkpoint-hook":
+
+        def withheld_checkpoint(value):
+            events.append({"hook": "first_pair_decision", "effect": "withheld"})
+            raise RuntimeError("matrix retained first-pair decision withheld")
+
+        production.pilot.first_pair_decision = withheld_checkpoint
+    if mode == "matrix-evaluator-hook":
+
+        def withheld_evaluator(*args, **kwargs):
+            events.append({"hook": "evaluate_retained_session", "effect": "withheld"})
+            raise RuntimeError("matrix retained evaluator withheld")
+
+        production.pilot.evaluate_retained_session = withheld_evaluator
+    if mode in {
+        "matrix-ownership-missing",
+        "matrix-ownership-corrupt",
+        "matrix-cleanup-resume",
+        "matrix-cleanup-interrupt-exhausted",
+    }:
+        original = effects.cleanup_transaction
+
+        def cleanup(request):
+            from giclab.harness.t09_cleanup_state import EarlyCleanupJournal
+
+            events.append(
+                {"hook": "cleanup_transaction", "handoff": request.immutable_handoff_sha256}
+            )
+            if mode == "matrix-cleanup-interrupt-exhausted" or len(events) == 2:
+                if mode in {"matrix-cleanup-resume", "matrix-cleanup-interrupt-exhausted"}:
+                    # Interruption before dispatch, after the real controller has
+                    # minted the durable handoff and exact output capability.
+                    raise CleanupInterrupted("matrix carrier interruption before dispatch")
+                journal = EarlyCleanupJournal(
+                    effects.transfer_request.provider_entry_receipt_path.parent.parent
+                    / "preflight-cleanup-state"
+                )
+                state = journal.load()
+                path = journal.versions / f"{state.sequence:08d}.json"
+                original_bytes = path.read_bytes()
+                # Retain the original outside the journal before explicit test
+                # corruption. This is a negative input operation, not a writer
+                # admission success or a synthesized cleanup state.
+                evidence = world.root / "matrix-original-ownership.json"
+                evidence.write_bytes(original_bytes)
+                if mode.endswith("missing"):
+                    path.unlink()
+                else:
+                    path.write_bytes(b"{corrupt published ownership\n")
+                events[-1]["mutated_path"] = str(path.relative_to(world.root))
+                events[-1]["original_sha256"] = hashlib.sha256(original_bytes).hexdigest()
+            return original(request)
+
+        effects.cleanup_transaction = cleanup
+    from dataclasses import replace
+
+    if mode in {
+        "matrix-terminal-answer",
+        "matrix-terminal-status",
+        "matrix-raw-reference",
+        "matrix-cross-session-journal",
+    }:
+        original_execute = effects.execute_condition
+        prior_bridge = None
+
+        def changed_outcome(request, *, observer):
+            nonlocal prior_bridge
+            value = original_execute(request, observer=observer)
+            if mode == "matrix-cross-session-journal" and prior_bridge is None:
+                prior_bridge = value.bridge_evidence
+                return value
+            events.append(
+                {
+                    "hook": "execute_condition.return",
+                    "run_id": request.run_id,
+                    "effect": "negative-reference-substitution",
+                }
+            )
+            if mode == "matrix-terminal-answer":
+                return replace(value, answer="different unexecuted answer")
+            if mode == "matrix-terminal-status":
+                return replace(value, completed=False)
+            if mode == "matrix-raw-reference":
+                return replace(value, raw_receipt_path=value.raw_manifest_path)
+            assert prior_bridge is not None
+            return replace(
+                value,
+                bridge_evidence=replace(
+                    value.bridge_evidence, remote_journal_path=prior_bridge.remote_journal_path
+                ),
+            )
+
+        effects.execute_condition = changed_outcome
+    if mode == "matrix-finalizer-reference":
+        original_finalizer = effects.finalize_condition
+
+        def changed_finalizer(request):
+            value = original_finalizer(request)
+            events.append({"hook": "finalize_condition.return", "effect": "wrong-raw-reference"})
+            return replace(value, consumed_raw_receipt_sha256="f" * 64)
+
+        effects.finalize_condition = changed_finalizer
+    if mode == "matrix-evaluator-mutation":
+        original_evaluator = production.pilot.evaluate_retained_session
+
+        def changed_evaluator(*args, **kwargs):
+            value = original_evaluator(*args, **kwargs)
+            assert value["score"] == 0.0
+            events.append(
+                {
+                    "hook": "evaluate_retained_session.return",
+                    "actual_score": value["score"],
+                    "effect": "changed-score",
+                }
+            )
+            return {**value, "score": 1.0}
+
+        production.pilot.evaluate_retained_session = changed_evaluator
+    if mode == "matrix-selected-reference":
+        original_checkpoint = world.checkpoint
+
+        def changed_selection(*, name):
+            first = world.contract.run_ids[0]
+            original = world._finalizations[first]
+            events.append({"hook": "checkpoint.selected-finalization", "effect": "wrong-receipt"})
+            world._finalizations[first] = replace(original, completion_receipt_sha256="f" * 64)
+            try:
+                return original_checkpoint(name=name)
+            finally:
+                world._finalizations[first] = original
+
+        world.checkpoint = changed_selection
+    return events
+
 
 def qualify_local_fixture_inputs(*, snapshot, package, archive, qualification_root):
     """Run the retained producer over bound fixtures and fake installed metadata.
@@ -338,8 +528,11 @@ def main() -> None:
     finally:
         sys.settrace(previous_trace)
     prelaunch_local_qualification = None
-    if request.get("exercise_transaction") in {
+    if request.get("exercise_transaction") in MATRIX_CASES or request.get(
+        "exercise_transaction"
+    ) in {
         "transaction",
+        "transaction-io-continuation",
         "condition-failure-export",
         "condition-failure-cleanup-admission-disconnect",
         "condition-failure-cleanup-descendant-interruption",
@@ -426,7 +619,9 @@ def main() -> None:
                 contract=V16_PROVIDER_CONTRACT,
                 fault_plan=ShadowFaultPlan(
                     "candidate-input-preparation",
-                    fail_operation="cleanup.descendant-interruption"
+                    fail_operation=mode
+                    if mode in MATRIX_CASES or mode == "transaction-io-continuation"
+                    else "cleanup.descendant-interruption"
                     if mode == "condition-failure-cleanup-descendant-interruption"
                     else "cleanup.admission-disconnect"
                     if mode == "condition-failure-cleanup-admission-disconnect"
@@ -466,6 +661,8 @@ def main() -> None:
             source_inputs=snapshot,
             low_level_effects=effects,
         )
+        if mode in MATRIX_CASES:
+            install_matrix_parent_hooks(world, effects, mode)
         try:
             context = world.authorization_context
             assert context.candidate_source_binding_sha256 == snapshot.digest
@@ -685,6 +882,10 @@ def main() -> None:
                 )
                 expected_terminal = (
                     "category3-shadow-stopped-cleanup-unresolved"
+                    if mode in MATRIX_CASES and MATRIX_CASES[mode][2]
+                    else "category3-shadow-stopped-cleanup-verified"
+                    if mode in MATRIX_CASES
+                    else "category3-shadow-stopped-cleanup-unresolved"
                     if mode
                     in {
                         "transaction-export-output-denial",
@@ -710,7 +911,67 @@ def main() -> None:
                     "retained_phase_events": effects.phase_events,
                     "retained_failure_exceptions": retained_failures,
                 }
-                if mode == "condition-failure-cleanup-descendant-interruption":
+                if mode in MATRIX_CASES:
+                    phase, count, _unresolved = MATRIX_CASES[mode]
+                    assert transaction["earliest_stopping_phase"] == phase, transaction
+                    assert transaction["condition_identities_consumed"] == list(
+                        V16_PROVIDER_CONTRACT.run_ids[:count]
+                    )
+                    assert not any(
+                        r in world._condition_requests
+                        for r in V16_PROVIDER_CONTRACT.run_ids[count:]
+                    )
+                    matrix = {
+                        "case": mode,
+                        "candidate_binding_sha256": snapshot.digest,
+                        "expected_phase": phase,
+                        "actual_phase": transaction["earliest_stopping_phase"],
+                        "consumed": transaction["condition_identities_consumed"],
+                        "terminal": transaction["terminal_state"],
+                        "events": effects.matrix_events,
+                        "phase_events": effects.phase_events,
+                        "cleanup_calls": world._cleanup_calls,
+                        "condition_ownership": effects.condition_ownership,
+                        "condition_io": effects.condition_io,
+                        "wire_faults": effects.wire_faults,
+                    }
+                    if mode in {
+                        "matrix-model-send-loss",
+                        "matrix-runtime-halfclose",
+                        "matrix-terminal-ack",
+                    }:
+                        run_id = V16_PROVIDER_CONTRACT.run_ids[0]
+                        observer = world._condition_observers[run_id]
+                        owned = effects.condition_ownership[run_id]
+                        assert owned["reaped"] and owned["process_group_absent"]
+                        assert owned["streams_closed"] and not owned["open_owned_descriptors"]
+                        assert not owned["errors"] and owned["capture_workers"] == 0
+                        assert not world._evaluations and not world._finalizations
+                        if mode != "matrix-terminal-ack":
+                            assert len(observer.call_ids) == 1
+                            accounting = observer.boundary.accounting_document()
+                            matrix["failure_accounting"] = accounting
+                            assert "sent_outcome_unknown" in json.dumps(accounting)
+                        else:
+                            assert effects.wire_faults == ["terminal-ack-rejected"]
+                    if mode in {"matrix-ipc-neverread", "matrix-ipc-midframe"}:
+                        run_id = V16_PROVIDER_CONTRACT.run_ids[0]
+                        owned = effects.condition_ownership[run_id]
+                        io_counts = effects.condition_io[run_id]
+                        assert 0 < io_counts["write"]["bytes"] < 524288
+                        assert owned["reaped"] and owned["process_group_absent"]
+                        assert owned["streams_closed"] and not owned["open_owned_descriptors"]
+                        assert not owned["errors"] and owned["capture_workers"] == 0
+                        assert not world._condition_observers[run_id].call_ids
+                    if mode in {"matrix-cleanup-resume", "matrix-cleanup-interrupt-exhausted"}:
+                        assert not world._dotenv.exists()
+                        handoffs = [e["handoff"] for e in effects.matrix_events if "handoff" in e]
+                        assert len(handoffs) == 2 and len(set(handoffs)) == 1
+                        assert world._cleanup_calls == 2
+                    (transaction_root / "joined-matrix-result.json").write_text(
+                        json.dumps(matrix, indent=2) + "\n"
+                    )
+                elif mode == "condition-failure-cleanup-descendant-interruption":
                     assert transaction["condition_identities_consumed"] == [
                         V16_PROVIDER_CONTRACT.run_ids[0]
                     ]
@@ -830,6 +1091,7 @@ def main() -> None:
                     # the workload has already exited zero. Preserve the actual
                     # status/answer instead of manufacturing a nonzero exit.
                     assert type(failure.process_exit_code) is int
+                    assert failure.process_exit_code == 0
                     assert (
                         failure.process_exit_code
                         == source["process_exit_code"]
@@ -898,6 +1160,43 @@ def main() -> None:
                         assert observer.call_ids == observer.logical_call_ids
                         prior.update(observer.call_ids)
                         outcome = world._condition_outcomes[run_id]
+                        bridge = outcome.bridge_evidence
+                        assert bridge is not None
+                        shared = json.loads(bridge.shared_transcript_path.read_bytes())
+                        remote = json.loads(bridge.remote_journal_path.read_bytes())
+                        host_terminal = json.loads(bridge.host_terminal_receipt_path.read_bytes())
+                        shared_terminal = json.loads(
+                            bridge.shared_terminal_receipt_path.read_bytes()
+                        )
+                        assert (
+                            shared["binding"]
+                            == remote["binding"]
+                            == host_terminal["binding"]
+                            == shared_terminal["binding"]
+                        )
+                        assert shared["binding"]["condition_run_id"] == run_id
+                        frames = [row["frame"] for row in shared["frames"]]
+                        remote_frames = [row["frame"] for row in remote["frames"]]
+                        assert frames[: len(remote_frames)] == remote_frames
+                        for document in (shared, remote):
+                            reserves = [
+                                row["frame"]["payload"]
+                                for row in document["frames"]
+                                if row["frame"]["event_type"] == "model-call-reserve"
+                            ]
+                            assert [row["call_id"] for row in reserves] == sorted(observer.call_ids)
+                            assert [row["logical_call_id"] for row in reserves] == list(
+                                observer.logical_call_ids
+                            )
+                        calls = json.loads(outcome.call_ledger_path.read_bytes())
+                        assert [row["call_id"] for row in calls["calls"]] == sorted(
+                            observer.call_ids
+                        )
+                        assert (
+                            host_terminal["terminal_acknowledged"]
+                            is shared_terminal["terminal_acknowledged"]
+                            is True
+                        )
                         answer = (
                             "No relevant answer."
                             if ordinal % 2 == 0
@@ -926,6 +1225,21 @@ def main() -> None:
                         ] == snapshot.source_sha256(
                             snapshot.root, "src/giclab/harness/sira_gate_a_runtime.py"
                         )
+                        if mode == "transaction-io-continuation":
+                            assert diagnostic["actual_model_response_count"] == 2
+                            for counts in (diagnostic["runtime_io"], effects.condition_io[run_id]):
+                                for direction in ("read", "write"):
+                                    assert (
+                                        counts[direction]["eintr"]
+                                        == counts[direction]["eagain"]
+                                        == 1
+                                    )
+                                    assert counts[direction]["short"] >= 1
+                                    assert counts[direction]["bytes"] > 0
+                            owned = effects.condition_ownership[run_id]
+                            assert owned["reaped"] and owned["process_group_absent"]
+                            assert not owned["open_owned_descriptors"] and owned["streams_closed"]
+                            assert not owned["errors"]
                         runtime_processes.add(diagnostic["runtime_process_id"])
                     assert len(prior) == 8 and prior == world._seen_call_ids
                     assert len(runtime_processes) == 4

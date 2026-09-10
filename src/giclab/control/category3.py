@@ -767,6 +767,7 @@ def _run_conditions(
         if index == 2:
             _transition(state.transitions, Category3Phase.REMAINING_CONDITIONS, "entered")
         try:
+            active_phase = Category3Phase.CONDITION_RESERVATION
             adapters.condition_runtime.reserve(run_id)
             state.condition_reserved.append(run_id)
             _transition(
@@ -775,6 +776,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.EMPIRICAL_ENTRY
             adapters.condition_runtime.enter(run_id)
             state.condition_consumed.append(run_id)
             _transition(
@@ -783,6 +785,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.CONDITION_EXECUTION
             run_output = adapters.condition_runtime.run(run_id)
             _transition(
                 state.transitions,
@@ -790,6 +793,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.RAW_EXPORT
             raw = adapters.condition_runtime.export_raw(run_id)
             state.raw_evidence.append(run_id)
             state.effect_evidence.append(
@@ -807,6 +811,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.FINALIZATION
             finalized = adapters.condition_runtime.finalize(run_id)
             state.finalized_evidence.append(run_id)
             state.effect_evidence.append(
@@ -824,6 +829,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.EVALUATION
             evaluated = adapters.condition_runtime.evaluate(run_id)
             state.evaluator_outputs.append(run_id)
             state.effect_evidence.append(
@@ -878,16 +884,9 @@ def _run_conditions(
             state.stop(failure_phase, str(exc))
             return
         except AdapterFailure as exc:
-            operation = adapters.audit.calls[-1].operation if adapters.audit.calls else ""
-            phase = {
-                "condition.reserve": Category3Phase.CONDITION_RESERVATION,
-                "condition.enter": Category3Phase.EMPIRICAL_ENTRY,
-                "condition.run": Category3Phase.CONDITION_EXECUTION,
-                "condition.export_raw": Category3Phase.RAW_EXPORT,
-                "condition.finalize": Category3Phase.FINALIZATION,
-                "condition.evaluate": Category3Phase.EVALUATION,
-                "evidence.record": Category3Phase.FINALIZATION,
-            }.get(operation, Category3Phase.CONDITION_EXECUTION)
+            # The operation selected by this controller is authoritative even
+            # when admission fails before an adapter emits its audit event.
+            phase = active_phase
             _transition(state.transitions, phase, "failed", detail=f"{run_id}: {exc}")
             state.stop(phase, str(exc))
             return

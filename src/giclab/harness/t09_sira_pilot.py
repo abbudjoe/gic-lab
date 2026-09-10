@@ -30,6 +30,8 @@ from giclab.harness.campaign_output import (
     CampaignWriterRole,
     admit_campaign_write,
     observe_campaign_write,
+    prepare_campaign_temporary,
+    replace_campaign_write,
     verify_campaign_write,
 )
 from giclab.harness.sira_gate_a import (
@@ -1487,6 +1489,7 @@ def _write_json_atomic(
         before_write(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.parent / f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
+    prepare_campaign_temporary(allowance, temporary)
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(temporary, flags, 0o600)
     published = False
@@ -1503,7 +1506,7 @@ def _write_json_atomic(
         os.fsync(descriptor)
         os.close(descriptor)
         descriptor = -1
-        os.replace(temporary, path)
+        replace_campaign_write(allowance, temporary, path)
         published = True
         verify_campaign_write(allowance, path)
         parent_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)

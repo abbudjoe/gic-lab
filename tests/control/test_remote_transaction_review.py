@@ -2697,6 +2697,8 @@ def test_r6_cleanup_child_channel_actual_writer_before_growth(tmp_path, role, de
         CleanupOutputAuthority,
         CleanupOutputChannel,
         campaign_output_scope,
+        cleanup_output_inventory,
+        reconcile_cleanup_output,
     )
     from tests.control.retained_candidate_effects import write
 
@@ -2750,6 +2752,7 @@ def test_r6_cleanup_child_channel_actual_writer_before_growth(tmp_path, role, de
         action = partial(write_phase_receipt, target, {"actual": "phase-receipt"})
     else:
         action = partial(write, target, {"actual": "phase"})
+    inventory_before = cleanup_output_inventory(tmp_path)
     before = target.read_bytes() if target.exists() else None
     original_paths = set(tmp_path.rglob("*"))
     left, right = socket.socketpair()
@@ -2812,6 +2815,16 @@ def test_r6_cleanup_child_channel_actual_writer_before_growth(tmp_path, role, de
             assert world._campaign_accountant().campaign_output_observed == lease.observed
             assert any(x["operation"] == "verify" for x in authority.events)
             assert authority.events[-1]["operation"] == "close"
+            retirement = len(before) if before is not None else 0
+            assert lease.retired_bytes == retirement
+            census = reconcile_cleanup_output(
+                inventory_before, cleanup_output_inventory(tmp_path), authority
+            )
+            assert census["actual_written_bytes"] == lease.observed
+            assert census["exact_replaced_old_bytes"] == retirement
+            assert census["occupancy_delta_bytes"] == lease.observed - retirement
+            assert census["unreconciled_bytes"] == 0
+            assert not census["uncovered_writes"]
 
 
 @pytest.mark.parametrize("mutation", ["source", "root", "attempt", "replay", "closed", "expired"])
@@ -3404,3 +3417,110 @@ def test_r5_condition_carrier_partial_start_uses_same_owner(
     assert not document["open_owned_descriptors"] and not document["errors"]
     assert document["capture_workers"] == 0
     record_property("condition_owner", json.dumps(document, sort_keys=True))
+
+
+@pytest.mark.parametrize("failure", ["partial", "retirement-drift"])
+def test_r6_actual_atomic_writer_retains_partial_and_rejects_retirement_drift(
+    tmp_path, monkeypatch, failure
+):
+    from giclab.control.production import _host_module
+    from giclab.harness.campaign_output import (
+        CleanupOutputAuthority,
+        campaign_output_scope,
+        cleanup_output_inventory,
+        reconcile_cleanup_output,
+    )
+
+    host = _host_module(ROOT)
+    world, _ = _campaign_writer_world(tmp_path)
+    target = tmp_path / "actual.json"
+    target.write_bytes(b"old exact bytes")
+    temporary = target.with_suffix(f".{os.getpid()}.tmp")
+    original_write = os.write
+    before = cleanup_output_inventory(tmp_path)
+    changed = False
+
+    def interrupted_write(fd, data):
+        nonlocal changed
+        if temporary.exists() and os.fstat(fd).st_ino == temporary.lstat().st_ino:
+            if failure == "partial":
+                if changed:
+                    raise OSError("injected actual partial publication")
+                changed = True
+                return original_write(fd, data[:7])
+            if not changed:
+                changed = True
+                foreign = tmp_path / "foreign-input"
+                foreign.write_bytes(b"foreign replacement preserved")
+                foreign.replace(target)
+        return original_write(fd, data)
+
+    monkeypatch.setattr(os, "write", interrupted_write)
+    with world._campaign_writer_scope(cleanup=True):
+        authority = CleanupOutputAuthority(
+            _cleanup_output_binding(tmp_path),
+            deadline=time.monotonic() + 5,
+            monotonic=time.monotonic,
+        )
+        authority.claim(authority.binding.document())
+        with campaign_output_scope(authority.admit), pytest.raises((OSError, RuntimeError)):
+            host.write_atomic(target, {"actual": "replacement"})
+        (lease,) = authority.leases
+        assert lease.granted > 0 and lease.retired_bytes == 0 and lease.final_identity is None
+        assert lease.temporary_path == temporary
+        assert temporary.stat().st_size == lease.observed > 0
+        assert world._campaign_accountant().campaign_output_observed == lease.observed
+        after = cleanup_output_inventory(tmp_path)
+        if failure == "partial":
+            assert lease.observed == 7 and target.read_bytes() == b"old exact bytes"
+            census = reconcile_cleanup_output(before, after, authority)
+            assert census["actual_written_bytes"] == 7 and census["unreconciled_bytes"] == 0
+        else:
+            assert target.read_bytes() == b"foreign replacement preserved"
+            with pytest.raises(RuntimeError, match="byte equation"):
+                reconcile_cleanup_output(before, after, authority)
+        assert world._campaign_cleanup_remaining >= 0
+        authority.close()
+
+
+def test_r6_repeated_replacement_reconciles_each_exact_retirement_without_refund(tmp_path):
+    from giclab.control.production import _host_module
+    from giclab.harness.campaign_output import (
+        CleanupOutputAuthority,
+        campaign_output_scope,
+        cleanup_output_inventory,
+        reconcile_cleanup_output,
+    )
+
+    host = _host_module(ROOT)
+    world, _ = _campaign_writer_world(tmp_path)
+    path = tmp_path / "mutable.json"
+    path.write_bytes(b"prior retained state")
+    initial = path.stat().st_size
+    before = cleanup_output_inventory(tmp_path)
+    with world._campaign_writer_scope(cleanup=True):
+        authority = CleanupOutputAuthority(
+            _cleanup_output_binding(tmp_path),
+            deadline=time.monotonic() + 5,
+            monotonic=time.monotonic,
+        )
+        authority.claim(authority.binding.document())
+        remaining = world._campaign_cleanup_remaining
+        with campaign_output_scope(authority.admit):
+            host.write_atomic(path, {"payload": "x" * 101})
+            first_size = path.stat().st_size
+            host.write_atomic(path, {"payload": "small"})
+        first, second = authority.leases
+        assert first.retired_bytes == initial
+        assert second.retired_bytes == first_size
+        assert first.final_identity == second.initial_identity
+        assert remaining - world._campaign_cleanup_remaining == first.granted + second.granted
+        assert (
+            world._campaign_accountant().campaign_output_observed
+            == first.observed + second.observed
+        )
+        census = reconcile_cleanup_output(before, cleanup_output_inventory(tmp_path), authority)
+        assert census["exact_replaced_old_bytes"] == initial + first_size
+        assert census["unreconciled_bytes"] == 0
+        assert len(census["retirements"]) == 2
+        authority.close()

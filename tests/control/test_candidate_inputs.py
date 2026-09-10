@@ -204,6 +204,35 @@ def test_normal_local_qualifier_rejects_candidate_before_runtime_access(
         "preflight-start-failure",
         "local-qualification",
         "package-current-commit",
+        "matrix-transfer-partial",
+        "matrix-transfer-verify-hook",
+        "matrix-preflight-hook",
+        "matrix-qualification-hook",
+        "matrix-freeze-unpublished",
+        "matrix-postfreeze-zero",
+        "matrix-runtime-hook",
+        "matrix-raw-export-hook",
+        "matrix-finalizer-hook",
+        "matrix-evaluator-hook",
+        "matrix-checkpoint-hook",
+        "matrix-cleanup-terminal-hook",
+        "matrix-ownership-missing",
+        "matrix-ownership-corrupt",
+        "matrix-cleanup-resume",
+        "matrix-cleanup-interrupt-exhausted",
+        "matrix-terminal-answer",
+        "matrix-terminal-status",
+        "matrix-raw-reference",
+        "matrix-cross-session-journal",
+        "matrix-finalizer-reference",
+        "matrix-evaluator-mutation",
+        "matrix-selected-reference",
+        "transaction-io-continuation",
+        "matrix-ipc-neverread",
+        "matrix-ipc-midframe",
+        "matrix-model-send-loss",
+        "matrix-runtime-halfclose",
+        "matrix-terminal-ack",
     ],
     ids=[
         "package",
@@ -220,6 +249,35 @@ def test_normal_local_qualifier_rejects_candidate_before_runtime_access(
         "preflight-start-failure",
         "local-qualification",
         "package-current-commit",
+        "matrix-transfer-partial",
+        "matrix-transfer-verify-hook",
+        "matrix-preflight-hook",
+        "matrix-qualification-hook",
+        "matrix-freeze-unpublished",
+        "matrix-postfreeze-zero",
+        "matrix-runtime-hook",
+        "matrix-raw-export-hook",
+        "matrix-finalizer-hook",
+        "matrix-evaluator-hook",
+        "matrix-checkpoint-hook",
+        "matrix-cleanup-terminal-hook",
+        "matrix-ownership-missing",
+        "matrix-ownership-corrupt",
+        "matrix-cleanup-resume",
+        "matrix-cleanup-interrupt-exhausted",
+        "matrix-terminal-answer",
+        "matrix-terminal-status",
+        "matrix-raw-reference",
+        "matrix-cross-session-journal",
+        "matrix-finalizer-reference",
+        "matrix-evaluator-mutation",
+        "matrix-selected-reference",
+        "transaction-io-continuation",
+        "matrix-ipc-neverread",
+        "matrix-ipc-midframe",
+        "matrix-model-send-loss",
+        "matrix-runtime-halfclose",
+        "matrix-terminal-ack",
     ],
 )
 def test_candidate_actual_package_verifier_in_isolated_source_process(
@@ -254,9 +312,11 @@ def test_candidate_actual_package_verifier_in_isolated_source_process(
         # Whole-transaction watchdog includes all retained phase subprocesses
         # and cleanup. Individual phase/transport deadlines remain unchanged.
         timeout=900
-        if exercise_preparation
+        if (isinstance(exercise_preparation, str) and exercise_preparation.startswith("matrix-"))
+        or exercise_preparation
         in {
             "transaction",
+            "transaction-io-continuation",
             "condition-failure-export",
             "condition-failure-cleanup-admission-disconnect",
             "condition-failure-cleanup-descendant-interruption",
@@ -327,6 +387,9 @@ def test_candidate_actual_package_verifier_in_isolated_source_process(
         transaction = preparation["joined_transaction"]
         if exercise_preparation is True:
             assert transaction == "not-run"
+        elif isinstance(exercise_preparation, str) and exercise_preparation.startswith("matrix-"):
+            assert transaction["terminal_state"].startswith("category3-shadow-stopped-cleanup-")
+            assert len(transaction["condition_identities_consumed"]) <= 2
         elif exercise_preparation == "condition-failure-export":
             assert transaction["terminal_state"] == "category3-shadow-stopped-cleanup-verified"
             assert transaction["earliest_stopping_phase"] == "condition-execution"

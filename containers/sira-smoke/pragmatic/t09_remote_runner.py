@@ -71,6 +71,8 @@ from giclab.harness.campaign_output import (
     CampaignWriterRole,
     admit_campaign_write,
     observe_campaign_write,
+    prepare_campaign_temporary,
+    replace_campaign_write,
     verify_campaign_write,
 )
 from giclab.harness.lambda_campaign_lifecycle import AutonomousPilotLifecycleLimits
@@ -1056,7 +1058,9 @@ _HOST_OUTPUT_ADMISSION: ContextVar[Callable[[Path, int], None] | None] = Context
 )
 
 
-def write_exclusive(path: Path, value: object) -> None:
+def write_exclusive(
+    path: Path, value: object, *, on_unpublished: Callable[[], object] | None = None
+) -> None:
     """Atomically publish one immutable JSON object with O_EXCL semantics."""
 
     encoded = (json.dumps(value, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
@@ -1070,7 +1074,9 @@ def write_exclusive(path: Path, value: object) -> None:
         admission(path, len(encoded))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = _prepare_atomic_publication_temporary(path)
+    prepare_campaign_temporary(allowance, temporary)
     descriptor = -1
+    published = False
     try:
         descriptor = os.open(
             temporary,
@@ -1088,6 +1094,11 @@ def write_exclusive(path: Path, value: object) -> None:
         os.close(descriptor)
         descriptor = -1
         os.link(temporary, path, follow_symlinks=False)
+        published = True
+    except OSError:
+        if on_unpublished is not None and not published and not os.path.lexists(path):
+            on_unpublished()
+        raise
     finally:
         if descriptor >= 0:
             os.close(descriptor)
@@ -1112,6 +1123,7 @@ def write_bytes_exclusive(
         admission(path, len(value))
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = _prepare_atomic_publication_temporary(path)
+    prepare_campaign_temporary(allowance, temporary)
     descriptor = -1
     try:
         descriptor = os.open(
@@ -1161,6 +1173,7 @@ def write_atomic(path: Path, value: object) -> None:
     allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.with_suffix(f".{os.getpid()}.tmp")
+    prepare_campaign_temporary(allowance, temporary)
     descriptor = os.open(
         temporary,
         os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -1177,7 +1190,7 @@ def write_atomic(path: Path, value: object) -> None:
         os.fsync(descriptor)
     finally:
         os.close(descriptor)
-    os.replace(temporary, path)
+    replace_campaign_write(allowance, temporary, path)
     verify_campaign_write(allowance, path)
     parent_descriptor = os.open(
         path.parent,
@@ -5790,7 +5803,10 @@ def derive_cleanup_export_phase(
         or bool(retained_chronology_projection)
         or retained_pending is not None
     )
-    if manifest_present and cleanup_journal_state.freeze_publication_started is False:
+    if manifest_present and (
+        cleanup_journal_state.freeze_publication_started is False
+        or cleanup_journal_state.freeze_publication_aborted is True
+    ):
         raise CleanupExportEvidenceError("frozen publication contradicts its durable journal")
     if postfreeze_present != manifest_present or (preflight_present and not postfreeze_present):
         raise CleanupExportEvidenceError("frozen manifest publication evidence is partial")
@@ -5802,7 +5818,10 @@ def derive_cleanup_export_phase(
     if not manifest_present:
         if (
             cleanup_journal_state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
-            or cleanup_journal_state.freeze_publication_started is not False
+            or (
+                cleanup_journal_state.freeze_publication_started is not False
+                and cleanup_journal_state.freeze_publication_aborted is not True
+            )
             or required_acknowledgements != 0
         ):
             raise CleanupExportEvidenceError("pre-freeze cleanup evidence is contradictory")
@@ -8983,7 +9002,7 @@ def write_frozen_run_manifest(
         raise T09HostError("replacement runtime cannot be frozen")
     path = _pilot_root(artifact_root) / "frozen-run-manifest.json"
     cleanup_journal.begin_freeze_publication()
-    write_exclusive(path, manifest)
+    write_exclusive(path, manifest, on_unpublished=cleanup_journal.abort_unpublished_freeze)
     return path, manifest
 
 
@@ -24465,8 +24484,8 @@ def _cleanup_without_optional_pilot_state(
         raise T09HostError("cleanup journal host ownership drifted")
     if (
         journal_state.freeze_publication_started is not False
-        or journal_state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
-    ):
+        and journal_state.freeze_publication_aborted is not True
+    ) or journal_state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED:
         raise T09HostError("missing pilot state lacks durable proof of pre-freeze absence")
 
     prefix: list[str] | None = None
@@ -28433,7 +28452,10 @@ def _live_host_cleanup(
         state = cleanup_journal.load()
         if (
             retained != cleanup_journal.basic_closeout_receipt()
-            or state.freeze_publication_started is not False
+            or (
+                state.freeze_publication_started is not False
+                and state.freeze_publication_aborted is not True
+            )
             or _unfinished_remote_cleanup_target_ids(cleanup_journal)
         ):
             raise T09HostError("early cleanup terminal lacks exact durable pre-freeze ownership")

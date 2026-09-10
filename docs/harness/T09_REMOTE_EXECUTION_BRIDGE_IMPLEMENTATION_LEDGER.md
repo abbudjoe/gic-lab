@@ -4547,3 +4547,58 @@ separate from guarded inner doubles and zero real experimental/provider/model ac
 EXP-0001 science, model, evaluator, data, task order, budgets and zero retries remain
 unchanged. No V17, live grant, new scientific cost or merge.
 t09_remote_execution_bridge_review_repair_blocked.
+
+### Remaining coupled R1–R6 development matrix — in progress (2026-09-10 UTC)
+
+Start d7f0921955aec8183a754646030cd6220b96d80d, tree
+4a8206bb18ff5eaa6380cd7c9e5ecec2810a45ff; five ordinary descendants and
+clean worktree/index verified. Remote/PR a98b4b8 and required f56dfc2 base
+unchanged; open/draft/unmerged/auto-merge disabled. Joseph authorizes the
+remaining identity/answer, durable controller cleanup-prefix, causal-hook,
+controller IPC/lifetime and complete writer-mechanism development matrix.
+The finite machine-readable requirement/source/node map is held in protected
+development scratch and will accompany the single final private handoff.
+All rows begin not-started pending reuse audit/new exact-source evidence.
+Prior 219-pass focused development evidence and all original reds remain intact.
+Scope: coherent source/test repairs, guarded focused container iterations and
+one final matrix-focused selection. No full ci-check, final V16 regeneration,
+product push/PR change, new runtime, Source109 recovery or independent approval.
+Only existing gic-pr15-clean-ci may resume under its identity/resource/isolation
+checks. Source109 UNKNOWN/excluded/recovery deferred; old/shared runtimes unused.
+Assembly skill applies; explicit no-delegation instruction controls. Independent
+review follows this assignment. No frozen-science change or real model cost.
+
+#### Coupled matrix: unvalidated implementation checkpoint
+
+The new joined prefixes exposed three concrete source defects: freeze publication
+had no durable failed-before-publication continuation; the controller inferred a
+failure phase from the preceding adapter audit entry; and interrupted cleanup
+removed its retained credential before the same bounded continuation could use it.
+The exclusive publisher now records an actual unpublished failure, the controller
+tracks its selected phase explicitly, and final release owns credential destruction
+when cleanup is interrupted. Missing published evidence still cannot mint absence.
+
+Cleanup writer reconciliation now records each admitted temporary and exact old-file
+retirement. Its independent full-root census compares occupancy change with actual
+writes minus those retirements and baseline removals. Grants are not refunded.
+Partial writes and retained temporaries remain counted; changed replacement identity
+fails before replacement and unexplained census changes fail reconciliation.
+
+Development run gic-pr15-ci-d328a2465cf11b05 passed 27 nodes (four joined cleanup
+prefixes plus 23 actual-writer cases), pytest exit 0, input-manifest SHA-256
+04c00d5e8380a9b9400ccdcfc57009da3ea7166834e37c0c460b4ffacbc9aee0.
+Its exact-owned ephemeral resources were removed after verified export. Earlier
+runs c590e93651f01d77, 3fb67325e02605d3 and 2ebf2eeb092162b1 retain their separate
+red assertions, source archives and exported evidence. Fixture-parent creation,
+clock binding and cleanup-prefix assertions were corrected without replacing
+production phase results. No run is labelled validation of committed d7f092.
+
+The broader downstream/coupling/IPC selection gic-pr15-ci-85d6229ed26d11f9 is still
+running on input-manifest SHA-256
+7a42acbe3dd980f01bbe9f64e697310b16b50ed630e6b0f47b71946ae7d19504.
+Subsequent host edits, including completed-call replay and disconnect regressions,
+are outside that sealed archive and remain unvalidated. This ordinary local
+checkpoint preserves work; it is not a matrix-complete ancestor or receipt binding.
+Source-only Ruff/diff checks and type checking of the four changed typed production
+modules passed. Required remaining work is the complete coupled selection, failure
+correction and one exact-source green matrix run. No independent finding is closed.
