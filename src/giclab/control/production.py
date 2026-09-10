@@ -507,6 +507,7 @@ class _AccountingObserver(ConditionEventObserver):
         self._remote_output_allowance = 0
         self._controller_output_allowance = 0
         self._controller_output_observed = 0
+        self.control_write_reconciliations: list[dict[str, object]] = []
         self._controller_output_reconciled = 0
         self._failure_output_remaining: int | None = None
         self._closed_remote_output: int | None = None
@@ -2798,11 +2799,19 @@ class ProductionCategory3World:
         host = _host_module(self.repository)
         allowed = (self._pilot_state, *extra_paths)
         if len(set(allowed)) != len(allowed) or any(
-            path.parent not in (self._pilot_state.parent, self.public_root) for path in extra_paths
+            not path.is_relative_to(self._pilot_state.parent) and path.parent != self.public_root
+            for path in extra_paths
         ):
             raise AdapterFailure("control writer has an undeclared publication path")
 
-        roots = tuple(dict.fromkeys(path.parent for path in allowed))
+        candidates = tuple(dict.fromkeys(path.parent for path in allowed))
+        # Exact admitted paths may include a nested selection receipt. Census
+        # each complete root once; nested roots must not count the same bytes twice.
+        roots = tuple(
+            root
+            for root in candidates
+            if not any(root != other and root.is_relative_to(other) for other in candidates)
+        )
         before_bytes = sum(host.full_attempt_tree_usage(root).bytes for root in roots)
         before_files = {
             path: path.stat(follow_symlinks=False) for path in allowed if os.path.lexists(path)
@@ -2841,14 +2850,35 @@ class ProductionCategory3World:
             # clamps a decrease away, and includes the whole declared roots.
             try:
                 retired_bytes = 0
+                retirements = []
                 for path, before in before_files.items():
                     after = path.stat(follow_symlinks=False)
                     if (after.st_dev, after.st_ino) != (before.st_dev, before.st_ino):
                         if path not in admitted:
                             raise AdapterFailure("unadmitted control replacement")
                         retired_bytes += before.st_size
-                growth = (
-                    sum(host.full_attempt_tree_usage(root).bytes for root in roots) - before_bytes
+                        retirements.append(
+                            {
+                                "path": str(path.relative_to(self.root)),
+                                "old_bytes": before.st_size,
+                                "new_bytes": after.st_size,
+                            }
+                        )
+                after_bytes = sum(host.full_attempt_tree_usage(root).bytes for root in roots)
+                growth = after_bytes - before_bytes
+                observer.control_write_reconciliations.append(
+                    {
+                        "run_id": run_id,
+                        "allowed_paths": [str(path.relative_to(self.root)) for path in allowed],
+                        "admitted_bytes": sum(admitted.values()),
+                        "actual_written_bytes": written_bytes,
+                        "before_bytes": before_bytes,
+                        "after_bytes": after_bytes,
+                        "exact_retired_old_bytes": retired_bytes,
+                        "retirements": retirements,
+                        "unreconciled_bytes": growth - (written_bytes - retired_bytes),
+                        "interpretation": "independent census; not an admission or grant refund",
+                    }
                 )
                 if growth != written_bytes - retired_bytes:
                     raise AdapterFailure("control writer and retained occupancy do not reconcile")
@@ -4151,6 +4181,8 @@ class ProductionCategory3World:
         cause: BaseException,
     ) -> NoReturn:
         self._record(operation, run_id, "failed")
+        record: EssentialFailureRecord | None = None
+        sealing_error: BaseException | None = None
         try:
             record = self._seal_accepted_condition_failure(
                 run_id=run_id,
@@ -4159,8 +4191,22 @@ class ProductionCategory3World:
             )
         except BaseException as seal_exc:
             self._record(operation, run_id, "essential-failure-unsealed")
-            raise AdapterFailure(f"{message} could not be sealed and exported") from seal_exc
-        self._record(operation, run_id, "essential-failure-sealed")
+            sealing_error = seal_exc
+        else:
+            self._record(operation, run_id, "essential-failure-sealed")
+        # Export/acknowledgement writes occur after the sealed accounting snapshot.
+        # Carry their actual observations and all unused grants before cleanup,
+        # without rewriting that immutable snapshot or admitting bytes afterward.
+        try:
+            self._record_boundary_state(run_id, self._condition_observers[run_id])
+        except BaseException as accounting_exc:
+            self._record(operation, run_id, "failure-accounting-unreconciled")
+            raise AdapterFailure(
+                f"{message} failed ({cause}); failure accounting did not reconcile"
+            ) from accounting_exc
+        if sealing_error is not None:
+            raise AdapterFailure(f"{message} could not be sealed and exported") from sealing_error
+        assert record is not None
         raise ConsumedConditionFailure(
             f"{message} stopped with reconstructable essential evidence",
             record=record,
@@ -4931,18 +4977,22 @@ class ProductionCategory3World:
             finalized_paths = tuple(path for path in final_root.rglob("*") if not path.is_dir())
             held_finalized = self._hold_artifact_set(finalized_paths)
             finalized_binding = self._artifact_binding(held_finalized)
-            observer = self._condition_observers[run_id]
-            selection_root = self._pilot_state.parent
-            before_selection = host.full_attempt_tree_usage(selection_root).bytes
-
-            def admit_selection(path: Path, count: int) -> None:
-                if not path.is_relative_to(selection_root) or any(
-                    item.is_symlink() for item in (path, *path.parents)
-                ):
-                    raise AdapterFailure("shared finalizer selection escaped its control root")
-                observer.allocate_controller_output_bytes(count=count)
-
-            try:
+            state = pilot.load_validated_pilot_state(
+                self._pilot_state, execution_contract_sha256=execution.sha256
+            )
+            history = state.get("attempt_finalization_history")
+            if not isinstance(history, dict) or not isinstance(history.get(run_id, []), list):
+                raise AdapterFailure("finalizer selection history is malformed")
+            selection_path = (
+                pilot._selection_receipt_directory(
+                    self._pilot_state, run_id, contract=self.contract
+                )
+                / f"selection-{len(history.get(run_id, [])) + 1:04d}.json"
+            )
+            with self._pilot_control_writer(run_id, extra_paths=(selection_path,)) as (
+                admit,
+                observed,
+            ):
                 pilot.mark_attempt_completed(
                     self._pilot_state,
                     execution_contract_sha256=execution.sha256,
@@ -4959,16 +5009,9 @@ class ProductionCategory3World:
                     semantic_projection_sha256=outcome.semantic_projection_sha256,
                     finalized_output_root=attempt.finalized_output_root,
                     finalization_complete_sha256=outcome.completion_receipt_sha256,
-                    before_write=admit_selection,
+                    before_write=admit,
+                    after_output_write=observed,
                 )
-            finally:
-                observed_selection = (
-                    host.full_attempt_tree_usage(selection_root).bytes - before_selection
-                )
-                if observed_selection < 0:
-                    raise AdapterFailure("shared finalizer selection removed retained evidence")
-                observer.observe_controller_output_bytes(count=observed_selection)
-                self._record_boundary_state(run_id, observer)
 
         except BaseException as exc:
             for artifact in held_finalized:

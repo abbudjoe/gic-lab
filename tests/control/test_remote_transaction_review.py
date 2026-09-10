@@ -36,6 +36,56 @@ from giclab.harness.t09_provider_contracts import V16_PROVIDER_CONTRACT
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_r2_delayed_attach_delivers_actual_bytes_only_after_actual_exit(exit_code):
+    import subprocess
+
+    from tests.control.retained_candidate_effects import AttachAfterProcessExit
+
+    payload = b"actual delayed fixture stdout\n" * 8192
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            "-B",
+            "-c",
+            "import os,sys; b=b'actual delayed fixture stdout\\n'*8192; "
+            "n=0\nwhile n<len(b): n+=os.write(1,b[n:n+65536])\nsys.exit(int(sys.argv[1]))",
+            str(exit_code),
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    deadline = time.monotonic() + 10
+    carrier = AttachAfterProcessExit(process, deadline=deadline, maximum_bytes=len(payload))
+    observed = bytearray()
+    try:
+        while True:
+            assert time.monotonic() < deadline
+            ready, _, _ = select.select([carrier.stdout], [], [], 0.1)
+            if not ready:
+                continue
+            chunk = os.read(carrier.stdout.fileno(), 65536)
+            # The real child was reaped before the carrier made a byte visible.
+            assert process.poll() == exit_code
+            if not chunk:
+                break
+            assert len(observed) + len(chunk) <= len(payload)
+            observed.extend(chunk)
+        assert carrier.wait(timeout=2) == exit_code
+        assert bytes(observed) == payload
+        assert carrier.observed_exit == exit_code
+        assert carrier.observation["actual_process_exit"] == exit_code
+        assert carrier.observation["buffered_stdout_bytes"] == len(payload)
+        assert carrier.error is None and not carrier.thread.is_alive()
+    finally:
+        carrier.stdout.close()
+        if process.poll() is None:
+            process.kill()
+        carrier.wait(timeout=2)
+        process.stderr.close()
+
+
 def test_shared_checkpoint_clock_uses_sealed_origin_and_rejects_drift(tmp_path):
     import hashlib
     from types import SimpleNamespace
@@ -2209,6 +2259,7 @@ def test_r6_shared_pilot_entry_establishes_and_reuses_one_accountant(tmp_path):
     boundary, template = conformance._observer_for(_binding())
     world = object.__new__(ProductionCategory3World)
     world.repository = ROOT
+    world.root = tmp_path
     world._pilot_state = tmp_path / "pilot-state.json"
     world._condition_observers = {}
     world._campaign_output_boundary = None
@@ -2341,7 +2392,7 @@ def test_r6_failed_initial_control_reserve_cannot_be_reused(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("fault", ["none", "deny", "partial"])
+@pytest.mark.parametrize("fault", ["none", "deny", "partial", "retirement-drift"])
 def test_r6_mutable_control_counts_actual_writes_instead_of_signed_occupancy(
     tmp_path, monkeypatch, fault
 ):
@@ -2367,7 +2418,12 @@ def test_r6_mutable_control_counts_actual_writes_instead_of_signed_occupancy(
             if writes:
                 raise OSError("synthetic interrupted admitted write")
             data = data[:7]
-        return actual_write(fd, data)
+        count = actual_write(fd, data)
+        if fault == "retirement-drift" and not writes:
+            replacement = tmp_path / "foreign-replacement"
+            replacement.write_bytes(b"foreign owned replacement")
+            replacement.replace(path)
+        return count
 
     monkeypatch.setattr(pilot.os, "write", write)
     if fault == "none":
@@ -2377,17 +2433,23 @@ def test_r6_mutable_control_counts_actual_writes_instead_of_signed_occupancy(
         assert len(path.read_bytes()) < len(original)
         assert sum(writes) == path.stat().st_size == sum(grants)
     else:
-        with pytest.raises((RuntimeError, OSError), match="synthetic"):
+        with pytest.raises((RuntimeError, OSError), match=r"synthetic|retirement identity"):
             pilot._write_json_atomic(
                 path, {"small": True}, before_write=admit, after_output_write=writes.append
             )
-        assert path.read_bytes() == original
+        assert path.read_bytes() == (
+            b"foreign owned replacement" if fault == "retirement-drift" else original
+        )
         temporary = list(tmp_path.glob(".state.json.*.tmp"))
         if fault == "deny":
             assert not temporary and not grants and not writes
         else:
             assert len(temporary) == 1
-            assert temporary[0].stat().st_size == sum(writes) == 7 < sum(grants)
+            assert temporary[0].stat().st_size == sum(writes)
+            if fault == "retirement-drift":
+                assert sum(writes) == sum(grants)
+            else:
+                assert sum(writes) == 7 < sum(grants)
 
 
 # Campaign writers use the production admission connection and real file writers.
@@ -3360,6 +3422,8 @@ def test_r5_condition_carrier_partial_start_uses_same_owner(
     effects = object.__new__(retained.RetainedCandidateEffects)
     effects.contract = V16_PROVIDER_CONTRACT
     effects.repository = ROOT
+    effects.fault_plan = SimpleNamespace(fail_operation=None)
+    effects.condition_ownership = {}
     effects.source_inputs = SimpleNamespace(root=ROOT)
     effects.transfer_request = SimpleNamespace(
         binding=SimpleNamespace(remote_root=str(root / "remote")),
@@ -3524,3 +3588,144 @@ def test_r6_repeated_replacement_reconciles_each_exact_retirement_without_refund
         assert census["unreconciled_bytes"] == 0
         assert len(census["retirements"]) == 2
         authority.close()
+
+
+@pytest.mark.parametrize("partial_state", [False, True])
+def test_r6_selection_callback_counts_nested_receipt_and_replaced_state(
+    tmp_path, monkeypatch, partial_state
+):
+    from giclab.harness import t09_sira_pilot as pilot
+
+    world, _ = _campaign_writer_world(tmp_path)
+    world.repository = ROOT
+    world.public_root = tmp_path / "public"
+    world.public_root.mkdir(mode=0o700)
+    world._pilot_state = tmp_path / "control/state.json"
+    world._pilot_state.parent.mkdir(mode=0o700)
+    original = b"old retained state" * 256
+    world._pilot_state.write_bytes(original)
+    world._campaign_deadline_monotonic = time.monotonic() + 30
+    run = V16_PROVIDER_CONTRACT.run_ids[0]
+    observer = world._condition_accountant(run)
+    receipt = world._pilot_state.parent / "selections" / run / "selection-0001.json"
+    actual_write = pilot.os.write
+    calls = 0
+
+    def write(fd, data):
+        nonlocal calls
+        calls += 1
+        if partial_state and calls >= 2:
+            if calls > 2:
+                raise OSError("synthetic selection state interruption")
+            data = data[:7]
+        return actual_write(fd, data)
+
+    monkeypatch.setattr(pilot.os, "write", write)
+    with (
+        pytest.raises(OSError, match="synthetic selection") if partial_state else nullcontext(),
+        world._pilot_control_writer(run, extra_paths=(receipt,)) as (admit, observed),
+    ):
+        pilot._write_json_exclusive(
+            receipt,
+            {"selection": "actual receipt"},
+            before_write=admit,
+            after_output_write=observed,
+        )
+        pilot._write_json_atomic(
+            world._pilot_state, {"selected": True}, before_write=admit, after_output_write=observed
+        )
+    receipt_size = receipt.stat().st_size
+    if partial_state:
+        assert world._pilot_state.read_bytes() == original
+        temporary = list(world._pilot_state.parent.glob(".state.json.*.tmp"))
+        assert len(temporary) == 1 and temporary[0].stat().st_size == 7
+        expected = receipt_size + 7
+    else:
+        assert world._pilot_state.stat().st_size < len(original)
+        expected = receipt_size + world._pilot_state.stat().st_size
+    census = observer.control_write_reconciliations[-1]
+    assert census["actual_written_bytes"] == expected and census["unreconciled_bytes"] == 0
+    assert census["exact_retired_old_bytes"] == (0 if partial_state else len(original))
+    assert len(census["retirements"]) == (0 if partial_state else 1)
+    assert observer._controller_output_observed == expected
+    assert observer._controller_output_reconciled == expected
+    accounting = observer.boundary.accounting_document()
+    assert accounting["observed_lower_bound"]["condition"]["output_bytes"] == expected
+    assert accounting["reserved_upper_bound"]["condition"]["output_bytes"] >= expected
+
+
+@pytest.mark.parametrize(
+    ("exit_code", "sessions", "accepted"),
+    [(1, 0, True), (0, 0, False), (1, 1, True), (0, 1, True), (1, 2, False)],
+)
+def test_r2_raw_completion_requires_session_unless_sealed_process_failed(
+    tmp_path, exit_code, sessions, accepted
+):
+    """Exercise the exact-byte reader on a labelled synthetic raw-seal fixture.
+
+    The joined send-loss case supplies full producer/export/cleanup qualification;
+    this component isolates missing/ambiguous-session and exit-tampering rejection.
+    No source validator or completion consumer is replaced.
+    """
+    from giclab.control.production import _host_module
+
+    host = _host_module(ROOT)
+    contract = V16_PROVIDER_CONTRACT
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    (raw / "host-cleanup-receipt.json").write_bytes(canonical_bytes({"returncode": exit_code}))
+    if sessions:
+        (raw / "sira-output").mkdir()
+        for index in range(sessions):
+            (raw / "sira-output" / f"session-{index}.json").write_bytes(
+                canonical_bytes(
+                    {
+                        "is_complete": True,
+                        "history": [[{}, "send_msg_to_user('partial fixture answer')"]],
+                        "error": "",
+                    }
+                )
+            )
+    files, total = host._raw_attempt_files(raw)
+    common = {
+        "schema_version": "0.1.0",
+        "plan_id": contract.plan_id,
+        "host_run_id": contract.host_run_id,
+        "provider_contract_version": contract.version,
+        "run_id": contract.run_ids[0],
+    }
+    manifest = {
+        **common,
+        "package_commit": "a" * 40,
+        "raw_attempt_root": "raw",
+        "files": files,
+        "total_bytes": total,
+    }
+    manifest_path = tmp_path / "raw-attempt-manifest.json"
+    manifest_path.write_bytes(canonical_bytes(manifest))
+    (tmp_path / "raw-attempt-complete.json").write_bytes(
+        canonical_bytes(
+            {
+                **common,
+                "raw_attempt_complete": True,
+                "empirical_attempt_consumed": True,
+                "raw_manifest_sha256": host.file_sha256(manifest_path),
+                "raw_total_bytes": total,
+                "raw_file_count": len(files),
+                "condition_retry_permitted": False,
+            }
+        )
+    )
+    arguments = dict(attempt_root=tmp_path, run_id=contract.run_ids[0], package_commit="a" * 40)
+    if not accepted:
+        with pytest.raises(host.T09HostError, match="exactly one sealed session"):
+            host.read_retained_condition_completion(**arguments, exit_code=exit_code)
+    else:
+        result = host.read_retained_condition_completion(**arguments, exit_code=exit_code)
+        assert result["process_exit_code"] == exit_code
+        assert result["completed"] is bool(sessions)
+        assert result["answer"] == ("partial fixture answer" if sessions else None)
+        assert (result["source_session"] is None) is (sessions == 0)
+        with pytest.raises(host.T09HostError, match="exit differs from sealed evidence"):
+            host.read_retained_condition_completion(**arguments, exit_code=exit_code + 1)
+    assert host._raw_attempt_files(raw) == (files, total)

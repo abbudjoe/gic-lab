@@ -167,6 +167,30 @@ def admit_campaign_write(
     return lease
 
 
+def callback_campaign_write(
+    path: Path,
+    size: int,
+    role: CampaignWriterRole,
+    *,
+    admit: Callable[[Path, int], None],
+    observed: Callable[[int], None] | None,
+) -> CampaignWriteAllowance:
+    """Adapt explicit shared callbacks to the same single-publication primitive.
+
+    The callback owns admission. This local allowance cannot issue a policy grant;
+    it carries only that exact approved size, actual writes and held file identity.
+    No context-variable owner is introduced for these explicit request callbacks.
+    """
+    if type(size) is not int or size < 0:
+        raise ValueError("callback writer length must be a non-negative integer")
+    lease = CampaignWriteAllowance(
+        path, role, size, consume=observed if observed is not None else lambda _count: None
+    )
+    _bind_campaign_initial(lease)
+    admit(path, size)
+    return lease
+
+
 def observe_campaign_write(allowance: CampaignWriteAllowance | None, count: int) -> None:
     if allowance is not None:
         allowance.observe(count)

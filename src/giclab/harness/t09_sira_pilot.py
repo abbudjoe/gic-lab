@@ -29,6 +29,7 @@ from typing import Any, Final, Literal, cast
 from giclab.harness.campaign_output import (
     CampaignWriterRole,
     admit_campaign_write,
+    callback_campaign_write,
     observe_campaign_write,
     prepare_campaign_temporary,
     replace_campaign_write,
@@ -1486,7 +1487,13 @@ def _write_json_atomic(
     encoded = (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
     allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
     if allowance is None and before_write is not None:
-        before_write(path, len(encoded))
+        allowance = callback_campaign_write(
+            path,
+            len(encoded),
+            CampaignWriterRole.HOST_CONTROL,
+            admit=before_write,
+            observed=after_output_write,
+        )
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     temporary = path.parent / f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
     prepare_campaign_temporary(allowance, temporary)
@@ -1572,7 +1579,13 @@ def _write_json_exclusive(
     encoded = (json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n").encode()
     allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.HOST_CONTROL)
     if allowance is None and before_write is not None:
-        before_write(path, len(encoded))
+        allowance = callback_campaign_write(
+            path,
+            len(encoded),
+            CampaignWriterRole.HOST_CONTROL,
+            admit=before_write,
+            observed=after_output_write,
+        )
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     descriptor = os.open(
         path,
@@ -2490,6 +2503,7 @@ def mark_attempt_completed(
     finalized_output_root: str,
     finalization_complete_sha256: str,
     before_write: Callable[[Path, int], None] | None = None,
+    after_output_write: Callable[[int], None] | None = None,
 ) -> None:
     """Select one downstream finalization without reopening the condition attempt."""
 
@@ -2549,7 +2563,9 @@ def mark_attempt_completed(
         ):
             state["first_pair_decision"] = "stop-before-task-b"
             state["first_pair_selection_drift_detected"] = True
-            _write_json_atomic(path, state, before_write=before_write)
+            _write_json_atomic(
+                path, state, before_write=before_write, after_output_write=after_output_write
+            )
             raise T09PilotError(
                 "post-checkpoint Task A finalization changed the bound semantic projection"
             )
@@ -2577,6 +2593,7 @@ def mark_attempt_completed(
                 "selection": selection,
             },
             before_write=before_write,
+            after_output_write=after_output_write,
         )
         retained_history.append(file_sha256(receipt_path))
     else:
@@ -2587,7 +2604,9 @@ def mark_attempt_completed(
     ]
     state["attempt_finalizations"] = finalizations
     state["attempt_finalization_history"] = history
-    _write_json_atomic(path, state, before_write=before_write)
+    _write_json_atomic(
+        path, state, before_write=before_write, after_output_write=after_output_write
+    )
 
 
 def record_first_pair_checkpoint(

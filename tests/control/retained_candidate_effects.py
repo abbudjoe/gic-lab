@@ -2,7 +2,8 @@
 
 Only environmental provider responses, local carrier copies and Docker observations
 are substituted. Unimplemented environmental cases fail before an external call.
-This development harness does not yet establish a successful joined transaction.
+Joined receipts are development evidence against bound environmental fixtures;
+they are not live execution, image qualification or independent approval.
 """
 
 from __future__ import annotations
@@ -78,6 +79,113 @@ _EXPORT_OUTPUT_ALLOCATION_BYTES = 16 * 1024 * 1024
 _EXPORT_CARRIER_RECORD_BYTES = 1024 * 1024
 
 RELATIVE = "tests/control/retained_candidate_effects.py"
+
+
+class AttachAfterProcessExit:
+    """Bound leaf carrier: deliver actual stdout only after the real child exits.
+
+    This models delayed attach delivery, not a process/phase success receipt.
+    The host's actual pipe capture, allowance and failure consumers still run.
+    """
+
+    def __init__(self, process, *, deadline, maximum_bytes=8 * 1024**2):
+        if process.stdout is None or not 0 < maximum_bytes <= 8 * 1024**2:
+            raise RuntimeError("delayed attach lacks bounded actual stdout")
+        self.process = process
+        self.deadline = deadline
+        self.maximum_bytes = maximum_bytes
+        self.stderr = process.stderr
+        self.pid = process.pid
+        self.error = None
+        self.observed_exit = None
+        self.buffered_bytes = 0
+        self.peer_closed = False
+        self.observation = {}
+        read_fd, write_fd = os.pipe()
+        self.stdout = os.fdopen(read_fd, "rb", buffering=0)
+        self.thread = threading.Thread(
+            target=self._deliver, args=(process.stdout, write_fd), name="bound-delayed-attach"
+        )
+        self.thread.start()
+
+    @property
+    def returncode(self):
+        return self.process.returncode
+
+    def poll(self):
+        return self.process.poll()
+
+    def _remaining(self):
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("bound delayed attach deadline exhausted")
+        return remaining
+
+    def _deliver(self, source, destination):
+        chunks = []
+        try:
+            os.set_blocking(source.fileno(), False)
+            while True:
+                ready, _, _ = select.select([source], [], [], min(0.05, self._remaining()))
+                if not ready:
+                    continue
+                try:
+                    chunk = os.read(source.fileno(), 65536)
+                except (BlockingIOError, InterruptedError):
+                    continue
+                if not chunk:
+                    break
+                if self.buffered_bytes + len(chunk) > self.maximum_bytes:
+                    raise RuntimeError("bound delayed attach input exceeds its finite cap")
+                chunks.append(chunk)
+                self.buffered_bytes += len(chunk)
+            self.observed_exit = self.process.wait(timeout=self._remaining())
+            os.set_blocking(destination, False)
+            for chunk in chunks:
+                offset = 0
+                while offset < len(chunk):
+                    _, ready, _ = select.select([], [destination], [], min(0.05, self._remaining()))
+                    if not ready:
+                        continue
+                    try:
+                        count = os.write(destination, chunk[offset:])
+                    except (BlockingIOError, InterruptedError):
+                        continue
+                    if count <= 0:
+                        raise RuntimeError("bound delayed attach made no progress")
+                    offset += count
+        except BrokenPipeError:
+            # The actual host allowance denial closes its read endpoint.
+            self.peer_closed = True
+        except BaseException as error:
+            self.error = error
+        finally:
+            source.close()
+            os.close(destination)
+            self.observation.update(
+                actual_process_exit=self.observed_exit,
+                buffered_stdout_bytes=self.buffered_bytes,
+                peer_closed=self.peer_closed,
+                error_type=type(self.error).__name__ if self.error is not None else None,
+            )
+
+    def wait(self, timeout=None):
+        end = (
+            min(self.deadline, time.monotonic() + timeout) if timeout is not None else self.deadline
+        )
+        result = self.process.wait(timeout=max(0, end - time.monotonic()))
+        self.thread.join(timeout=max(0, end - time.monotonic()))
+        if self.thread.is_alive():
+            raise TimeoutError("bound delayed attach did not close")
+        if self.error is not None:
+            raise RuntimeError("bound delayed attach failed") from self.error
+        return result
+
+    def terminate(self):
+        return self.process.terminate()
+
+    def kill(self):
+        return self.process.kill()
 
 
 class ImageCommandChannel:
@@ -2627,6 +2735,10 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
             diagnostic = stderr_path.read_text(errors="replace")
         elif error is None:
             raise RuntimeError("retained condition diagnostic unexpectedly unavailable")
+        if backpressure:
+            self.condition_io[request.run_id]["peer_prefix_read"] = (
+                "matrix-midframe-read-4096\n" in diagnostic
+            )
         if error:
             diagnostic += "\nshared carrier: " + error
         return subprocess.CompletedProcess(
@@ -3780,6 +3892,7 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
         "monotonic": time.monotonic,
     }
     runtime_io = None
+    runtime_faults = []
     restore_runtime_io = None
     original_port_builder = runtime.build_private_socket_supervisor_port
 
@@ -3803,6 +3916,7 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
                     ]
                     assert len(channels) == 1
                     channels[0].shutdown(socket.SHUT_WR)
+                    runtime_faults.append("write-half-closed-after-model-send-start")
                     raise ConnectionError("bound runtime half-close after possible send")
                 return value
 
@@ -3978,6 +4092,7 @@ def _run_condition_runtime(invocation, snapshot, package, environment_root):
             "candidate_binding_sha256": snapshot.digest,
             "run_id": entry["run_id"],
             "runtime_io": runtime_io,
+            "runtime_faults": runtime_faults,
             "actual_model_response_count": response_count,
             "runtime_process_id": os.getpid(),  # Private diagnostic; publish only distinct count.
             "executed_runtime_source_sha256": sha(Path(runtime.__file__).read_bytes()),
@@ -4495,7 +4610,7 @@ def _main(invocation):
         input_path = write(
             transaction / "runtime-inputs" / (entry["run_id"] + ".json"), runtime_invocation
         )
-        return native_popen(
+        process = native_popen(
             [sys.executable, "-B", str(source_root / RELATIVE), "--invocation", str(input_path)],
             stdin=subprocess.DEVNULL,
             stdout=kwargs["stdout"],
@@ -4508,6 +4623,16 @@ def _main(invocation):
                 "GIT_CONFIG_GLOBAL": "/dev/null",
             },
         )
+        if invocation["fault_operation"] == "condition.attach-output-denial":
+            # Explicit low-level timing input: the capture receives these actual
+            # fixture bytes after the real runtime has exited, without rewriting
+            # its status or replacing the retained admission/output consumers.
+            carrier = AttachAfterProcessExit(process, deadline=time.monotonic() + 120)
+            image_channel.events.append(
+                ["delayed-attach-after-actual-exit", entry["run_id"], carrier.observation]
+            )
+            return carrier
+        return process
 
     if image_channel is not None:
         image_channel.condition_launch = launch_condition
@@ -4711,14 +4836,19 @@ def _main(invocation):
 
         host.os.open = fail_frozen_publication
 
-    if invocation["phase"] == "condition-session" and matrix_fault in {
-        "matrix-ipc-neverread",
-        "matrix-ipc-midframe",
-    }:
+    if (
+        invocation["phase"] == "condition-session"
+        and not any(
+            key in invocation
+            for key in ("postcondition_export", "postcondition_finalizer", "runtime_command")
+        )
+        and matrix_fault in {"matrix-ipc-neverread", "matrix-ipc-midframe"}
+    ):
         if matrix_fault == "matrix-ipc-midframe":
             prefix = os.read(0, 4096)
             if len(prefix) != 4096:
                 raise RuntimeError("bound carrier prefix was short")
+            os.write(2, b"matrix-midframe-read-4096\n")
         time.sleep(120)  # Owner terminates/reaps this exact child inside 15 seconds.
         raise RuntimeError("bound carrier stall unexpectedly returned")
 

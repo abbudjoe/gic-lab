@@ -27889,11 +27889,6 @@ def read_retained_condition_completion(
     session_files = [
         entry for entry in manifest["files"] if entry["path"].startswith("sira-output/")
     ]
-    if len(session_files) != 1:
-        raise T09HostError("condition completion requires exactly one sealed session")
-    session_path = raw_root / session_files[0]["path"]
-    session = load_object(session_path, label="condition completion source session")
-    source_completed, answer, error = _retained_session_values(session)
     cleanup = raw_root / ".giclab-supervisor/host-cleanup-receipt.json"
     if not cleanup.is_file():
         cleanup = raw_root / "host-cleanup-receipt.json"
@@ -27904,6 +27899,22 @@ def read_retained_condition_completion(
         or process.get("returncode") != exit_code
     ):
         raise T09HostError("condition completion process exit differs from sealed evidence")
+    if len(session_files) > 1 or (not session_files and exit_code == 0):
+        raise T09HostError("condition completion requires exactly one sealed session")
+    source_session = None
+    if session_files:
+        source_session = session_files[0]
+        session = load_object(
+            raw_root / source_session["path"], label="condition completion source session"
+        )
+        source_completed, answer, error = _retained_session_values(session)
+    else:
+        # A failed process may terminate before its first session publication.
+        # The validated raw inventory proves absence and the sealed host cleanup
+        # supplies the actual nonzero exit. This is a derived failure fact, not
+        # a fabricated session, answer, model-error message or successful result.
+        source_completed, answer = False, None
+        error = "process exited nonzero before retained session publication"
     result = {
         "schema_version": "1.0.0",
         "run_id": run_id,
@@ -27911,7 +27922,7 @@ def read_retained_condition_completion(
         "answer": answer,
         "error": error,
         "process_exit_code": exit_code,
-        "source_session": session_files[0],
+        "source_session": source_session,
         "raw_manifest_sha256": file_sha256(attempt_root / "raw-attempt-manifest.json"),
         "raw_receipt_sha256": file_sha256(attempt_root / "raw-attempt-complete.json"),
     }

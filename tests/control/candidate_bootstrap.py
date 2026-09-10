@@ -18,7 +18,7 @@ from types import SimpleNamespace
 # no case supplies a successful receipt or changes the controller's decisions.
 MATRIX_CASES = {
     "matrix-transfer-partial": ("host-package-transfer", 0, False),
-    "matrix-transfer-verify-hook": ("host-package-transfer", 0, False),
+    "matrix-transfer-verify-hook": ("host-package-transfer", 0, True),
     "matrix-preflight-hook": ("host-preflight", 0, False),
     "matrix-qualification-hook": ("image-finalizer-qualification", 0, False),
     "matrix-freeze-unpublished": ("scientific-freeze", 0, False),
@@ -40,11 +40,11 @@ MATRIX_CASES = {
     "matrix-finalizer-reference": ("finalization", 1, False),
     "matrix-evaluator-mutation": ("evaluation", 1, False),
     "matrix-selected-reference": ("first-pair-checkpoint", 2, False),
-    "matrix-ipc-neverread": ("condition-execution", 1, True),
-    "matrix-ipc-midframe": ("condition-execution", 1, True),
+    "matrix-ipc-neverread": ("condition-execution", 1, False),
+    "matrix-ipc-midframe": ("condition-execution", 1, False),
     "matrix-model-send-loss": ("condition-execution", 1, False),
-    "matrix-runtime-halfclose": ("condition-execution", 1, True),
-    "matrix-terminal-ack": ("condition-execution", 1, True),
+    "matrix-runtime-halfclose": ("condition-execution", 1, False),
+    "matrix-terminal-ack": ("condition-execution", 1, False),
 }
 
 
@@ -863,6 +863,7 @@ def main() -> None:
                         "remote_granted_bytes": observer._remote_output_allowance,
                         "controller_granted_bytes": observer._controller_output_allowance,
                         "closed_remote_reconciled": observer._closed_remote_reconciled,
+                        "control_write_reconciliations": observer.control_write_reconciliations,
                         "accounting": actual,
                         "classification": (
                             "observed-counter-reconciliation-not-writer-admission-proof"
@@ -912,6 +913,55 @@ def main() -> None:
                     "retained_failure_exceptions": retained_failures,
                 }
                 if mode in MATRIX_CASES:
+                    causal_hook = {
+                        "matrix-transfer-verify-hook": "host_transfer_verify",
+                        "matrix-preflight-hook": "host_preflight",
+                        "matrix-qualification-hook": "host_qualify",
+                        "matrix-runtime-hook": "condition_session",
+                        "matrix-raw-export-hook": "export_attempt",
+                        "matrix-finalizer-hook": "finalize_attempt",
+                        "matrix-cleanup-terminal-hook": "_publish_bridge_phase",
+                    }.get(mode)
+                    causal_evidence = []
+                    if causal_hook is not None or mode == "matrix-freeze-unpublished":
+                        paths = list((transaction_root / "retained-phase-traces").glob("*.json"))
+                        assert len(paths) <= 64
+                        expected_error = (
+                            "matrix required retained hook withheld: " + causal_hook
+                            if causal_hook is not None
+                            else "matrix freeze publication withheld after durable begin"
+                        )
+                        for path in paths:
+                            assert not path.is_symlink() and path.stat().st_size <= 8 * 1024**2
+                            trace = json.loads(path.read_bytes())
+                            failure = trace.get("failure")
+                            if (
+                                isinstance(failure, dict)
+                                and failure.get("message") == expected_error
+                            ):
+                                assert trace["candidate_binding_sha256"] == snapshot.digest
+                                causal_evidence.append(
+                                    {
+                                        "trace": path.name,
+                                        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                                        "failure": failure,
+                                    }
+                                )
+                        assert causal_evidence, "required negative hook was never observed"
+                    if mode in {
+                        "matrix-terminal-answer",
+                        "matrix-terminal-status",
+                        "matrix-raw-reference",
+                        "matrix-cross-session-journal",
+                        "matrix-finalizer-reference",
+                        "matrix-evaluator-mutation",
+                        "matrix-selected-reference",
+                        "matrix-checkpoint-hook",
+                        "matrix-evaluator-hook",
+                    }:
+                        assert effects.matrix_events, (
+                            "required producer/consumer mutation was not reached"
+                        )
                     phase, count, _unresolved = MATRIX_CASES[mode]
                     assert transaction["earliest_stopping_phase"] == phase, transaction
                     assert transaction["condition_identities_consumed"] == list(
@@ -934,6 +984,7 @@ def main() -> None:
                         "condition_ownership": effects.condition_ownership,
                         "condition_io": effects.condition_io,
                         "wire_faults": effects.wire_faults,
+                        "causal_hook_evidence": causal_evidence,
                     }
                     if mode in {
                         "matrix-model-send-loss",
@@ -947,18 +998,104 @@ def main() -> None:
                         assert owned["streams_closed"] and not owned["open_owned_descriptors"]
                         assert not owned["errors"] and owned["capture_workers"] == 0
                         assert not world._evaluations and not world._finalizations
+                        invocation = json.loads(effects.condition_invocations[run_id].read_bytes())
+                        diagnostic_path = (
+                            transaction_root
+                            / "fixture-process-environment"
+                            / (invocation["instance"] + "-runtime")
+                            / ("output-census-" + run_id + ".json")
+                        )
+                        diagnostic = json.loads(diagnostic_path.read_bytes())
+                        assert diagnostic["candidate_binding_sha256"] == snapshot.digest
+                        assert (
+                            diagnostic["actual_model_response_count"]
+                            == {
+                                "matrix-model-send-loss": 1,
+                                "matrix-runtime-halfclose": 0,
+                                "matrix-terminal-ack": 2,
+                            }[mode]
+                        )
+                        matrix["runtime_fault_diagnostic"] = {
+                            "sha256": hashlib.sha256(diagnostic_path.read_bytes()).hexdigest(),
+                            "actual_model_response_count": diagnostic[
+                                "actual_model_response_count"
+                            ],
+                            "runtime_faults": diagnostic["runtime_faults"],
+                        }
                         if mode != "matrix-terminal-ack":
                             assert len(observer.call_ids) == 1
                             accounting = observer.boundary.accounting_document()
                             matrix["failure_accounting"] = accounting
-                            assert "sent_outcome_unknown" in json.dumps(accounting)
+                            assert accounting["unknown_outcomes"] == 1
+                            assert accounting["terminal_counts"]["sent_outcome_unknown"] == 1
+                            call = accounting["calls"][0]
+                            assert call["terminal_state"] == "sent_outcome_unknown"
+                            assert (
+                                accounting["reserved_upper_bound"]["condition"]["total_tokens"]
+                                >= (call["reservation"]["total_tokens"])
+                            )
+                            failure = world._condition_failures[run_id]
+                            assert failure.unknown_call_ids == (call["call_id"],)
+                            assert failure.process_exit_code != 0
+                            assert world._essential_failure_exports[run_id].export_complete is True
+                            if mode == "matrix-runtime-halfclose":
+                                assert diagnostic["runtime_faults"] == [
+                                    "write-half-closed-after-model-send-start"
+                                ]
                         else:
                             assert effects.wire_faults == ["terminal-ack-rejected"]
+                            # Resource cleanup and raw-byte export can complete
+                            # while the damaged bridge prevents a shared failure
+                            # projection. Never call that missing projection sealed,
+                            # or turn the workload's actual zero exit into acceptance.
+                            assert run_id in effects.retained_exports
+                            assert run_id not in world._condition_outcomes
+                            assert run_id not in world._condition_failures
+                            assert run_id not in world._essential_failure_exports
+                            assert any(
+                                call.operation == "condition.run"
+                                and call.subject == run_id
+                                and call.outcome == "essential-failure-unsealed"
+                                for call in world.calls
+                            )
+                            condition_request = world._condition_requests[run_id]
+                            attempt = (transaction_root / condition_request.raw_output_root).parent
+                            source_path = attempt / "condition-session-completion.json"
+                            source_bytes = source_path.read_bytes()
+                            from giclab.control.production import _host_module
+
+                            host = _host_module(package)
+                            source = host.read_retained_condition_completion(
+                                attempt_root=attempt,
+                                run_id=run_id,
+                                package_commit=condition_request.package_commit,
+                                exit_code=0,
+                            )
+                            assert source == json.loads(source_bytes)
+                            assert source["process_exit_code"] == observer.exit_code == 0
+                            assert source["answer"] == observer.completion_state[1]
+                            host.require_attempt_export_acknowledgement(
+                                transaction_root,
+                                run_id=run_id,
+                                package_commit=condition_request.package_commit,
+                                clock=effects._clock.wall_time,
+                            )
+                            assert source_path.read_bytes() == source_bytes
+                            matrix["condition_evidence"] = {
+                                "workload_exit": 0,
+                                "raw_export_verified": True,
+                                "shared_failure_projection": "unsealed-unresolved",
+                                "evaluator_eligible": False,
+                                "source_completion_sha256": hashlib.sha256(
+                                    source_bytes
+                                ).hexdigest(),
+                            }
                     if mode in {"matrix-ipc-neverread", "matrix-ipc-midframe"}:
                         run_id = V16_PROVIDER_CONTRACT.run_ids[0]
                         owned = effects.condition_ownership[run_id]
                         io_counts = effects.condition_io[run_id]
                         assert 0 < io_counts["write"]["bytes"] < 524288
+                        assert io_counts["peer_prefix_read"] is (mode == "matrix-ipc-midframe")
                         assert owned["reaped"] and owned["process_group_absent"]
                         assert owned["streams_closed"] and not owned["open_owned_descriptors"]
                         assert not owned["errors"] and owned["capture_workers"] == 0
@@ -1092,6 +1229,21 @@ def main() -> None:
                     # status/answer instead of manufacturing a nonzero exit.
                     assert type(failure.process_exit_code) is int
                     assert failure.process_exit_code == 0
+                    trace_path = (
+                        transaction_root
+                        / "retained-phase-traces"
+                        / f"condition-session-{run_id}.json"
+                    )
+                    trace = json.loads(trace_path.read_bytes())
+                    delayed = [
+                        event[2]
+                        for event in trace["environment_events"]
+                        if event[:2] == ["delayed-attach-after-actual-exit", run_id]
+                    ]
+                    assert len(delayed) == 1
+                    assert delayed[0]["actual_process_exit"] == 0
+                    assert delayed[0]["buffered_stdout_bytes"] >= 65 * 65536
+                    assert delayed[0]["error_type"] is None
                     assert (
                         failure.process_exit_code
                         == source["process_exit_code"]
@@ -1185,7 +1337,7 @@ def main() -> None:
                                 if row["frame"]["event_type"] == "model-call-reserve"
                             ]
                             assert [row["call_id"] for row in reserves] == sorted(observer.call_ids)
-                            assert [row["logical_call_id"] for row in reserves] == list(
+                            assert [row["logical_call_id"] for row in reserves] == sorted(
                                 observer.logical_call_ids
                             )
                         calls = json.loads(outcome.call_ledger_path.read_bytes())

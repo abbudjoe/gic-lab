@@ -4602,3 +4602,128 @@ checkpoint preserves work; it is not a matrix-complete ancestor or receipt bindi
 Source-only Ruff/diff checks and type checking of the four changed typed production
 modules passed. Required remaining work is the complete coupled selection, failure
 correction and one exact-source green matrix run. No independent finding is closed.
+
+### PR15-COUPLED-MATRIX — source ready for combined development run (2026-09-10 UTC)
+
+The current assignment starts at d7f0921955aec8183a754646030cd6220b96d80d
+(tree 4a8206bb18ff5eaa6380cd7c9e5ecec2810a45ff). Ordinary preservation checkpoint
+185be09d9a432ae54e9f392d02729e7b749c2653 (tree d3f2f8869b8d0aede9e3f3e927984a7d20fd44ea)
+retains the first coherent matrix increment; it is not a validated implementation
+ancestor. Remote/PR remains a98b4b875ab4d101709d62bc7222b5c90681a893; required base
+f56dfc2c9346c9b8d8eea4380a3b2388b9668bd2 remains unchanged. No product push is
+permitted in this assignment. This entry precedes the combined test snapshot;
+final run/checkpoint and private-delivery records are external to the bytes they attest.
+
+The finite protected development matrix maps 53 requirements to actual assertions.
+The planned combined selection retains all eight prior joined nodes, 28 causal/failure
+prefixes, the four-condition I/O-continuation path, the three component files, and the
+legacy retained order/cap/first-pair-state regression. A combined pass is still PENDING
+at this source-recording boundary. Independent review remains PENDING regardless.
+
+Production changes: freeze publication records a typed, irreversible aborted-unpublished
+state only from the actual exclusive publisher's failed create/link boundary before
+publication. Published missing/corrupt evidence stays unresolved. Controller stop phases
+now follow their actual current consumer. Cleanup resume retains the same credential
+and grant until its terminal release. All campaign/control writer mechanisms use held,
+no-follow identities and shared pre-growth leases; successful replacement reconciles
+new writes against exact retired old bytes, while partial temporary writes and unused
+capacity remain counted. Finalizer selection state and receipt writes now pass through
+the existing control writer, including nested selection receipts and shrinking state.
+After downstream failure sealing/export, the actual observed tail and unused admission
+carry into cleanup without rewriting the prior sealed accounting snapshot.
+
+The coupled lost-send negative exposed another real consumer gap: a failed runtime can
+exit before any session file is published while leaving valid immutable raw evidence.
+The retained completion reader now derives only incomplete/None/error from zero sessions
+when the actual sealed host process status is nonzero. A zero exit with no session,
+multiple sessions, changed process status, and malformed source remain rejected. No raw
+session is fabricated, no sealed answer rewritten, and no such attempt is evaluated.
+The complete joined failure/export/acknowledgement consumers now exercise this branch.
+
+Distinct originals retained: c590e93651f01d77 (2 passed/1 failed), 3fb67325e02605d3
+(4 failed), 2ebf2eeb092162b1 (21 passed/4 failed), d328a2465cf11b05 (27 passed),
+85d6229ed26d11f9 (11 passed/7 failed), 14069fda17a058f5 (300 passed/7 failed),
+c6a8080eaa9d6f7c (7 passed/2 failed), 375db2a5c7a51919 (7 passed). Do not sum them
+into a green suite. Full run IDs, complete source manifests, original JUnit/exits,
+source diffs and writer/phase/controller traces are retained in the private handoff.
+The last targeted source input is e7da916930993c4e581c544fd88579433c519d94b81e47dbc9043f84044bc6ca.
+The separate 14069 four-condition I/O path completed actual retained finalizer/evaluator/
+first-pair checkpoint and cleanup; it does not certify the combined snapshot.
+
+Original export defect 85d6: the collector/host member limits interrupted collection.
+A bounded export-only continuation preserved the original JUnit and closed joined
+artifacts, then removed exact-owned ephemeral volumes. It did not rerun the separate
+focused-export remainder; omitted phase/campaign diagnostics were not reconstructed.
+The existing exporter now validates both complete original indexes, bytes and hashes
+before ephemeral cleanup, and retains exact per-condition runtime fault/census records.
+Its higher finite transport/member limits remain within the owner's existing 1-GiB
+export cap and do not alter scientific writer budgets or test acceptance.
+
+Negative semantics stay distinct: half-close preserves possibly-sent reservation and
+essential failure evidence with exact-owned cleanup. Rejected terminal acknowledgement
+can leave verified raw export and resource cleanup while the shared failure projection
+remains unsealed/unresolved, with actual exit zero retained and no evaluator/later
+condition. Withheld host-transfer verification leaves remote-zero/privacy proof
+unresolved; a different partial-transfer prefix demonstrates supported cleanup.
+No successful receipt is inferred from a component pass or method-map boolean.
+
+All runs use the existing gic-pr15-clean-ci ARM64 container lane, image
+sha256:0928021614063435abaebc9771282edd681aa7dfe1e2960c1a86dda61b174a3a,
+Python 3.11.14, uv 0.11.7, Quarto 1.9.38 and unchanged recipe/lock inputs.
+This assignment's storage/containment smoke 006825c00571cc79 passed. The non-root,
+network-none, read-only source/root, declared-volume, capped resource and precollection/
+child effect guards remain active. No unguarded host pytest was used. Native source-only
+Ruff/mypy/diff checks are labelled separately. Final make ci-check, full exact-base parity,
+privacy/site/native acceptance, final V16 regeneration and product publication are NOT RUN
+by this assignment's boundary. No independent R finding is claimed closed.
+
+Source109: UNKNOWN, excluded from successful validation; recovery deferred. Its old
+storage cause and container/three-volume absence remain unresolved. Old bundles/keys/
+recovery tools and shared Desktop/Lab/Biblos remain unused. Fresh-lane operability is not
+an old-fault cure. Existing infrastructure credential use/outer operations are separate
+from fake inner effects, blocked forbidden dispatch and zero real experimental activity.
+Frozen EXP-0001 science/model/evaluator/data/order/budgets/zero retries and historical
+USD 36.36170860803283125 remain unchanged. New real provider/model cost USD 0.00.
+No V17, live grant, PR mutation, merge or independent self-approval.
+
+
+### Coupled matrix continuation — deterministic delayed attach input (2026-09-10)
+
+Combined development run `gic-pr15-ci-c50140bc313e3cd6`, input-manifest
+`925b7871e7ef1cc9a9a280a47c3c8b33b9add7b1ba2f84d18deaef5b83aca094`, retained
+337 passes and one failure, no errors/skips, pytest exit 1, unchanged sealed source.
+The attach-output-denial fixture wrote excess bytes while its runtime was still
+exiting; the actual child was killed with status -9 before the asserted zero exit.
+This is retained as a timing-fixture failure, not an invented zero exit or a new
+storage incident. Both original export indexes were verified. Two exact saved
+pre-corruption ownership records were separately copied and reread before cleanup;
+future collectors include those named originals in the normal bounded export.
+
+The bound container/attach leaf now buffers at most 8 MiB of actual fixture stdout,
+observes the real runtime exit, then delivers those bytes over an actual pipe to
+the unchanged retained capture/admission/essential-failure consumers. It delegates
+process status and termination to the actual child; it supplies no successful
+phase receipt or fabricated exit. The joined assertion requires observed zero
+exit before delayed delivery, actual excess bytes, preserved zero/unscored status,
+essential export and no later condition. Production caps and scientific inputs
+are unchanged. Two component parameters independently carry real exits 0 and 7.
+
+Run `gic-pr15-ci-ac1a339e6817279e` (source
+`174f79c7bd691db9cc7f9a1379d6ee359b9db4c177c78e021122c6e773045328`)
+passed the joined denial path but failed two new components: their `-I` option
+prevented supported Python-child guard loading. The guard denied both launches;
+the overall guard/gate exit was 90. Removing that test option preserves guarded
+child execution. Run `gic-pr15-ci-317302ca3b9887b5` (source
+`4698d29bdb9877c6a7044ff3592678862d280e33e9a76931858427fcdd9077de`)
+then passed both components with pytest exit 0, but its original container command
+failed export because no test requested a temporary directory. The collector now
+admits an absent temporary root only when original JUnit contains no candidate
+process node; synthetic component/candidate/unsafe-XML checks passed. Export-only
+continuation `export-continuation-6948255a` completed both original indexes and
+exact-owned cleanup. Original failed receipts were not relabelled.
+
+All earlier run results remain separate. The complete 53-row development matrix
+rerun is pending at this source-record boundary; its external final records must
+bind all required nodes to these actual bytes before a matrix-complete checkpoint
+is claimed. No final CI/parity, final V16 receipts, product push, PR mutation,
+independent closure or Source109 recovery is authorized by this increment.
