@@ -356,6 +356,14 @@ def test_pytest_environment_removes_selection_broadening_and_private_opt_in(
     assert environment["PYTHONPATH"] == str(tmp_path / "src")
 
 
+def test_guarded_parity_explicitly_loads_the_child_denial_consumer(tmp_path, monkeypatch):
+    monkeypatch.setenv("GICLAB_CI_GUARD_JOURNAL", str(tmp_path / "journal"))
+    command = build_pytest_command(tmp_path / "report.xml", tmp_path / "pytest")
+    assert command[command.index("-p") + 1] == "offline_guard"
+    monkeypatch.delenv("GICLAB_CI_GUARD_JOURNAL")
+    assert "-p" not in build_pytest_command(tmp_path / "report.xml", tmp_path / "pytest")
+
+
 def test_simulated_deselection_of_previously_passing_base_node_fails_parity() -> None:
     comparison = compare_outcomes(
         _outcome(passed=(OLD, STABLE)),

@@ -301,6 +301,25 @@ def test_local_shared_fixture_clone_retains_history_and_fixed_commit_clock(tmp_p
         timeout=5,
     )
     clone = tmp_path / "clone"
+    (source / "member").write_text("tracked update\n")
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "--quiet",
+            "-am",
+            "tracked update",
+        ],
+        env=environment,
+        check=True,
+        timeout=5,
+    )
     subprocess.run(
         ["git", "clone", "--shared", "--quiet", str(source), str(clone)], check=True, timeout=5
     )
@@ -312,7 +331,7 @@ def test_local_shared_fixture_clone_retains_history_and_fixed_commit_clock(tmp_p
         timeout=5,
     )
     assert result.stdout.splitlines() == ["2026-09-01T00:00:00+00:00"] * 2
-    assert (clone / "member").read_text() == "bounded fixture\n"
+    assert (clone / "member").read_text() == "tracked update\n"
     assert (
         Path((clone / ".git/objects/info/alternates").read_text().strip())
         == source / ".git/objects"
@@ -357,3 +376,47 @@ def test_shared_clone_rejects_linked_alternate_metadata_before_dispatch(tmp_path
             timeout=5,
         )
     assert not (tmp_path / "clone").exists()
+
+
+def test_legacy_conformance_git_requires_recorded_private_temp_allocation(tmp_path):
+    import tempfile
+    from pathlib import Path
+
+    from offline_guard import EffectDenied, expected_denial
+
+    with tempfile.TemporaryDirectory(prefix="giclab-t09-live-conformance-") as allocated:
+        repository = Path(allocated) / "repository"
+        repository.mkdir()
+        subprocess.run(["git", "init", "-q", str(repository)], check=True, timeout=5)
+        assert (repository / ".git").is_dir()
+    unregistered = Path(os.environ["TMPDIR"]) / ("giclab-t09-live-conformance-" + tmp_path.name)
+    unregistered.mkdir(mode=0o700)
+    repository = unregistered / "repository"
+    repository.mkdir()
+    with expected_denial("unregistered-legacy-root", "process:git"), pytest.raises(EffectDenied):
+        subprocess.run(["git", "init", "-q", str(repository)], check=False, timeout=5)
+    assert not (repository / ".git").exists()
+
+
+def test_replaced_child_environment_keeps_declared_temporary_storage():
+    import json
+
+    import offline_guard
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json,os; print(json.dumps([os.environ['TMPDIR'],"
+            "os.environ['PYTEST_DEBUG_TEMPROOT']]))",
+        ],
+        env={"PATH": os.defpath},
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    assert json.loads(result.stdout) == [
+        os.environ["TMPDIR"],
+        str(offline_guard._git_fixture_root),
+    ]

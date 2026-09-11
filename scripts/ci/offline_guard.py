@@ -130,6 +130,7 @@ def child_environment(environment=None):
     result["GICLAB_CI_GUARD_IPC_ROOTS"] = json.dumps(sorted(map(str, _ipc_roots)))
     if _git_fixture_root is not None:
         result["GICLAB_CI_GIT_FIXTURE_ROOT"] = str(_git_fixture_root)
+        result["PYTEST_DEBUG_TEMPROOT"] = str(_git_fixture_root)
     for name in (
         "GICLAB_CI_SOURCE_OBJECTS",
         "GICLAB_CI_PARITY_REPOSITORY",
@@ -137,8 +138,7 @@ def child_environment(environment=None):
     ):
         if name in os.environ:
             result[name] = os.environ[name]
-    if _bulk_root is not None:
-        result.update({key: os.environ[key] for key in STORAGE_ENV_KEYS if key in os.environ})
+    result.update({key: os.environ[key] for key in STORAGE_ENV_KEYS if key in os.environ})
     return result
 
 
@@ -155,6 +155,35 @@ def _fixture_git_allowed(argv, cwd):
         return _inspect_fixture_git(argv, cwd)
     except (OSError, ValueError, configparser.Error):
         _deny("process:git")
+
+
+def _inside_git_fixture_scope(path):
+    if (
+        _git_fixture_root is not None
+        and path != _git_fixture_root
+        and path.is_relative_to(_git_fixture_root)
+    ):
+        return True
+    # The immutable base conformance uses this specific tempfile allocation.
+    # Admit only a recorded allocation under the launcher's private temporary
+    # root, never a directory inferred from its name alone.
+    temporary = os.environ.get("TMPDIR")
+    if temporary is None:
+        return False
+    for root in _ipc_roots:
+        if (
+            root.name.startswith("giclab-t09-live-conformance-")
+            and root.parent == Path(temporary).resolve()
+            and path != root
+            and path.is_relative_to(root)
+        ):
+            meta = root.lstat()
+            return (
+                stat.S_ISDIR(meta.st_mode)
+                and meta.st_uid == os.getuid()
+                and stat.S_IMODE(meta.st_mode) == 0o700
+            )
+    return False
 
 
 def _inspect_fixture_git(argv, cwd):
@@ -194,8 +223,7 @@ def _inspect_fixture_git(argv, cwd):
         if targets:
             repository = (repository / targets[0]).absolute()
     if (
-        not repository.is_relative_to(_git_fixture_root)
-        or repository == _git_fixture_root
+        not _inside_git_fixture_scope(repository)
         or ".." in repository.parts
         or any(p.is_symlink() for p in (repository, *repository.parents))
         or not repository.is_dir()
@@ -296,6 +324,8 @@ def _inspect_fixture_git(argv, cwd):
         value, *arguments = arguments
         if value in {"-q", "--quiet", "--allow-empty"}:
             continue
+        if value == "-am":
+            value = "-m"  # Native tracked-file fixture update; hooks remain disabled.
         if value != "-m" or not arguments or len(arguments[0]) > 4096:
             return False
         _, *arguments = arguments
@@ -314,10 +344,7 @@ def _safe_source_objects(value, seen=frozenset()):
         and ".." not in path.parts
         and path.name == "objects"
         and path.parent.name == ".git"
-        and (
-            value == bound
-            or (_git_fixture_root is not None and path.is_relative_to(_git_fixture_root))
-        )
+        and (value == bound or _inside_git_fixture_scope(path))
         and not any(p.is_symlink() for p in (path, *path.parents))
         and path.is_dir()
         and path.stat().st_uid == os.getuid()
@@ -344,8 +371,7 @@ def _local_clone_allowed(argv, cwd):
         _safe_source_objects(str(source / ".git/objects"))
         and _git_fixture_root is not None
         and destination.is_absolute()
-        and destination.is_relative_to(_git_fixture_root)
-        and destination != _git_fixture_root
+        and _inside_git_fixture_scope(destination)
         and ".." not in destination.parts
         and not os.path.lexists(destination)
         and not any(p.is_symlink() for p in (destination, *destination.parents))

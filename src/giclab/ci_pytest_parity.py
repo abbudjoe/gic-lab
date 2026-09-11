@@ -365,6 +365,8 @@ def build_pytest_command(report: Path, basetemp: Path) -> tuple[str, ...]:
         f"--junitxml={report}",
         f"--basetemp={basetemp}",
     ]
+    if os.environ.get("GICLAB_CI_GUARD_JOURNAL"):
+        command.extend(("-p", "offline_guard"))
     for node_id in PRIVATE_LOCAL_NODE_IDS:
         command.extend(("--deselect", node_id))
     return tuple(command)

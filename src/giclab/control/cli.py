@@ -512,7 +512,10 @@ def _generate_receipt_tree(
         validate_selected_seal=False,
     )
     if anti_shadow.get("complete") is not True:
-        raise ValueError("candidate receipt tree fails selected-root topology validation")
+        raise ValueError(
+            "candidate receipt tree fails selected-root topology validation: "
+            + json.dumps(anti_shadow.get("findings"), sort_keys=True)
+        )
     capsule = generate_state_capsule(
         repository,
         registry_complete=registry.get("complete") is True,
