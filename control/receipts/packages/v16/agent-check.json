@@ -2,12 +2,12 @@
   "checks": {
     "active_version_lint": {
       "complete": true,
-      "semantic_sha256": "9ddcc9fe91754bd5813818582331dff85c5de894d8d5f4281f832069ab90f7c5"
+      "semantic_sha256": "845498976fef5f313b88a1f673b48338cbc464e4a1f8369ccd741d6e4d514daf"
     },
     "anti_shadow_lint": {
       "complete": true,
       "finding_count": 0,
-      "semantic_sha256": "eebc577b41287f0812bcaef150998f9247edf610462defd24bd7fc0e567b9531"
+      "semantic_sha256": "64248cc8fb20ce805e02e69c9f8afba3a92a106a3bb51077ccd69679bb48909c"
     },
     "category3_shadow": {
       "complete": true,
@@ -15,97 +15,97 @@
         {
           "earliest_stopping_phase": null,
           "scenario": "happy-path",
-          "semantic_sha256": "c35015d3081e134692afd91bab1fc3bf97ee2e8505e27ce916ffb638f60d4751",
+          "semantic_sha256": "fc7e038fc63b19f34fd35e12425df71709342aee71c04aa3ab6c07d18b6da21d",
           "terminal_state": "category3-shadow-complete-clean"
         },
         {
           "earliest_stopping_phase": "offline-composition",
           "scenario": "lifecycle-unsupported",
-          "semantic_sha256": "d32a3a7d708f6207a0f287018b112238032bc005515e44ff0dff148892fa1b9b",
+          "semantic_sha256": "c5e68ce8b8dab7e8fbaeb8e511e1770b3bd90c5096ab0a6ddb6ec7e30c2d0dd5",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": "final-metadata-freshness",
           "scenario": "metadata-expired",
-          "semantic_sha256": "a907910766d98e8ca1e61b772dda2d3409a0caa66588e571fea92edf36a65619",
+          "semantic_sha256": "f1c8b54c25c1795ca058ade0b9d98df43b6c2bda22e860b7fe70aa049d399c6c",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": null,
           "scenario": "provider-entry-replacement",
-          "semantic_sha256": "89fb324fddd72a087f7c15d21586f42cf18b75f1dcd27c9cbbe19762c0cbf88b",
+          "semantic_sha256": "b4864074a8379d1342591e615e64a0c8ec7cb74ea73daff08ccb225394920365",
           "terminal_state": "category3-shadow-complete-clean"
         },
         {
           "earliest_stopping_phase": null,
           "scenario": "host-preflight-replacement",
-          "semantic_sha256": "3b034439b398152c397d5b2806f90904f21bc09070dfd6d23302b6f2a44704c1",
+          "semantic_sha256": "7f63875bd5f7899215ffa78b5308adaa68978badce59a3ffe05d3e60e2061202",
           "terminal_state": "category3-shadow-complete-clean"
         },
         {
           "earliest_stopping_phase": "condition-execution",
           "scenario": "condition-failure",
-          "semantic_sha256": "0f6adf0a95358c3dc0ec9f894cb7c761d27e384efcf657f9049a60eda8acb21e",
+          "semantic_sha256": "f83b7412cd530c2ec6de1fe9ded509fcbc49c1a080851d26bfe5034b77c2403e",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": "condition-execution",
           "scenario": "raw-export-failure",
-          "semantic_sha256": "c918382dd9fa0bce8bcf49512a37488b515d16dfbaaf70c3f9f0ec5ac44de174",
+          "semantic_sha256": "c2951c7245a277063756f529b589db55733419c9cf612eaf43d5ec8e83e22738",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": "finalization",
           "scenario": "finalizer-failure",
-          "semantic_sha256": "d5686de6d805d9d82db4e4537d28fc734929e6849717101ada5e642cdc616314",
+          "semantic_sha256": "d729468cdb068c79a4f6898e68b77f7fdbad6dcaac11ab8566356dc288e3bf2e",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": null,
           "scenario": "cleanup-interrupted-resumed",
-          "semantic_sha256": "c8e6b3c8f58904b2f154167c295ced9f40a5216f16bc782c2d625364f7939e96",
+          "semantic_sha256": "2faadf060f56468afd2b198f68360f69bfa394320d17b2181765b8cd45a43636",
           "terminal_state": "category3-shadow-complete-clean"
         },
         {
           "earliest_stopping_phase": "cleanup",
           "scenario": "provider-termination-unavailable",
-          "semantic_sha256": "039667ae0157c1739c29d620a3803f2f4554d5b93a424f7181e249088b92ab5c",
+          "semantic_sha256": "b702ebb4401409300d0f698f35a13187cd4b58e78c61a9367bf179a4fd683c12",
           "terminal_state": "category3-shadow-stopped-cleanup-unresolved"
         },
         {
           "earliest_stopping_phase": "cleanup",
           "scenario": "structural-privacy-finding",
-          "semantic_sha256": "af83bd56a62644bcbe4020a2c3344791aba78367e13fd65f549e8d87d08f2c69",
+          "semantic_sha256": "d8b7309aeecc535ea7d2768da9b1074e78d33c2e2a915d6e1f73f9638b55a507",
           "terminal_state": "category3-shadow-stopped-privacy-blocked"
         },
         {
           "earliest_stopping_phase": "launch",
           "scenario": "ambiguous-provider-call-outcome",
-          "semantic_sha256": "33754097470f4ec17ca2a6999525e4993213d8ab5f6ea77776679c9c98af4ea7",
+          "semantic_sha256": "7fe12ad9ae0ee7f4b63d267fa8726d2b3d08b35fb691dc1a24c8f36eef349c16",
           "terminal_state": "category3-shadow-stopped-cleanup-unresolved"
         },
         {
           "earliest_stopping_phase": "condition-execution",
           "scenario": "known-provider-exception",
-          "semantic_sha256": "760a1484130770204d94ecfb3d8fbc5da57022d20ccef2c9cd1a9e7091dafab6",
+          "semantic_sha256": "fdc263b6f14cea50dfa74511a234507a28cd23ba0c34a8b662937726d11b4478",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": "condition-execution",
           "scenario": "response-accounting-incomplete",
-          "semantic_sha256": "475d35328a06c296498a597595b157e81b085680f7edde0d7799e17f4e63e440",
+          "semantic_sha256": "6623b5bb232891573481df9c2d1a627db85950856bf83961d6f9d14499994216",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": "condition-execution",
           "scenario": "ambiguous-task-model-send",
-          "semantic_sha256": "37f140d1ea504cd487004253b8a7825d639dbb9fbe0110612b0ea0c01e64459e",
+          "semantic_sha256": "113c3bd07abe60b8743e402116a29c479bf30c9ff36bafc9a253258d92fda525",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         },
         {
           "earliest_stopping_phase": "condition-execution",
           "scenario": "cost-token-admission-stop",
-          "semantic_sha256": "190ff373ac090603405568d9fec584d7755deea901297b0720ce86cd5bf5622f",
+          "semantic_sha256": "ab7e8a6e2e9ca97e1c994915005a091725f2adb4cec89a611877f0212c1d759d",
           "terminal_state": "category3-shadow-stopped-cleanup-verified"
         }
       ],
@@ -115,19 +115,19 @@
     "incident_completeness": {
       "complete": true,
       "incident_count": 8,
-      "semantic_sha256": "f9fd8fd5ff497334c90532ff3c7bf5ca0bc2a2e00c22608aaf34569b5e84e45e"
+      "semantic_sha256": "7bed58b1694358c84d537dbf053f248a26f28fb4f8f928672c8a8c156ca8214c"
     },
     "live_effect_conformance": {
       "complete": true,
       "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
-      "semantic_sha256": "26ac84b0459debc317db61b99143491c0460acb1347abf3a798d7c71e56ad38b",
+      "semantic_sha256": "df0e9e5aab9319b69fc74d292986711502c29660652ce0ded3955f2772ea8eb8",
       "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
       "zero_real_effects": true
     },
     "live_method_viability": {
       "complete": true,
       "method_count": 31,
-      "semantic_sha256": "69b90964ed2d7c836dcf8e1040e219a09577c0b63cc111121007d25a3a939dc2",
+      "semantic_sha256": "c4559ffceb362227fbfbedb4ffe2e5d26cf9a29d70e2566908e027388805db2e",
       "unresolved_method_count": 0,
       "zero_real_effects": true
     },
@@ -137,132 +137,132 @@
         {
           "error": null,
           "ready_for_shadow": false,
-          "semantic_sha256": "59eef1890560964deecfd49c2a1b987670b1327e340eaf7bbcc19dafbdf46cc0",
+          "semantic_sha256": "952f4a9d140f921666ce555208ce4392badc7b40ae914f47b0b5119d8fa38be5",
           "valid": true,
           "version": "V3"
         },
         {
           "error": null,
           "ready_for_shadow": false,
-          "semantic_sha256": "0e0ae53da81a4ae505307c74492a2d9692d2e3e6c5d4e54f5d3bb845c714d9b1",
+          "semantic_sha256": "43001884c5cc204b69558a423ffc08aec85d149e97d41aed05c9dca790a6c5eb",
           "valid": true,
           "version": "V4"
         },
         {
           "error": null,
           "ready_for_shadow": false,
-          "semantic_sha256": "136fcc11e7af43c2d13615e13814c5a12f82f3ab039af2d011c84498429a1fcf",
+          "semantic_sha256": "8f18374146a150e60989dc4d8c34bbfd33f0072a31904e01494958e8740f75b4",
           "valid": true,
           "version": "V5"
         },
         {
           "error": null,
           "ready_for_shadow": false,
-          "semantic_sha256": "acdfaf710344fd2744f9333895e5e5fb670ceeba9efb391c27b649a4c4fd49a3",
+          "semantic_sha256": "c8b9bfcd3cbe264cd2d63bff9ab6b192a406ec109e5e803e421db24cdab6e8da",
           "valid": true,
           "version": "V6"
         },
         {
           "error": null,
           "ready_for_shadow": false,
-          "semantic_sha256": "d3cbdd516efd747ea55c0f220f53cd62307def4ec1c8741f5a595f3c80842ecd",
+          "semantic_sha256": "6a4b20383cdc79d057b2c2cf3b8008fbbfa5cd242991e9609bec226470b487ee",
           "valid": true,
           "version": "V7"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "b9366afde9dc70cc9ddc17478d412981de3f2d27601f43b66df121f2498304ca",
+          "semantic_sha256": "f18521a38d3b34dd807a403ec43337dc9f1115f0a72ad6bdf9ed3e41aa1efe06",
           "valid": true,
           "version": "V8"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "369c3839d09b0ee4cc5c62fdd9bac382c5af26fb86ec46c87a1640dd359e4f22",
+          "semantic_sha256": "493968b2badb7374ea5388e3a807aca3e17b231e73a473bcfd7275d05723122f",
           "valid": true,
           "version": "V9"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "b4b32055f100f94f4c5b2502592339253a7972556c095184de112c0ed0867614",
+          "semantic_sha256": "7e3536c8bcee258a36c488450533d36c49c24de56e8d72c23bf3bd348a6be6cb",
           "valid": true,
           "version": "V10"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "85e0d2461f162519d8138efc1b8e39f16d8f407daa12e906c9ca6595896ce3c0",
+          "semantic_sha256": "daebc8601b5d6b3c9b45ae9e7058b9cec8b808a6952698db03646b05a7fe4bff",
           "valid": true,
           "version": "V11"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "155608f7017a912c803eef5889521d399efcbab49621fc0dc1cf73989d875eb7",
+          "semantic_sha256": "24dc2846dd33523c3b25a150e21715c7500e5f04ff4e9223995c706880c7424a",
           "valid": true,
           "version": "V12"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "f4ece7904be1e6cb46aa7ff8397e7e6c7fad9785df4bc95c2ad2919cf79a77a2",
+          "semantic_sha256": "79ebc575ba9e2feb8ca45715c8faa07d77157c7d2bb3185af6b99508bfe639b3",
           "valid": true,
           "version": "V13"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "26685fe5e9ad8477127e2c821780a1191f810996749b09074c6cdbaaa6590d78",
+          "semantic_sha256": "079793b87707bfd5abfd4ade54951613bc73f613d2904a3d6e0f16bbd38e330a",
           "valid": true,
           "version": "V14"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "04414031c602d9a8a362ffc750a963c55ec6f8e5831b76e7c791e7c627a3cb76",
+          "semantic_sha256": "a9f44391a894de6c196d0d526619468d98392972f76b399e2379c91b95eaa659",
           "valid": true,
           "version": "V15"
         },
         {
           "error": null,
           "ready_for_shadow": true,
-          "semantic_sha256": "45b8d73dfdc8c1bb5107e952e07d678929febed36f7e30f07e7d485e405aebf1",
+          "semantic_sha256": "64b715d49525096ddad8b37b0e172a2c65c93e1200e2285a20cb2a20d758decf",
           "valid": true,
           "version": "V16"
         }
       ],
       "selected_provider_contract_version": "V16",
-      "selected_semantic_sha256": "45b8d73dfdc8c1bb5107e952e07d678929febed36f7e30f07e7d485e405aebf1"
+      "selected_semantic_sha256": "64b715d49525096ddad8b37b0e172a2c65c93e1200e2285a20cb2a20d758decf"
     },
     "registry_completeness": {
       "complete": true,
       "contract_count": 14,
-      "semantic_sha256": "7014ec0c75009d877b6d4078b468222e3a9716bfd0b1baabd426eed4b250ac25"
+      "semantic_sha256": "3bd0f7394d7c304a3e9e22c415bdedbfaeecf4b12e8fc59bca0bd8ae5f8aecd4"
     },
     "remote_execution_bridge_conformance": {
       "complete": true,
       "production_assembly_entry_point": "giclab.control.production.build_production_adapter_assembly",
-      "semantic_sha256": "933cf94e48cee8f3f91ebb72142ba25a6a45a8cf90365966b6c59c84523717dd",
+      "semantic_sha256": "4bb83baf369d66b87ac89a9cf2490970d18c9a1cfdc3839021ed75894dfb823d",
       "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
       "zero_real_effects": true
     },
     "source_binding": {
       "complete": true,
       "file_count": 51,
-      "semantic_sha256": "445b4797494322d475162a1ade97f8f52b7492d3e8b41e6c3b84d6539417fe74"
+      "semantic_sha256": "468497b8ad33fe89734fec7559371585797c14c6634d72dc25edc8761c70e1ed"
     },
     "state_capsule": {
       "complete": true,
-      "semantic_sha256": "732d9e36365feff118a11be9f96515a5b77a804e001c73581ffbd269558a0870"
+      "semantic_sha256": "dade50375c6ada42eccbde39ae6b5893182bcec4963fa9cf7415cd259dbf1047"
     }
   },
   "complete": true,
-  "repository_commit": "2f5918a70cb596c51602b6d47dd53bdb8bbf1493",
-  "repository_tree": "a2067e2b854be01448ad4327c715bab539c24bd2",
+  "repository_commit": "01c19d0d7dc6e9b24fe8768d7c661bdd5160c52d",
+  "repository_tree": "00e55e81eefb541a4104d89f13f1e3f0ae463f21",
   "schema_version": "4.0.0",
-  "selected_composition_semantic_sha256": "45b8d73dfdc8c1bb5107e952e07d678929febed36f7e30f07e7d485e405aebf1",
+  "selected_composition_semantic_sha256": "64b715d49525096ddad8b37b0e172a2c65c93e1200e2285a20cb2a20d758decf",
   "selected_runtime_target": {
     "authority": {
       "live_authorization": false,
@@ -282,5 +282,5 @@
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "57f595b1fc4cb170adddc06ab0dc9e4116a712632f0cc23404138f96b5ff5d7d"
+  "semantic_sha256": "0ef6cc68355bd98afad5ae5b7de60cd50a330cb26331d868a65f74435edb3cb2"
 }

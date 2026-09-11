@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "c5e016d159285399c1cab19bd2991125b54ac8f21343d3a7a61afdebfbdc869a"
+      "subject": "120bca61ec30345e76eafa43025045123828c4a3d7f0eb3f4f3346a5ba19bca2"
     },
     {
       "adapter": "provider",
@@ -74,7 +74,7 @@
       "adapter": "evidence",
       "index": 11,
       "operation": "evidence.record",
-      "outcome": "retained:2eb0ca7c9167",
+      "outcome": "retained:31b8c0818b30",
       "subject": "qualification"
     },
     {
@@ -88,7 +88,7 @@
       "adapter": "evidence",
       "index": 13,
       "operation": "evidence.record",
-      "outcome": "retained:0d88dd5b85a1",
+      "outcome": "retained:21dd486e9c58",
       "subject": "scientific-freeze"
     },
     {
@@ -123,7 +123,7 @@
       "adapter": "evidence",
       "index": 18,
       "operation": "evidence.record",
-      "outcome": "retained:19ee2740a1cb",
+      "outcome": "retained:1f3e10d599cf",
       "subject": "raw"
     },
     {
@@ -196,7 +196,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "45b8d73dfdc8c1bb5107e952e07d678929febed36f7e30f07e7d485e405aebf1",
+  "composition_sha256": "64b715d49525096ddad8b37b0e172a2c65c93e1200e2285a20cb2a20d758decf",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -205,19 +205,19 @@
   ],
   "earliest_stopping_phase": "finalization",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "8ab348571407e5003a48e080a998d8bbe3938a3f2c9df0f232af8c9b8af4a8ea",
+  "effect_authorization_context_sha256": "8a2783b76fc952d95f27a323d61d4368d41db5e7e653c252ed4a0b443cf74c09",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [
       {
         "essential_file_count": 7,
         "essential_total_bytes": 7580,
-        "evidence_binding_sha256": "073a37a4ddd5c2ee8b22d94539257f7813ba7d2b0552a7ac1e223ba9fab10560",
-        "export_receipt_sha256": "6536c0b91badcf843648c032ad32384aa668a522243f87b60a34d3828145c2aa",
+        "evidence_binding_sha256": "cee093ae941fa0f43d4be5a7250d882408340b3cac268ddd4f2c4f2add0c7d5f",
+        "export_receipt_sha256": "13fcf9bfb70d54018efe79366f77885073b04ec5bf4ad901f950b78cd062e8cd",
         "failure_class": "finalizer-failure",
         "infrastructure_invalid": true,
-        "manifest_sha256": "3c9de06d528bf961c161f942019dd8fae9e9b99655d5241d37488b6b82e37ba5",
-        "receipt_sha256": "0b18b8ad79069c62a5b903047979240593aef13192832176fb1911e40190a6ab",
+        "manifest_sha256": "51a9c3166273cafec0d1fde10070e5dd8537024c8ad8c2516466bf4eaf2391d0",
+        "receipt_sha256": "79aebcf970e8a5703defcd97b3cc6fdce5d52d03769dcd18ac9a2915f770ae77",
         "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "stopping_phase": "finalization",
         "unscored": true
@@ -236,13 +236,13 @@
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "19ee2740a1cb0a0fb1ebd2fe32a6c041a4ec7569036c182da172eaad7b3687d1",
+      "sha256": "1f3e10d599cfd2b8c32b6b1252e5f5a324fe4f143071bc6758e993064e0be1bb",
       "shadow_only": true
     },
     {
       "kind": "essential-infrastructure-failure",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "073a37a4ddd5c2ee8b22d94539257f7813ba7d2b0552a7ac1e223ba9fab10560",
+      "sha256": "cee093ae941fa0f43d4be5a7250d882408340b3cac268ddd4f2c4f2add0c7d5f",
       "shadow_only": true
     }
   ],
@@ -584,7 +584,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "8ab348571407e5003a48e080a998d8bbe3938a3f2c9df0f232af8c9b8af4a8ea",
+    "authorization_context_semantic_sha256": "8a2783b76fc952d95f27a323d61d4368d41db5e7e653c252ed4a0b443cf74c09",
     "cleanup_handoff_sha256": "3c35a568475be9862dfbe3c9b1980f51eb416c14222942925f4f23841c3ef6c3",
     "cleanup_receipt_sha256": "a69edd2f7c028b9296f215466190083ce0eea8e878967c52f8e8202753658700",
     "cleanup_resume_byte_identical": true,
@@ -601,14 +601,14 @@
     "essential_failures": {
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
         "completed": true,
-        "export_receipt_sha256": "6536c0b91badcf843648c032ad32384aa668a522243f87b60a34d3828145c2aa",
+        "export_receipt_sha256": "13fcf9bfb70d54018efe79366f77885073b04ec5bf4ad901f950b78cd062e8cd",
         "export_resumed": false,
         "failure_class": "finalizer-failure",
         "file_count": 7,
-        "held_artifact_binding_sha256": "9218de42c1b9efb3827df50a262f899658149a008f2c520d21e071c2a9bf4cd4",
-        "manifest_sha256": "3c9de06d528bf961c161f942019dd8fae9e9b99655d5241d37488b6b82e37ba5",
+        "held_artifact_binding_sha256": "b347e1a8dbfab19669cda1526e9a1c40744dc596a90eae442f60f6744900086a",
+        "manifest_sha256": "51a9c3166273cafec0d1fde10070e5dd8537024c8ad8c2516466bf4eaf2391d0",
         "process_exit_code": 0,
-        "receipt_sha256": "0b18b8ad79069c62a5b903047979240593aef13192832176fb1911e40190a6ab",
+        "receipt_sha256": "79aebcf970e8a5703defcd97b3cc6fdce5d52d03769dcd18ac9a2915f770ae77",
         "retry_count": 0,
         "total_bytes": 7580,
         "unknown_call_ids": [],
@@ -620,11 +620,11 @@
     "held_evidence": {
       "condition_bridge": {},
       "essential_failure": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "9218de42c1b9efb3827df50a262f899658149a008f2c520d21e071c2a9bf4cd4"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "b347e1a8dbfab19669cda1526e9a1c40744dc596a90eae442f60f6744900086a"
       },
       "finalized": {},
       "raw": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "8128533b7bb8b01ce2ac72e71522022361882f20cbc00220037e0c730a5f9cde"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "e58bbeb2fe117d398355a0ff29cfa073d1282dbd8d8dd7805af404452e1d7aae"
       },
       "revalidated_across_consumers": true
     },
@@ -639,16 +639,16 @@
       "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "b0ea8961e7b7b4771714ae50f4cb37b6fed00e19ecf3083349a517e5e10d81c5",
-      "postfreeze_validation": "9c92e423a0680815796be110c611e1dda9ad80880e6b8bf6a6e8b2f48995b8db",
-      "qualification": "2eb0ca7c9167da9516141eb5037c571f0159e6f0f976c6fd392340af31da293f"
+      "frozen_manifest": "6f1ff506a3535d338314c8a9f757f72f58ce3cefd0b84734a9c282f955234e87",
+      "postfreeze_validation": "c774f1a7a53bdf0c05d95c5ec21b697dcf36306e2fe092bd76e403c3b509defa",
+      "qualification": "31b8c0818b3096e09a43c2ed7e44e203a66812690212d5ef1b0fd37cb473c0b2"
     },
     "host_transfers": {
       "1": {
         "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
-        "host_acknowledgement_sha256": "64d345e6421d2d10f1580a37f9a62c055202b159f8ad285ef87dab9969bdabe4",
+        "host_acknowledgement_sha256": "e224f903d96af86908b3617f6bfcb932b5a372df9f598f32aef58d281c50e95f",
         "member_manifest_sha256": "8fe2559a455ab4e87ebbd68b89b951fd878c2c82ac9da6acf7e8597ddba07fc6",
-        "receipt_sha256": "36b85057a584e8449df91823ab05bfd194ce2d27e3862335d13ebfc3233cd0b4"
+        "receipt_sha256": "e7cf80258c567593970e5fd6121d042eceb75589e11594a698ec8ec50556b912"
       }
     },
     "implementation_flavor": "production-wrapper",
@@ -663,7 +663,7 @@
       "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
       "package_source": "working-tree",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "source_manifest_sha256": "a559034b933648c9678f0cdea81daab539babd0c6769591e0a48449474dfbd7c",
+      "source_manifest_sha256": "8d4239a8d20640eac58f43f27d395076c684e7fd05f4aea38ec2508e22ea9b40",
       "tracked_only": true,
       "uploaded": false,
       "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
@@ -787,7 +787,7 @@
     "provider_cost_receipt": null,
     "provider_lifecycle_cost_proof": null,
     "raw_export_acknowledgements": {
-      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "b79b3f215306a9a947f54b9c203e984ba2a9d6c0fb5ec6dd5485df625fe0ad18"
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "743b5aec1a77810138b0908075d64cd039ae0fd74b43225d685ea520558206dd"
     },
     "replacement_history": {
       "closed_launch_slots": [
@@ -979,8 +979,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "2f5918a70cb596c51602b6d47dd53bdb8bbf1493",
-  "repository_tree": "a2067e2b854be01448ad4327c715bab539c24bd2",
+  "repository_commit": "01c19d0d7dc6e9b24fe8768d7c661bdd5160c52d",
+  "repository_tree": "00e55e81eefb541a4104d89f13f1e3f0ae463f21",
   "scenario": "finalizer-failure",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -991,7 +991,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "d5686de6d805d9d82db4e4537d28fc734929e6849717101ada5e642cdc616314",
+  "semantic_sha256": "d729468cdb068c79a4f6898e68b77f7fdbad6dcaac11ab8566356dc288e3bf2e",
   "shadow_only": true,
   "stop_reason": "finalizer stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",
