@@ -4839,3 +4839,22 @@ passes and three setup failures; their corrected actual nodes all passed in
 `gic-pr15-ci-34fa9f462dca1ffc` (14 passes, no failures/errors/skips). The original
 red runs remain retained. New source/receipt descendants and the complete final
 gate remain required; independent review is pending.
+
+The next complete gate, `gic-pr15-ci-99d2c32ac6573066` at
+`5e82850ccc1f3f47f87e67d34d1cd15ba170dcfe`, reproduced all 53 matrix rows and
+37 joined parameters but failed parity on one held-dotenv same-size mutation
+regression. Source integrity, complete export and exact-owned ephemeral cleanup
+passed. The original failure did not record timestamp values; it is not a new
+storage-I/O observation. A deterministic low-level timestamp-observation fixture
+reproduced the metadata-only reader's missed mutation in
+`gic-pr15-ci-8e115f1bc65a3f4a`; actual file mutation and reads still executed.
+
+The dedicated credential reader now compares two bounded reads through the same
+held descriptor, retaining ownership/path/metadata checks and erasing the mutable
+confirmation buffer on every exit. No credential value is hashed or logged. This
+checks consistency between observations, not atomic snapshot safety against an
+arbitrary writer. The unchanged mutation assertion and new confirmation
+short-read/error/erasure/close checks passed within the complete 70-test module
+in `gic-pr15-ci-dcbe5329f3b644b9`. These are focused development results; a new
+immutable source ancestor, normal receipt descendants, guarded native counterpart
+and complete exact-candidate gate remain required. No prior failure is erased.

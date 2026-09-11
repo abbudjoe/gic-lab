@@ -252,6 +252,21 @@ def _read_private_bytes(path: Path, *, label: str) -> bytes:
         os.close(descriptor)
 
 
+def _read_credential_buffer(descriptor: int, buffer: bytearray) -> int:
+    """Fill a caller-bounded mutable buffer without immutable secret copies."""
+    offset = 0
+    while offset < len(buffer):
+        target = memoryview(buffer)[offset:]
+        try:
+            count = os.readv(descriptor, [target])
+        finally:
+            target.release()
+        if count == 0:
+            break
+        offset += count
+    return offset
+
+
 def _read_openai_dotenv_bytes(path: Path) -> bytearray:
     """Read the approved external dotenv shape without relaxing private JSON.
 
@@ -274,6 +289,7 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
     except OSError as exc:
         raise ModelMetadataReceiptError(f"{label} is unavailable") from exc
     raw = bytearray()
+    confirmation = bytearray()
     try:
         before = os.fstat(descriptor)
         if (
@@ -286,16 +302,14 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
             raise ModelMetadataReceiptError(f"{label} metadata is unsafe")
 
         raw = bytearray(before.st_size + 1)
-        offset = 0
-        while offset < len(raw):
-            target = memoryview(raw)[offset:]
-            try:
-                count = os.readv(descriptor, [target])
-            finally:
-                target.release()
-            if count == 0:
-                break
-            offset += count
+        offset = _read_credential_buffer(descriptor, raw)
+        # Adjacent writes can have equal timestamp observations. Compare a
+        # second bounded read through the held descriptor, without hashing or
+        # retaining immutable credential bytes. This is a consistency check
+        # between observations, not an atomic snapshot against arbitrary writes.
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        confirmation = bytearray(len(raw))
+        confirmed_offset = _read_credential_buffer(descriptor, confirmation)
 
         held_after = os.fstat(descriptor)
         try:
@@ -312,6 +326,8 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
         )
         if (
             offset != before.st_size
+            or confirmed_offset != offset
+            or raw != confirmation
             or not _same_identity(before, held_after)
             or not _same_identity(before, path_after)
             or not stat.S_ISREG(held_after.st_mode)
@@ -330,6 +346,7 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
         _destroy_bytearray(raw)
         raise
     finally:
+        _destroy_bytearray(confirmation)
         os.close(descriptor)
 
 
