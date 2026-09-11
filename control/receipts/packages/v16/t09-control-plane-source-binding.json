@@ -222,7 +222,7 @@
   "schema_version": "3.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "da61defd1592c1866cff179a2c3179289dd300187c04514006650be8f69a19fa",
-  "source_commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
-  "source_tree": "1c3933d27b9486b51cf0103e5179db18671242ef"
+  "semantic_sha256": "f9903e28ee0d4cb134280b4e1147af26884e6a9267c89e7d4bad64034074632e",
+  "source_commit": "00e94b61c5123649227d7c0a8c4127ba03e7489e",
+  "source_tree": "babce80324007c54bb11894cc0b7084556f1d603"
 }
