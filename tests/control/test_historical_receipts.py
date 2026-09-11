@@ -35,6 +35,16 @@ from giclab.control.target import resolve_selected_runtime_target
 from giclab.harness import t09_provider_contracts
 
 ROOT = Path(__file__).resolve().parents[2]
+RETAINED_REPAIR_SOURCES = (
+    "containers/sira-smoke/pragmatic/runtime_preflight.py",
+    "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+    "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
+    "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
+    "src/giclab/harness/campaign_output.py",
+    "src/giclab/harness/t09_candidate_inputs.py",
+    "src/giclab/harness/t09_environment_fixture.py",
+    "src/giclab/harness/t09_qualification_fixture.py",
+)
 
 
 def _canonical_sha256(value: object) -> str:
@@ -131,6 +141,68 @@ def test_synthetic_v17_and_retained_v16_roots_validate_simultaneously(
     assert historical.provider_contract_version == "V16"
     assert current.provider_contract_version == "V17"
     assert validation.validate_tracked_control_receipts(repository) == []
+
+
+def test_normal_generator_binds_retained_repair_sources_without_redefining_history(
+    successor_receipt_repository: tuple[Path, object],
+) -> None:
+    from giclab.control.proofs import required_shared_sources_for_schema
+
+    repository, contract = successor_receipt_repository
+    root = repository / "control/receipts/packages/v17"
+    binding = json.loads((root / "t09-control-receipt-bindings.json").read_bytes())
+    source = json.loads((root / "t09-control-plane-source-binding.json").read_bytes())
+    assert binding["schema_version"] == "7.0.0"
+    assert source["schema_version"] == "4.0.0"
+    prior = required_shared_sources_for_schema("3.0.0")
+    current = required_shared_sources_for_schema("4.0.0")
+    assert len(prior) == 43 and len(current) == 51
+    assert current - prior == frozenset(RETAINED_REPAIR_SOURCES)
+    files = {row["path"]: row for row in source["files"]}
+    assert set(files) == current
+    for relative in RETAINED_REPAIR_SOURCES:
+        encoded = (repository / relative).read_bytes()
+        assert files[relative]["bytes"] == len(encoded)
+        assert files[relative]["sha256"] == hashlib.sha256(encoded).hexdigest()
+    validate_current_control_receipt_set(repository, contract, _reference(root))
+
+
+@pytest.mark.parametrize("relative", RETAINED_REPAIR_SOURCES)
+def test_current_proof_rejects_retained_repair_source_mutation(
+    successor_receipt_repository: tuple[Path, object],
+    monkeypatch: pytest.MonkeyPatch,
+    relative: str,
+) -> None:
+    repository, contract = successor_receipt_repository
+    original = Path.read_bytes
+    changed = repository / relative
+
+    def mutated(path: Path) -> bytes:
+        encoded = original(path)
+        return encoded + b"\n# source mutation\n" if path == changed else encoded
+
+    monkeypatch.setattr(Path, "read_bytes", mutated)
+    with pytest.raises(ControlProofError, match="shared source changed after the control revision"):
+        validate_current_control_receipt_set(
+            repository,
+            contract,
+            _reference(repository / "control/receipts/packages/v17"),
+        )
+
+
+def test_current_source_closure_cannot_be_relabelled_as_older_binding_generation(
+    successor_receipt_repository: tuple[Path, object],
+    tmp_path: Path,
+) -> None:
+    repository, contract = successor_receipt_repository
+    copied = tmp_path / "receipts"
+    shutil.copytree(repository / "control/receipts/packages/v17", copied)
+    path = copied / "t09-control-receipt-bindings.json"
+    binding = json.loads(path.read_bytes())
+    binding["schema_version"] = "6.0.0"
+    _seal(path, binding)
+    with pytest.raises(ControlProofError, match="source-binding schema does not match"):
+        validate_current_control_receipt_set(repository, contract, _reference(copied))
 
 
 def test_selected_v17_topology_receipt_names_exact_selected_root_and_retained_roots(

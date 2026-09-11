@@ -99,7 +99,7 @@ V2_REQUIRED_SHARED_SOURCES: Final = LEGACY_REQUIRED_SHARED_SOURCES | frozenset(
         "src/giclab/control/shadow_effects.py",
     }
 )
-REQUIRED_SHARED_SOURCES: Final = V2_REQUIRED_SHARED_SOURCES | frozenset(
+V3_REQUIRED_SHARED_SOURCES: Final = V2_REQUIRED_SHARED_SOURCES | frozenset(
     {
         "containers/sira-smoke/pragmatic/t09_preflight.py",
         "src/giclab/control/live_method_viability.py",
@@ -110,11 +110,24 @@ REQUIRED_SHARED_SOURCES: Final = V2_REQUIRED_SHARED_SOURCES | frozenset(
         "src/giclab/harness/t09_runtime_admission.py",
     }
 )
+REQUIRED_SHARED_SOURCES: Final = V3_REQUIRED_SHARED_SOURCES | frozenset(
+    {
+        "containers/sira-smoke/pragmatic/runtime_preflight.py",
+        "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+        "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
+        "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
+        "src/giclab/harness/campaign_output.py",
+        "src/giclab/harness/t09_candidate_inputs.py",
+        "src/giclab/harness/t09_environment_fixture.py",
+        "src/giclab/harness/t09_qualification_fixture.py",
+    }
+)
 SHARED_SOURCE_BINDING_SCHEMAS: Final[Mapping[str, frozenset[str]]] = MappingProxyType(
     {
         "1.0.0": LEGACY_REQUIRED_SHARED_SOURCES,
         "2.0.0": V2_REQUIRED_SHARED_SOURCES,
-        "3.0.0": REQUIRED_SHARED_SOURCES,
+        "3.0.0": V3_REQUIRED_SHARED_SOURCES,
+        "4.0.0": REQUIRED_SHARED_SOURCES,
     }
 )
 
@@ -766,7 +779,7 @@ def generate_source_binding_receipt(
             }
         )
     document: dict[str, object] = {
-        "schema_version": "3.0.0",
+        "schema_version": "4.0.0",
         "base_commit": BASE_COMMIT,
         "source_commit": source_commit,
         "source_tree": source_tree,
@@ -839,7 +852,7 @@ def generate_control_binding_document(
         raise ControlProofError("control binding failure matrix is incomplete")
     registration = selected_target.selected_contract.effect_registration
     document: dict[str, object] = {
-        "schema_version": "6.0.0",
+        "schema_version": "7.0.0",
         "repository_slug": REPOSITORY_SLUG,
         "base_commit": BASE_COMMIT,
         "control_plane_revision": {"commit": control_commit, "tree": control_tree},
@@ -926,7 +939,7 @@ def _validate_control_receipt_set(
     _validate_schema(root, CONTROL_BINDING_SCHEMA, binding)
     binding_semantic = _semantic_sha256(binding)
     binding_version = binding.get("schema_version")
-    if binding_version not in {"4.0.0", "5.0.0", "6.0.0"}:
+    if binding_version not in {"4.0.0", "5.0.0", "6.0.0", "7.0.0"}:
         raise ControlProofError("control binding schema version is unsupported")
     if (
         reference.expected_repository_slug != REPOSITORY_SLUG
@@ -1007,7 +1020,7 @@ def _validate_control_receipt_set(
         or reference.expected_plan_id != contract.plan_id
     ):
         raise ControlProofError("binding selected another runtime target")
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         registration = contract.effect_registration
         expected_registration: dict[str, object] | None = (
             None
@@ -1047,13 +1060,13 @@ def _validate_control_receipt_set(
         "source_binding_receipt",
         "incident_receipt",
     )
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         names = (
             *names,
             "anti_shadow_lint_receipt",
             "live_effect_conformance_receipt",
         )
-    if binding_version == "6.0.0":
+    if binding_version in {"6.0.0", "7.0.0"}:
         names = (
             *names,
             "live_method_viability_receipt",
@@ -1132,7 +1145,7 @@ def _validate_control_receipt_set(
         "source_binding_receipt": "schemas/t09-control-plane-source-binding.schema.json",
         "incident_receipt": "schemas/t09-incident-completeness-receipt.schema.json",
     }
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         schema_map.update(
             {
                 "anti_shadow_lint_receipt": ("schemas/t09-anti-shadow-lint-receipt.schema.json"),
@@ -1141,7 +1154,7 @@ def _validate_control_receipt_set(
                 ),
             }
         )
-    if binding_version == "6.0.0":
+    if binding_version in {"6.0.0", "7.0.0"}:
         schema_map.update(
             {
                 "live_method_viability_receipt": ("schemas/t09-live-method-viability.schema.json"),
@@ -1242,13 +1255,13 @@ def _validate_control_receipt_set(
         "shadow_happy_path",
         "failure_matrix_valid",
     )
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         capsule_required_fields = (
             *capsule_required_fields,
             "anti_shadow_lint_valid",
             "live_effect_conformance_valid",
         )
-    if binding_version == "6.0.0":
+    if binding_version in {"6.0.0", "7.0.0"}:
         capsule_required_fields = (
             *capsule_required_fields,
             "live_method_viability_valid",
@@ -1259,7 +1272,7 @@ def _validate_control_receipt_set(
     ):
         raise ControlProofError("state capsule does not claim the complete bound control proof")
 
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         anti_shadow = documents["anti_shadow_lint_receipt"]
         anti_counts = anti_shadow.get("classification_counts")
         anti_topology = anti_shadow.get("public_receipt_topology_scan")
@@ -1400,7 +1413,7 @@ def _validate_control_receipt_set(
             and conformance.get("actual_v17_artifacts_present") is not False
         ):
             raise ControlProofError("live-effect conformance observed an undeclared successor")
-    if binding_version == "6.0.0":
+    if binding_version in {"6.0.0", "7.0.0"}:
         viability = documents["live_method_viability_receipt"]
         viability_checks = viability.get("checks")
         viability_methods = viability.get("methods")
@@ -1541,7 +1554,7 @@ def _validate_control_receipt_set(
         or happy_accounting["aggregate_charged_upper_cost_usd"] <= 0
     ):
         raise ControlProofError("happy-path shadow accounting proof is incomplete")
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         conformance_package = documents["live_effect_conformance_receipt"].get("temporary_package")
         if (
             not isinstance(conformance_package, dict)
@@ -1585,14 +1598,14 @@ def _validate_control_receipt_set(
         "state_capsule": semantics["state_capsule"],
         "source_binding": semantics["source_binding_receipt"],
     }
-    if binding_version in {"5.0.0", "6.0.0"}:
+    if binding_version in {"5.0.0", "6.0.0", "7.0.0"}:
         scalar_bindings.update(
             {
                 "anti_shadow_lint": semantics["anti_shadow_lint_receipt"],
                 "live_effect_conformance": semantics["live_effect_conformance_receipt"],
             }
         )
-    if binding_version == "6.0.0":
+    if binding_version in {"6.0.0", "7.0.0"}:
         scalar_bindings.update(
             {
                 "live_method_viability": semantics["live_method_viability_receipt"],
@@ -1662,6 +1675,7 @@ def _validate_control_receipt_set(
         "4.0.0": "1.0.0",
         "5.0.0": "2.0.0",
         "6.0.0": "3.0.0",
+        "7.0.0": "4.0.0",
     }[binding_version]
     if source.get("schema_version") != expected_source_version:
         raise ControlProofError("source-binding schema does not match the binding generation")

@@ -16,7 +16,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["4.0.0", "5.0.0", "6.0.0"]},
+    "schema_version": {"enum": ["4.0.0", "5.0.0", "6.0.0", "7.0.0"]},
     "repository_slug": {"const": "abbudjoe/gic-lab"},
     "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "control_plane_revision": {
@@ -184,7 +184,7 @@
     },
     {
       "if": {
-        "properties": {"schema_version": {"const": "6.0.0"}},
+        "properties": {"schema_version": {"enum": ["6.0.0", "7.0.0"]}},
         "required": ["schema_version"]
       },
       "then": {
