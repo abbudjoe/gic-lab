@@ -10,7 +10,7 @@
     "run-local-control-gates",
     "review-remote-execution-bridge-pr"
   ],
-  "blocking_incident": null,
+  "blocking_incident": "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW",
   "control_plane": {
     "active_version_lint_valid": true,
     "anti_shadow_lint_valid": true,
@@ -22,14 +22,14 @@
     "remote_execution_bridge_conformance_valid": true,
     "revision": "T09-remote-execution-bridge",
     "shadow_happy_path": true,
-    "status": "remote-execution-bridge-complete-external-governance"
+    "status": "remote-execution-bridge-final-validation-pending"
   },
   "cost": {
     "cumulative_t09_usd": "36.36170860803283125",
     "stabilization_openai_usd": "0.00",
     "stabilization_provider_usd": "0.00"
   },
-  "current_subgoal": "advance the completed remote-execution bridge through independent exact-head review and explicit merge authorization",
+  "current_subgoal": "finalize the independently accepted R1-R6 development matrix through non-circular V16 receipts and exact-commit local CI before independent review",
   "evidence": {
     "science_unchanged": true,
     "shadow_classification": "non-scientific-control-output",
@@ -47,9 +47,10 @@
     "live_resources_observed_in_this_work": false,
     "scientific_interpretation": false
   },
-  "next_technical_subgoal": "generate-package-only-v17-after-governance",
+  "next_technical_subgoal": "validate-exact-commit-v16-before-independent-review",
   "provenance": [
     "control/goals/EXP-0001.yaml",
+    "control/incidents/INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW.json",
     "docs/harness/T09_REMOTE_EXECUTION_BRIDGE_IMPLEMENTATION_LEDGER.md",
     "docs/harness/T09_CONTROL_PLANE_STABILIZATION_IMPLEMENTATION_LEDGER.md",
     "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json",
@@ -61,10 +62,10 @@
     "control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json",
     "experiments/EXP-0001-sira-simulative-vs-reactive/T09_V16_PREFLIGHT_STOPPED_DISPOSITION.json"
   ],
-  "recommended_action": "complete independent exact-head review and explicit merge authorization; only after the reviewed merge generate the package-only V17 successor",
+  "recommended_action": "preserve the accepted 53-row R1-R6 development matrix at checkpoint 0b27b74cbf160130b8177f47323e4d4f37a11986; complete current V16 source and receipt ancestry, exact-base/head final local gates and verified export before any product push; Source109 remains unknown and optional recovery is deferred; independent exact-head review remains required",
   "repository": {
-    "commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
-    "tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83"
+    "commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
+    "tree": "1c3933d27b9486b51cf0103e5179db18671242ef"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -92,21 +93,24 @@
       "scientific_interpretation_allowed": false
     },
     "goal_record_path": "control/goals/EXP-0001.yaml",
-    "goal_record_sha256": "3d0f48adc39e8d553f173f96d4585dbf53f31ea05617b328ae275f33ff6e3ea4",
+    "goal_record_sha256": "719a52fef2071410a28d5b846720e2353be0ef285b3dfb25a51e10eddcb41511",
     "historical_contract_version": "V16",
     "schema_version": "1.0.0",
     "selected_command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
     "selected_package_status": "consumed-prelaunch-failure",
     "selected_plan_id": "PLAN-EXP0001-PILOT-V16",
     "selected_provider_contract_version": "V16",
-    "semantic_sha256": "d5e0993a483fee7fe889c3dc293a753eb3cb84529851e6ce6e6f5db550807783",
+    "semantic_sha256": "d088a99ed362b40e0b4e1df116b4ffa727c65fd52ec99c1c7a69519870c26a44",
     "source": "goal-record",
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "7d19be939c42d29f5efc8985bfbfdef6434c8ad1f4e8e8868275206769954ad8",
+  "semantic_sha256": "394d65ea04f2e29bbc83a83134ea006ecd568815fa677af3cc3e2db75075c464",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
+    "the authorized archive fixture passes focused staging and regression-consumer tests but does not replace V16 frozen instrumentation source bindings",
+    "exact historical qualification archive bytes are unavailable in the inspected local repository trees and canonical staging location",
+    "source106 four joined passes plus setup failure, source108 343 component passes plus archive denial, and Source109 unknown remain separate; the accepted 340-pass development matrix is not final exact-candidate validation; old container and three-volume absence remains unresolved",
     "current-turn live authority must be supplied externally in a future turn",
     "V17 package identities and its package-specific effect implementation do not exist in this shared-control repair branch"
   ]

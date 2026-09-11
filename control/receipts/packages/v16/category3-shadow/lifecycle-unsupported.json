@@ -32,7 +32,7 @@
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "offline-composition",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "47518861bea86c3cdb69adbe37ba8e08c7ac05531e442b85a456f3b9f06235b8",
+  "effect_authorization_context_sha256": "5c6e2dc0b947c2857adc34821efd9223a820108d2692ecc2202dde7ae3d78f8a",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -75,18 +75,18 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "47518861bea86c3cdb69adbe37ba8e08c7ac05531e442b85a456f3b9f06235b8",
+    "authorization_context_semantic_sha256": "5c6e2dc0b947c2857adc34821efd9223a820108d2692ecc2202dde7ae3d78f8a",
     "cleanup_handoff_sha256": null,
     "cleanup_receipt_sha256": null,
     "cleanup_resume_byte_identical": false,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 109038,
+      "bytes": 111256,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
       "protocol_version": "2.0.0",
-      "sha256": "a9f5d0c42871871907fc6620e11309c423af8050556d1b8b5384c94a57df4921"
+      "sha256": "7aa76fca39098dfc6d1bbc8fdc87cc211067765f32e3cbe9d4d7c5de2e479586"
     },
     "effect_protocol_version": "2.0.0",
     "essential_failures": {},
@@ -149,8 +149,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
-  "repository_tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83",
+  "repository_commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
+  "repository_tree": "1c3933d27b9486b51cf0103e5179db18671242ef",
   "scenario": "lifecycle-unsupported",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -159,7 +159,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "1a5e15e42ec8b342a2f5a458f45a94999d8a2bcad39d06c1b764c24de26cb645",
+  "semantic_sha256": "b4e77699509ab75be036d07107cb7c60b4888dbe8e521beee7d1019ca7e0b4e7",
   "shadow_only": true,
   "stop_reason": "offline composition failed: provider registry completeness failed",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

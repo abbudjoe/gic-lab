@@ -2,14 +2,14 @@
   "actual_v17_artifacts_created": false,
   "bridge_protocol_version": "1.0.0",
   "complete": true,
-  "control_implementation_commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
-  "control_implementation_tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83",
+  "control_implementation_commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
+  "control_implementation_tree": "1c3933d27b9486b51cf0103e5179db18671242ef",
   "controller_conformance": {
     "cleanup_to_zero": true,
     "condition_session_count": 4,
     "first_pair_checkpoint_retained": true,
     "raw_finalizer_evaluator_chain": true,
-    "receipt_semantic_sha256": "d9b82f97f0d00d38fe635b037288c2ee7691cde3293ccf692f1201f979d31a26",
+    "receipt_semantic_sha256": "946470cd97c279bd157fef5cefafa6d1f68ffb7f086bd42623f3b51c5d365cd6",
     "shared_controller_used": true,
     "shared_production_assembly_used": true,
     "terminal_state": "category3-live-complete-clean"
@@ -22,10 +22,10 @@
     "all_terminal_acknowledged": true,
     "browser_action_count": 8,
     "evidence_binding_sha256s": [
-      "c5d2baef690812389517b6da7a5c7bad51b667b4b1171f96a2dff53dbaa74214",
-      "836d2e48ba11b297c5c08893d26368e213c90aa204175b72bb0df311203a5ebd",
-      "aaaf2e13318709a3bcf97f3451843ab9e974d08fb0c9a371098e5d5617b34804",
-      "3161831d1e755dd45ed4ad8d7556d2ed709c93442df0a7148e8d427380db4251"
+      "bee5195822c01c785386d461f56369ced7a51b50c0b63c53b26a8b8e36b7ada1",
+      "3d54ef173a2b27ba91dd9419f94993a0ed110b0ee05dff00978e0153e2d2118e",
+      "a7d1428555a67419d7ccaf1e161dcfb7546b3c2eb2182b70ad9026d3da47b832",
+      "9285d83db0163898fa181f24cc96857d3936399772ab44179326cd00a33a5fc4"
     ],
     "local_subprocess_count": 4,
     "model_call_count": 8,
@@ -44,10 +44,10 @@
     ],
     "session_count": 4,
     "shared_transcript_sha256s": [
-      "b4a2eda46384a0a2448332bc5305a767640eb81798c11d1007c99935517c961e",
-      "d32f18269cc13c2046900482f1dd0525802c564f8c0581a522ffcdffbd113250",
-      "82b3f299f88ebafdcebd48d2b8eb7b5f73663e75890dfc33df9823032aff31c0",
-      "762513d20acca32c60e0ec871a47558daceea7fa40862d6dc5b168e93c6a34e8"
+      "bd6ef8fcb6192f9a4bf07132b3e408605190d2809f342c1dc7e9e2558ae5c694",
+      "4a188bc2bcc5a9a5171196341eb54e0380ed1615a6f4fe9ce85c71887157c500",
+      "63cbb9a7fa4e66147cfd02e0d5534d89824a8bf32ba79b943c6a8eba0d32733b",
+      "5309bc4473f5d149ae57923d7dd0b367cf6fbaad342f6b19e466c92983eec06f"
     ]
   },
   "effect_protocol_version": "2.0.0",
@@ -102,7 +102,7 @@
   "runtime_admission_entry_point": "giclab.harness.sira_gate_a_runtime._install_locked_llm_factory",
   "schema_version": "1.0.0",
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "44785228c5fdb41ad8f462978d57aafceb2f96e6a9eb25c0eac2adf75b19be77",
+  "semantic_sha256": "c529845cf58b610b3d4c3cd37643d5d5873cdbb54ca881f0f9c545d4ff500ccb",
   "shared_controller_entry_point": "giclab.control.category3.execute_category3_transaction",
   "sole_accountant": {
     "coupling_probe_passed": true,

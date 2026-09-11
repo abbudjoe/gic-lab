@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "65408c84b8f54f3f822c5914304805d11df8b632673b66c47693fc32d40fd04e"
+      "subject": "0c164c8f1809da8035c0e1b451e3b373fd5735b87d96042097de48b96d05d56a"
     },
     {
       "adapter": "provider",
@@ -91,12 +91,12 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "45a113dd7431524f76313cdfad3c50035af1b54cc27825bc53ed86f3ef0f59e2",
+  "composition_sha256": "644b7df19c995ab6297d2087d788468a8c681cb802101a9336ee32bc1bb0ede5",
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "launch",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "47518861bea86c3cdb69adbe37ba8e08c7ac05531e442b85a456f3b9f06235b8",
+  "effect_authorization_context_sha256": "5c6e2dc0b947c2857adc34821efd9223a820108d2692ecc2202dde7ae3d78f8a",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -190,18 +190,18 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "47518861bea86c3cdb69adbe37ba8e08c7ac05531e442b85a456f3b9f06235b8",
+    "authorization_context_semantic_sha256": "5c6e2dc0b947c2857adc34821efd9223a820108d2692ecc2202dde7ae3d78f8a",
     "cleanup_handoff_sha256": "4240baa87d838671f53209c0715e1193793fa443458c7a4a2d1daa3fdb6ad132",
     "cleanup_receipt_sha256": "d5f50c8e719dac4f4a3fde9d6e82c23126719e9dbacd7987875868a2d66a24a6",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 109038,
+      "bytes": 111256,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
       "protocol_version": "2.0.0",
-      "sha256": "a9f5d0c42871871907fc6620e11309c423af8050556d1b8b5384c94a57df4921"
+      "sha256": "7aa76fca39098dfc6d1bbc8fdc87cc211067765f32e3cbe9d4d7c5de2e479586"
     },
     "effect_protocol_version": "2.0.0",
     "essential_failures": {},
@@ -232,9 +232,9 @@
     "host_transfers": {},
     "implementation_flavor": "production-wrapper",
     "package_assembly": {
-      "archive_bytes": 194560,
+      "archive_bytes": 204800,
       "archive_member_count": 11,
-      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
+      "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
       "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
       "contains_provider_handle": false,
       "contains_remote_path": false,
@@ -242,10 +242,10 @@
       "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
       "package_source": "working-tree",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "source_manifest_sha256": "eb6744c37004527d87e5a92935e745be04a8f0fc602a115ba16e0d1f321606af",
+      "source_manifest_sha256": "537a6215e7e5adfa60dd6d1b092b6f330bc772a3e0ffba8bbbf6dd4f10937ba2",
       "tracked_only": true,
       "uploaded": false,
-      "verification_archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305"
+      "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
     },
     "package_budget": {
       "aggregate_caps": {
@@ -381,8 +381,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
-  "repository_tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83",
+  "repository_commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
+  "repository_tree": "1c3933d27b9486b51cf0103e5179db18671242ef",
   "scenario": "ambiguous-provider-call-outcome",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -391,7 +391,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "e9661e316e63a4ad4b1102b67f674ae9f9030f8bf5ce8ade046fc09d8a0b798f",
+  "semantic_sha256": "67c46d1838b74162544d96f287d5dd7d226c7647324644cefbee8fa5ac475aa3",
   "shadow_only": true,
   "stop_reason": "provider launch acknowledgement is ambiguous",
   "terminal_state": "category3-shadow-stopped-cleanup-unresolved",

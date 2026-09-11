@@ -8,7 +8,7 @@
     },
     {
       "classification": "legitimate deterministic effect fixture",
-      "line": 449,
+      "line": 452,
       "path": "src/giclab/control/shadow_effects.py",
       "token": "production-shadow"
     },
@@ -222,10 +222,10 @@
     "selected_receipt_root": "control/receipts/packages/v16",
     "selected_root_matches_version": true
   },
-  "repository_commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
-  "repository_tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83",
+  "repository_commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
+  "repository_tree": "1c3933d27b9486b51cf0103e5179db18671242ef",
   "schema_version": "4.0.0",
-  "semantic_sha256": "75a94f9b6fad1d34b826d14554731ab31e88a0380ceca8b9622baa0d84fd034f",
+  "semantic_sha256": "052cf4737895896ee4ea6a319c85d88f0b3b6cbb5ea52e64f1d9cd93fd5e82d8",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",

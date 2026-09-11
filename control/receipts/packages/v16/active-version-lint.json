@@ -50,6 +50,7 @@
     "src/giclab/harness/adapters/sira.py",
     "src/giclab/harness/artifacts.py",
     "src/giclab/harness/budget.py",
+    "src/giclab/harness/campaign_output.py",
     "src/giclab/harness/cli.py",
     "src/giclab/harness/events.py",
     "src/giclab/harness/executor.py",
@@ -97,10 +98,13 @@
     "src/giclab/harness/t07_bounded_supervisor.py",
     "src/giclab/harness/t07_high_assurance_closeout.py",
     "src/giclab/harness/t08_sira_smoke.py",
+    "src/giclab/harness/t09_candidate_inputs.py",
     "src/giclab/harness/t09_cleanup_state.py",
+    "src/giclab/harness/t09_environment_fixture.py",
     "src/giclab/harness/t09_model_metadata_receipt.py",
     "src/giclab/harness/t09_pragmatic_provider.py",
     "src/giclab/harness/t09_provider_contracts.py",
+    "src/giclab/harness/t09_qualification_fixture.py",
     "src/giclab/harness/t09_remote_host_phases.py",
     "src/giclab/harness/t09_runtime_admission.py",
     "src/giclab/harness/t09_sira_pilot.py",
@@ -114,12 +118,12 @@
   ],
   "findings": [],
   "historical_module_allowlist": [],
-  "repository_commit": "aeff713e46a75d513dd9ccbcb53586e3151fdfd6",
-  "repository_tree": "a6a650de2c7d2611bb042789e8a359293f5ccd83",
+  "repository_commit": "ced4df2ea33a138ac5a441a3a55769ad3542637b",
+  "repository_tree": "1c3933d27b9486b51cf0103e5179db18671242ef",
   "scan_roots": [
     "src/giclab",
     "containers/sira-smoke/pragmatic"
   ],
   "schema_version": "1.0.0",
-  "semantic_sha256": "59a247ff3c4d752139d6a0cab363995fc59cdfb08b8387ffb10abb9602dd8ab4"
+  "semantic_sha256": "5946d1c56b5e77e9c1b7e7da7478fe5407b8ad6c89a7e3353091780b88363666"
 }
