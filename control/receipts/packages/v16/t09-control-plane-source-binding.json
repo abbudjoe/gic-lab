@@ -2,14 +2,34 @@
   "base_commit": "d0aff8a47e92013773d9d05b2cd90fb741658b03",
   "files": [
     {
+      "bytes": 12868,
+      "path": "containers/sira-smoke/pragmatic/runtime_preflight.py",
+      "sha256": "062e58fd980aea5b78138ea0235bbffed50f819e9ddd3d5f6c5b0ec2f5376b23"
+    },
+    {
+      "bytes": 72054,
+      "path": "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py",
+      "sha256": "e42fa6c6af8a783cd327805da1769d6e671356045e5729b13fecc9b7394326e1"
+    },
+    {
       "bytes": 6965,
       "path": "containers/sira-smoke/pragmatic/t09_freeze_commands.py",
       "sha256": "0ce8c64a9e1acad7da79fcac8ca5332cca391714c032ba26fca976370edf820d"
     },
     {
+      "bytes": 27298,
+      "path": "containers/sira-smoke/pragmatic/t09_local_finalizer_qualification.py",
+      "sha256": "38bf200a2777dce601b9cdd1ab261cbe9f09801630bcbdfbcd51b41df306ac96"
+    },
+    {
       "bytes": 24446,
       "path": "containers/sira-smoke/pragmatic/t09_preflight.py",
       "sha256": "ba7d108ddcb5109ffce74ae7223289c6984c4ef0553d940830f53dca193f8195"
+    },
+    {
+      "bytes": 24533,
+      "path": "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py",
+      "sha256": "3e2896f88b3cb011b6970e4fc44057d97ca354ea552b5a686ec889d59637ab6c"
     },
     {
       "bytes": 1295288,
@@ -87,9 +107,9 @@
       "sha256": "81267712b8b4a3a7d38289f23d0311661b9dd64d854f8ad3fb1c35b9bbf3bd70"
     },
     {
-      "bytes": 78194,
+      "bytes": 78987,
       "path": "src/giclab/control/proofs.py",
-      "sha256": "93d66fea0cc3376fec401b6c2b2fa03e04ee9908c682b148650cb4b8084ec5e3"
+      "sha256": "f99c9f106b3b9153c10358ed896febd47667ef0fae21fdd213bdc726f0d20636"
     },
     {
       "bytes": 19119,
@@ -137,6 +157,11 @@
       "sha256": "811dd05fbd49c7b63977d22de4bc6f5c3332a28bfb44fe45bc4b94e8eeb2b920"
     },
     {
+      "bytes": 27368,
+      "path": "src/giclab/harness/campaign_output.py",
+      "sha256": "231bb155619e5a2f97a7404cad63a27f1fb9e7574f1f0fe2bb13cad98f308759"
+    },
+    {
       "bytes": 13269,
       "path": "src/giclab/harness/lambda_campaign_lifecycle.py",
       "sha256": "6f0f74354f15766466480c498b4ab5af6887e337c5197416bb9dedf3ff78200b"
@@ -172,9 +197,19 @@
       "sha256": "0b5222eb8dfbd42f55b07090736be2c480f8976ee02ca97f0786360674691e7a"
     },
     {
+      "bytes": 33484,
+      "path": "src/giclab/harness/t09_candidate_inputs.py",
+      "sha256": "235df4fabb2ead71edc6a6c50640653ecad6515f63c9c9b86b1670b5eebb122f"
+    },
+    {
       "bytes": 62049,
       "path": "src/giclab/harness/t09_cleanup_state.py",
       "sha256": "2aba7c68d5368b743fe03c9466cc0936cdb5d4718c189d43646c200506284942"
+    },
+    {
+      "bytes": 18637,
+      "path": "src/giclab/harness/t09_environment_fixture.py",
+      "sha256": "6ad14251511b6b0cb73dac6112845e5a078b091405c2e7291adb2908b4fd558c"
     },
     {
       "bytes": 44112,
@@ -190,6 +225,11 @@
       "bytes": 64903,
       "path": "src/giclab/harness/t09_provider_contracts.py",
       "sha256": "024dbcfa3c343539fafb474fe48ffcf0fd6b5012746919fd35df4f89fb71210c"
+    },
+    {
+      "bytes": 11855,
+      "path": "src/giclab/harness/t09_qualification_fixture.py",
+      "sha256": "5fc161e87fc0f6f00de8104d56106d9c7d9dd6f118495c49d39f7cc32e129bdf"
     },
     {
       "bytes": 52533,
@@ -219,10 +259,10 @@
   ],
   "historical_package_changed": false,
   "live_execution_performed": false,
-  "schema_version": "3.0.0",
+  "schema_version": "4.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "f9903e28ee0d4cb134280b4e1147af26884e6a9267c89e7d4bad64034074632e",
-  "source_commit": "00e94b61c5123649227d7c0a8c4127ba03e7489e",
-  "source_tree": "babce80324007c54bb11894cc0b7084556f1d603"
+  "semantic_sha256": "5dcd379e6f9ef48b0d50abec5fc7293eb81aef24b055984c7a5fdf89cc841b28",
+  "source_commit": "83025eda686fd64bd7b1e0f2616297fce52d55d0",
+  "source_tree": "0380392290e54a60f3c293f34dd374e7987274ed"
 }
