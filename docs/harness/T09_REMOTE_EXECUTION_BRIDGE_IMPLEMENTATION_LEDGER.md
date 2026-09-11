@@ -4782,3 +4782,5 @@ their existing temporary successor fixture. That helper now materializes the
 test-owned file and derives its execution/condition/command references from the
 actual bytes. Frozen V16 inputs remain unchanged; no persistent successor
 package or live authority is created.
+
+The next normal V16 generation passed at source ancestor `ced4df2ea33a138ac5a441a3a55769ad3542637b`, and its byte-verified 29-file receipt set was committed as ordinary descendant `f8ab49739b1f83fbf07000d1e71922e8dac69974`. The separate guarded native run then recorded 87 passes and one failure: Git rendered the same fixed UTC author/committer clock using `Z` rather than `+00:00`. The fixture assertion now compares exact epoch seconds, preserving the clock contract without depending on display spelling. The failed native run and receipt descendant remain retained. This test-source correction requires a new immutable ancestor, regenerated receipts and renewed exact-candidate validation; no final gate or product publication is claimed.

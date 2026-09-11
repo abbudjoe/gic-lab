@@ -324,13 +324,13 @@ def test_local_shared_fixture_clone_retains_history_and_fixed_commit_clock(tmp_p
         ["git", "clone", "--shared", "--quiet", str(source), str(clone)], check=True, timeout=5
     )
     result = subprocess.run(
-        ["git", "-C", str(clone), "show", "-s", "--format=%aI%n%cI", "HEAD"],
+        ["git", "-C", str(clone), "show", "-s", "--format=%at%n%ct", "HEAD"],
         text=True,
         capture_output=True,
         check=True,
         timeout=5,
     )
-    assert result.stdout.splitlines() == ["2026-09-01T00:00:00+00:00"] * 2
+    assert result.stdout.splitlines() == ["1788220800"] * 2
     assert (clone / "member").read_text() == "tracked update\n"
     assert (
         Path((clone / ".git/objects/info/alternates").read_text().strip())
