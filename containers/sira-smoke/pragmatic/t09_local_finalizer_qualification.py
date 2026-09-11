@@ -23,12 +23,23 @@ import sysconfig
 from pathlib import Path
 from typing import Any
 
+from giclab.harness.t09_candidate_inputs import (
+    CandidateSourceSnapshot,
+    reject_candidate_source,
+    validate_candidate_package,
+)
 from giclab.harness.t09_provider_contracts import (
     T09ProviderContract,
     T09ProviderContractError,
     load_provider_profile,
     provider_contract,
     provider_contract_for_plan_id,
+)
+from giclab.harness.t09_qualification_fixture import (
+    DATASET_PATH,
+    EVALUATOR_ROOT,
+    DeterministicQualificationArchive,
+    validate_fixture_regression_receipt,
 )
 
 MAX_DEPENDENCY_TREE_ENTRIES = 100_000
@@ -274,11 +285,10 @@ def _selected_contract(args: argparse.Namespace) -> T09ProviderContract:
             "exactly one provider-contract version or plan identity is required"
         )
     try:
-        return (
-            provider_contract(version)
-            if isinstance(version, str)
-            else provider_contract_for_plan_id(plan_id)
-        )
+        if isinstance(version, str):
+            return provider_contract(version)
+        assert isinstance(plan_id, str)
+        return provider_contract_for_plan_id(plan_id)
     except T09ProviderContractError as exc:
         raise LocalQualificationError("local finalizer contract selector is unsupported") from exc
 
@@ -361,8 +371,27 @@ def _selected_identity_projection(
     }
 
 
-def qualify(args: argparse.Namespace) -> dict[str, object]:
+def qualify(
+    args: argparse.Namespace,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
+    fixture_binding: DeterministicQualificationArchive | None = None,
+) -> dict[str, object]:
     repository = args.repository.resolve(strict=True)
+    if source_inputs is None:
+        # No CLI argument, environment variable or receipt selects candidate mode.
+        reject_candidate_source(repository)
+        if fixture_binding is not None:
+            raise LocalQualificationError("archive fixture requires explicit candidate sources")
+    else:
+        validate_candidate_package(source_inputs, repository)
+        if (
+            source_inputs.package_identity(repository)[0] != args.package_commit
+            or fixture_binding is None
+            or fixture_binding.document() != source_inputs.document()["qualification_fixture"]
+        ):
+            raise LocalQualificationError("offline qualifier candidate/archive binding drifted")
+        fixture_binding.validate(repository)
     contract = _selected_contract(args)
     interpreter_identity = _interpreter_launcher_identity(args.interpreter)
     interpreter = Path(str(interpreter_identity["interpreter"]))
@@ -373,24 +402,25 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
         raise LocalQualificationError("qualification did not use the declared absolute Python")
     if sys.version_info[:3] != (3, 11, 14):
         raise LocalQualificationError("local finalizer Python must be exactly 3.11.14")
-    head = subprocess.run(
-        ["git", "-C", str(repository), "rev-parse", "HEAD"],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=True,
-        text=True,
-        timeout=30,
-    ).stdout.strip()
-    dirty = subprocess.run(
-        ["git", "-C", str(repository), "status", "--porcelain"],
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=True,
-        text=True,
-        timeout=30,
-    ).stdout
-    if head != args.package_commit or dirty:
-        raise LocalQualificationError("local qualification requires the exact clean package")
+    if source_inputs is None:
+        head = subprocess.run(
+            ["git", "-C", str(repository), "rev-parse", "HEAD"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=30,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "-C", str(repository), "status", "--porcelain"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            text=True,
+            timeout=30,
+        ).stdout
+        if head != args.package_commit or dirty:
+            raise LocalQualificationError("local qualification requires the exact clean package")
     _disable_network()
     execution_path = args.execution_contract.resolve(strict=True)
     execution_contract, command_path, provider_profile = _validate_selected_package(
@@ -409,6 +439,10 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
     evaluator_files_raw = (
         evaluator_identity.get("files") if isinstance(evaluator_identity, dict) else None
     )
+    if fixture_binding is not None:
+        if args.evaluator_root.resolve(strict=True) != repository / EVALUATOR_ROOT:
+            raise LocalQualificationError("offline evaluator path differs from its fixture")
+        evaluator_files_raw = fixture_binding.evaluator_files()
     if not isinstance(evaluator_files_raw, list):
         raise LocalQualificationError("evaluator source inventory is unavailable")
     evaluator_root = args.evaluator_root.resolve(strict=True)
@@ -442,15 +476,27 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
         label="local evaluator dependency tree",
     )
     dataset = args.dataset.resolve(strict=True)
-    if (
-        dataset.stat().st_size != 1_177_174
-        or file_sha256(dataset)
-        != "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
-    ):
+    dataset_bytes = 1_177_174
+    dataset_sha256 = "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+    if fixture_binding is not None:
+        if dataset != repository / DATASET_PATH:
+            raise LocalQualificationError("offline dataset path differs from its fixture")
+        member = next(item for item in fixture_binding.sources if item.path == DATASET_PATH)
+        dataset_bytes, dataset_sha256 = member.bytes, member.sha256
+    if dataset.stat().st_size != dataset_bytes or file_sha256(dataset) != dataset_sha256:
         raise LocalQualificationError("local finalizer dataset identity drifted")
     regression_path = args.real_evidence_regression.resolve(strict=True)
     regression = _object(regression_path, label="real-evidence regression")
-    if (
+    if fixture_binding is not None:
+        assert source_inputs is not None
+        validate_fixture_regression_receipt(repository, fixture_binding, regression)
+        if regression.get("finalizer_source_sha256") != source_inputs.source_sha256(
+            repository, "containers/sira-smoke/pragmatic/t09_evaluate_attempt.py"
+        ) or regression.get("regression_source_sha256") != source_inputs.source_sha256(
+            repository, "containers/sira-smoke/pragmatic/t09_real_evidence_regression.py"
+        ):
+            raise LocalQualificationError("offline regression used another candidate source")
+    elif (
         regression.get("accepted_scientific_and_evaluator_fields_equal") is not True
         or regression.get("network_disabled") is not True
         or regression.get("additional_model_requests") != 0
@@ -502,6 +548,23 @@ def qualify(args: argparse.Namespace) -> dict[str, object]:
         "model_requests": 0,
         "browser_actions": 0,
     }
+    if source_inputs is not None:
+        assert fixture_binding is not None
+        # These inputs qualify only the offline instrumentation test. The
+        # unchanged experiment package remains a template, not new V16 evidence.
+        receipt["offline_candidate_inputs"] = {
+            "candidate_binding_sha256": source_inputs.digest,
+            "template_contract": contract.version,
+            "qualification_fixture": fixture_binding.document(),
+            "classification": "non-scientific-no-network-non-live",
+            "historical_replay": False,
+            "live_qualification": False,
+            "template_dataset_sha256": (
+                "359300b029c6891567816f351bf8786e9b018d7af8a1a44b7da9ba5ef4651288"
+            ),
+        }
+        validate_candidate_package(source_inputs, repository)
+        fixture_binding.validate(repository)
     _write_exclusive(args.output.resolve(strict=False), receipt)
     return receipt
 

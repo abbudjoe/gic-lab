@@ -11,6 +11,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Final
 
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
+
 VERSION_LITERAL: Final = re.compile(r"^V[0-9]+$")
 VERSIONED_PROVIDER_CONTRACT_SYMBOL: Final = re.compile(r"^V[1-9][0-9]*_PROVIDER_CONTRACT$")
 ANNOTATION: Final = "giclab-version-lint: historical-identity"
@@ -316,7 +318,9 @@ def lint_active_selection_text(
     return tuple(findings)
 
 
-def validate_active_version_dispatch(repository: Path) -> dict[str, object]:
+def validate_active_version_dispatch(
+    repository: Path, *, source_inputs: CandidateSourceSnapshot | None = None
+) -> dict[str, object]:
     """Scan the complete active Python surface and return a deterministic receipt."""
 
     root = repository.resolve(strict=True)
@@ -352,7 +356,9 @@ def validate_active_version_dispatch(repository: Path) -> dict[str, object]:
                 relative_path=relative,
             )
         )
-    commit, tree = _git_identity(root)
+    commit, tree = (
+        _git_identity(root) if source_inputs is None else source_inputs.package_identity(root)
+    )
     projection: dict[str, object] = {
         "schema_version": "1.0.0",
         "repository_commit": commit,

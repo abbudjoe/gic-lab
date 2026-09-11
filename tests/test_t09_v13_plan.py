@@ -215,7 +215,9 @@ def test_v13_plan_binds_current_sources_artifacts_and_stopped_v12_record() -> No
         group = cast(dict[str, object], bindings[group_name])
         for path_field, hash_field in fields:
             relative = str(group[path_field])
-            if relative.endswith(".py"):
+            if relative.endswith(".py") or (
+                relative == "schemas/t09-early-cleanup-state.schema.json"
+            ):
                 encoded = subprocess.run(
                     ["git", "show", f"{reviewed_ancestor}:{relative}"],
                     cwd=ROOT,

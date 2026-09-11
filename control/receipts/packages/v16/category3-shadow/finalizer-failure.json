@@ -3,7 +3,7 @@
     {
       "adapter": "host",
       "index": 1,
-      "operation": "host.stage",
+      "operation": "host.assemble_local",
       "outcome": "passed",
       "subject": "tracked-package-archive"
     },
@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
+      "subject": "bed3df43d9a3b1ae408f85b3c0fdd3f0c07431a74125b7cc7502be66b1c510f4"
     },
     {
       "adapter": "provider",
@@ -52,111 +52,118 @@
     {
       "adapter": "host",
       "index": 8,
-      "operation": "host.preflight",
+      "operation": "host.transfer",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "host",
       "index": 9,
+      "operation": "host.preflight",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "host",
+      "index": 10,
       "operation": "host.qualify",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 10,
+      "index": 11,
       "operation": "evidence.record",
-      "outcome": "retained:1fa79da2ce3d",
+      "outcome": "retained:127494a10aae",
       "subject": "qualification"
     },
     {
       "adapter": "host",
-      "index": 11,
+      "index": 12,
       "operation": "host.freeze",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 12,
+      "index": 13,
       "operation": "evidence.record",
-      "outcome": "retained:534c48dd71fa",
+      "outcome": "retained:866d146f353f",
       "subject": "scientific-freeze"
     },
     {
       "adapter": "condition",
-      "index": 13,
+      "index": 14,
       "operation": "condition.reserve",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 14,
+      "index": 15,
       "operation": "condition.enter",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 15,
+      "index": 16,
       "operation": "condition.run",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 16,
+      "index": 17,
       "operation": "condition.export_raw",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "evidence",
-      "index": 17,
+      "index": 18,
       "operation": "evidence.record",
-      "outcome": "retained:62934e099cb4",
+      "outcome": "retained:5841eec1989d",
       "subject": "raw"
     },
     {
       "adapter": "condition",
-      "index": 18,
+      "index": 19,
       "operation": "condition.finalize",
       "outcome": "failed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 19,
+      "index": 20,
       "operation": "condition.finalize",
       "outcome": "essential-failure-sealed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "host",
-      "index": 20,
+      "index": 21,
       "operation": "host.cleanup",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 21,
+      "index": 22,
       "operation": "evidence.scan_privacy",
       "outcome": "passed",
       "subject": "effect-evidence"
     },
     {
       "adapter": "provider",
-      "index": 22,
+      "index": 23,
       "operation": "provider.terminate",
       "outcome": "accepted",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "provider",
-      "index": 23,
+      "index": 24,
       "operation": "provider.inventory",
       "outcome": "zero",
       "subject": "owned-resources"
@@ -189,7 +196,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "composition_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -198,19 +205,19 @@
   ],
   "earliest_stopping_phase": "finalization",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+  "effect_authorization_context_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [
       {
         "essential_file_count": 7,
-        "essential_total_bytes": 7450,
-        "evidence_binding_sha256": "42baacb376e77e1035695b5fd3acd55ba3c510eca568ac5c63cb1e82511fb2f6",
-        "export_receipt_sha256": "436008fd42e051ea70f82acb6a619ad96357a9058210b769fd48a2436cbc819e",
+        "essential_total_bytes": 7580,
+        "evidence_binding_sha256": "39d8f190b10e5fe38c987311df8a7c08e60bc26114a2ed0e0aaf32b88e3e1290",
+        "export_receipt_sha256": "bc7cc3bc80dad23a32c443ce20488e0e8470079be4ce2018249870111a42b084",
         "failure_class": "finalizer-failure",
         "infrastructure_invalid": true,
-        "manifest_sha256": "1f14aea99a6c5f7db93b192110d4065ce0b4721bbb61697cb79052b9acb6144e",
-        "receipt_sha256": "ca31703f28eaec1003ad5499b3f14497dfa23548248ed1c14157b89d617c7dfd",
+        "manifest_sha256": "5b8e4d5d9e6e6f1cfbae97839f1503203f6c49d940d514854dd0c1ec037fcfbf",
+        "receipt_sha256": "635af33522af5425a4e3484dad3160176164f949ec60b7a5103a70d519c445b0",
         "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "stopping_phase": "finalization",
         "unscored": true
@@ -229,13 +236,13 @@
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "62934e099cb4fb672e5fad16ea2b870efaaaf15a691f565913d05ade6185948d",
+      "sha256": "5841eec1989dd1b818d58a7500f47b0dfb1c140fbf49c2b75b23716424a4e611",
       "shadow_only": true
     },
     {
       "kind": "essential-infrastructure-failure",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "42baacb376e77e1035695b5fd3acd55ba3c510eca568ac5c63cb1e82511fb2f6",
+      "sha256": "39d8f190b10e5fe38c987311df8a7c08e60bc26114a2ed0e0aaf32b88e3e1290",
       "shadow_only": true
     }
   ],
@@ -265,7 +272,7 @@
     {
       "index": 5,
       "outcome": "passed",
-      "phase": "local-staging"
+      "phase": "local-package-assembly"
     },
     {
       "index": 6,
@@ -301,55 +308,60 @@
     {
       "index": 12,
       "outcome": "passed",
-      "phase": "host-preflight"
+      "phase": "host-package-transfer"
     },
     {
       "index": 13,
       "outcome": "passed",
-      "phase": "image-finalizer-qualification"
+      "phase": "host-preflight"
     },
     {
       "index": 14,
+      "outcome": "passed",
+      "phase": "image-finalizer-qualification"
+    },
+    {
+      "index": 15,
       "outcome": "passed",
       "phase": "scientific-freeze"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 15,
+      "index": 16,
       "outcome": "passed",
       "phase": "condition-reservation"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 16,
+      "index": 17,
       "outcome": "passed",
       "phase": "empirical-entry"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 17,
+      "index": 18,
       "outcome": "passed",
       "phase": "condition-execution"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 18,
+      "index": 19,
       "outcome": "passed",
       "phase": "raw-export"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: finalizer-failure",
-      "index": 19,
+      "index": 20,
       "outcome": "essential-failure-sealed",
       "phase": "finalization"
     },
     {
-      "index": 20,
+      "index": 21,
       "outcome": "passed",
       "phase": "cleanup"
     },
     {
-      "index": 21,
+      "index": 22,
       "outcome": "passed",
       "phase": "terminal-provider-security-verification"
     }
@@ -471,6 +483,11 @@
               "terminal_state": "sent_response_reconciled"
             }
           ],
+          "campaign_output": {
+            "condition_identity": null,
+            "granted_bytes": 67137575,
+            "observed_bytes": 28711
+          },
           "observed_lower_bound": {
             "aggregate": {
               "browser_actions": 2,
@@ -479,7 +496,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 42561,
               "output_tokens": 36,
               "total_tokens": 177
             },
@@ -490,7 +507,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 13850,
               "output_tokens": 36,
               "total_tokens": 177
             }
@@ -503,7 +520,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134215838,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -514,7 +531,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134215838,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -528,7 +545,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 201367263,
               "output_tokens": 36,
               "total_tokens": 177
             },
@@ -539,7 +556,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 134229688,
               "output_tokens": 36,
               "total_tokens": 177
             }
@@ -567,33 +584,33 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+    "authorization_context_semantic_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
     "cleanup_handoff_sha256": "3c35a568475be9862dfbe3c9b1980f51eb416c14222942925f4f23841c3ef6c3",
     "cleanup_receipt_sha256": "a69edd2f7c028b9296f215466190083ce0eea8e878967c52f8e8202753658700",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 100560,
+      "bytes": 111256,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
-      "protocol_version": "1.0.0",
-      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+      "protocol_version": "2.0.0",
+      "sha256": "7aa76fca39098dfc6d1bbc8fdc87cc211067765f32e3cbe9d4d7c5de2e479586"
     },
-    "effect_protocol_version": "1.0.0",
+    "effect_protocol_version": "2.0.0",
     "essential_failures": {
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
         "completed": true,
-        "export_receipt_sha256": "436008fd42e051ea70f82acb6a619ad96357a9058210b769fd48a2436cbc819e",
+        "export_receipt_sha256": "bc7cc3bc80dad23a32c443ce20488e0e8470079be4ce2018249870111a42b084",
         "export_resumed": false,
         "failure_class": "finalizer-failure",
         "file_count": 7,
-        "held_artifact_binding_sha256": "bc7ae7b01677d9054b2bb273c848243ed2ade4f65a9b61f3dfe10cbbacd54aff",
-        "manifest_sha256": "1f14aea99a6c5f7db93b192110d4065ce0b4721bbb61697cb79052b9acb6144e",
+        "held_artifact_binding_sha256": "29a5283410b66f3381130019444113bd5534da50dfbae82195b10724852bbb9b",
+        "manifest_sha256": "5b8e4d5d9e6e6f1cfbae97839f1503203f6c49d940d514854dd0c1ec037fcfbf",
         "process_exit_code": 0,
-        "receipt_sha256": "ca31703f28eaec1003ad5499b3f14497dfa23548248ed1c14157b89d617c7dfd",
+        "receipt_sha256": "635af33522af5425a4e3484dad3160176164f949ec60b7a5103a70d519c445b0",
         "retry_count": 0,
-        "total_bytes": 7450,
+        "total_bytes": 7580,
         "unknown_call_ids": [],
         "unscored": true
       }
@@ -601,12 +618,13 @@
     "evaluations": {},
     "first_pair_checkpoint": null,
     "held_evidence": {
+      "condition_bridge": {},
       "essential_failure": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "bc7ae7b01677d9054b2bb273c848243ed2ade4f65a9b61f3dfe10cbbacd54aff"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "29a5283410b66f3381130019444113bd5534da50dfbae82195b10724852bbb9b"
       },
       "finalized": {},
       "raw": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "cc7d8f3c94eaaf57d9f278172abc6c2cef7a698ddcb3c3498fe1d71346b9b7ed"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "59d2413a5e6e8c6b7d6d2778e86747f150de18b9e8f63033bf51ef35d3d77ca6"
       },
       "revalidated_across_consumers": true
     },
@@ -621,11 +639,35 @@
       "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "4fd322f992a410f39cb0395a10518498088b788f6f89f44af0cd947f60196306",
-      "postfreeze_validation": "a452149d74ddef7d0a49b44564a8be56eb3e80ef3f676c3d24da66e1fb796956",
-      "qualification": "1fa79da2ce3dea6217e7a4b8453d441fd7c182c661645c9c7dc49d164fd4eb6c"
+      "frozen_manifest": "67a3b01744c1e3fe01e7ff94966a942bd3e69684a769056bd1e59b03885bfab3",
+      "postfreeze_validation": "4ac8ffe5ce439196a3183ddc65a75471189f9542e79a83e1280ea780b0e3e997",
+      "qualification": "127494a10aae12196c82bdf683a8773794f6967f4a67fe312f632a83e19e2eee"
+    },
+    "host_transfers": {
+      "1": {
+        "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+        "host_acknowledgement_sha256": "3c69eddce04a5d0a04d975496a7e1e7cb6e1b238fa5802bf5df2dfc4cb0f5532",
+        "member_manifest_sha256": "8fe2559a455ab4e87ebbd68b89b951fd878c2c82ac9da6acf7e8597ddba07fc6",
+        "receipt_sha256": "bc809ef634a1d414ddf1e7349eb0d317d2399bd8ad846d5a83e9547ade33efd8"
+      }
     },
     "implementation_flavor": "production-wrapper",
+    "package_assembly": {
+      "archive_bytes": 204800,
+      "archive_member_count": 11,
+      "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "contains_provider_handle": false,
+      "contains_remote_path": false,
+      "deterministic_render_count": 2,
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "package_source": "working-tree",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "source_manifest_sha256": "b100bf13dc91157e14513af28ca3015cc428b66df7ce92c30b778ccafbb32c4d",
+      "tracked_only": true,
+      "uploaded": false,
+      "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
+    },
     "package_budget": {
       "aggregate_caps": {
         "max_browser_actions": 120,
@@ -703,29 +745,19 @@
       "service_tier": "default",
       "zero_retry": true
     },
-    "package_staging": {
-      "archive_bytes": 194560,
-      "archive_member_count": 11,
-      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
-      "host_acknowledgement_sha256": "331e343f966ccac051d127ab7031b02d08cca4f55a353ed983a2588a4ef5d0f0",
-      "host_rehash_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "package_source": "working-tree",
-      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "tracked_only": true
-    },
     "production_primitives": [
       "ProviderBudgetBoundary.invoke",
       "ProviderBudgetBoundary.record_browser_action",
       "ProviderBudgetBoundary.record_output_bytes",
       "T09ProviderContract.validate_owner",
       "admit_model_metadata_receipt_at_prelaunch_boundary",
+      "assemble_local_package:two-byte-identical-renders",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "create_model_metadata_receipt",
       "exact_raw_export_acknowledgement",
       "execute_typed_condition_session",
       "export_essential_failure_bundle",
+      "host-transfer-verify",
       "immutable_cleanup_export_handoff",
       "initialize_pilot_state",
       "launch_campaign",
@@ -739,7 +771,6 @@
       "publish_dynamic_frozen_run_manifest",
       "reserve_condition_start",
       "resolve_registered_command_package",
-      "stage_verified_archive",
       "validate_campaign_launch_projection",
       "validate_cleanup_execution_receipt",
       "validate_entry_receipt_source_bound",
@@ -756,7 +787,7 @@
     "provider_cost_receipt": null,
     "provider_lifecycle_cost_proof": null,
     "raw_export_acknowledgements": {
-      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "6dfe2b6280049ca095c55e857c89891ef29dc818d6ea55d820ec9a6346c95be0"
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "4a2e1860fbe06234bd598e250aa71024d8b66cce997530cdc6e0b1d63250863d"
     },
     "replacement_history": {
       "closed_launch_slots": [
@@ -796,6 +827,49 @@
         1005.0,
         1006.0,
         1006.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
         1011.0,
         1011.0,
         1011.0,
@@ -895,14 +969,18 @@
         1800001011.0,
         1800001011.0,
         1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
         1800001011.0
       ]
     }
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
   "scenario": "finalizer-failure",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -913,7 +991,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "22699b5d17ee8ec027844c23184a2aeb7ff981bf9dd99a87be36f472c2f30c55",
+  "semantic_sha256": "d1dfe3b1e25f231cfe9e7b101167e8b91d0aa7bb40877eb10b7140ff7c769d5e",
   "shadow_only": true,
   "stop_reason": "finalizer stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

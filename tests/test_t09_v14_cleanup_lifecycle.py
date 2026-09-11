@@ -123,6 +123,7 @@ def _publish_frozen_boundary(
     monkeypatch: pytest.MonkeyPatch,
     *,
     include_preflight: bool = False,
+    journal: EarlyCleanupJournal | None = None,
 ) -> tuple[dict[str, object], str]:
     frozen: dict[str, object] = {
         "manifest_id": V13_PROVIDER_CONTRACT.frozen_run_manifest_id,
@@ -132,6 +133,8 @@ def _publish_frozen_boundary(
         "replacement_image_id": "sha256:" + "5" * 64,
     }
     frozen_path = pilot_root / "frozen-run-manifest.json"
+    if journal is not None:
+        journal.begin_freeze_publication(clock=lambda: 1_900_000_002.0)
     _write_json(frozen_path, frozen)
     frozen_sha256 = _sha256(frozen_path)
     postfreeze_path = pilot_root / "postfreeze-validation.json"
@@ -354,6 +357,7 @@ def test_empirical_prefix_handoff_resume_reuses_byte_identical_receipt(
         host,
         pilot_root,
         monkeypatch,
+        journal=journal,
         include_preflight=True,
     )
     run_id = V13_PROVIDER_CONTRACT.run_ids[0]
@@ -419,6 +423,7 @@ def test_pending_essential_resume_preserves_nonempty_acknowledged_prefix(
         host,
         pilot_root,
         monkeypatch,
+        journal=journal,
         include_preflight=True,
     )
     first_run_id, pending_run_id = V13_PROVIDER_CONTRACT.run_ids[:2]
@@ -505,6 +510,7 @@ def test_empirical_full_cleanup_resume_does_not_repeat_exact_resource_mutations(
         host,
         pilot_root,
         monkeypatch,
+        journal=journal,
         include_preflight=True,
     )
     _write_json(
@@ -877,7 +883,7 @@ def test_valid_postfreeze_zero_attempt_handoff_requires_no_attempt_acknowledgeme
 ) -> None:
     host = _host("giclab_t09_v14_postfreeze_zero")
     artifact_root, pilot_root, state, journal = _v13_stopped_fixture(tmp_path)
-    _publish_frozen_boundary(host, pilot_root, monkeypatch)
+    _publish_frozen_boundary(host, pilot_root, monkeypatch, journal=journal)
     phase = _derive(host, artifact_root, state, journal)
     assert phase.lifecycle_phase is CleanupExportLifecyclePhase.POSTFREEZE_ZERO_ATTEMPT
     assert phase.required_export_acknowledgement_count == 0
@@ -900,7 +906,7 @@ def test_empirical_prefix_missing_acknowledgement_remains_strict(
 ) -> None:
     host = _host("giclab_t09_v14_empirical_missing_ack")
     artifact_root, pilot_root, state, journal = _v13_stopped_fixture(tmp_path)
-    _publish_frozen_boundary(host, pilot_root, monkeypatch, include_preflight=True)
+    _publish_frozen_boundary(host, pilot_root, monkeypatch, journal=journal, include_preflight=True)
     run_id = V13_PROVIDER_CONTRACT.run_ids[0]
     state["empirical_attempts_entered"] = [run_id]
     state["supervised_release_bindings"] = {run_id: "a" * 64}
@@ -941,6 +947,7 @@ def test_published_manifest_with_unsafe_identity_fails_closed(
 ) -> None:
     host = _host(f"giclab_t09_v14_unsafe_manifest_{unsafe_kind}")
     artifact_root, pilot_root, state, journal = _v13_stopped_fixture(tmp_path)
+    journal.begin_freeze_publication(clock=lambda: 1_900_000_002.0)
     manifest_path = pilot_root / "frozen-run-manifest.json"
     if unsafe_kind == "malformed":
         manifest_path.write_text("{", encoding="utf-8")
@@ -1010,4 +1017,23 @@ def test_wrong_provider_entry_host_identity_fails_closed(tmp_path: Path) -> None
     entry["host_run_id"] = "RUN-T09-PILOT-HOST-AUTONOMOUS-WRONG"
     _write_json(entry_path, entry)
     with pytest.raises(host.T09HostError, match="another provider contract"):
+        _derive(host, artifact_root, state, journal)
+
+
+def test_published_manifest_cannot_contradict_tracked_no_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    host = _host("giclab_t09_r3_publication_contradiction")
+    artifact_root, pilot_root, state, journal = _v13_stopped_fixture(tmp_path)
+    assert journal.load().freeze_publication_started is False
+    _publish_frozen_boundary(host, pilot_root, monkeypatch)
+    with pytest.raises(host.CleanupExportEvidenceError, match=r"publication.*contradict"):
+        _derive(host, artifact_root, state, journal)
+
+
+def test_missing_manifest_after_publication_intent_is_not_prefreeze(tmp_path: Path) -> None:
+    host = _host("giclab_t09_r3_missing_publication")
+    artifact_root, _pilot_root, state, journal = _v13_stopped_fixture(tmp_path)
+    journal.begin_freeze_publication(clock=lambda: 1_900_000_002.0)
+    with pytest.raises(host.CleanupExportEvidenceError, match=r"pre-freeze.*contradict"):
         _derive(host, artifact_root, state, journal)

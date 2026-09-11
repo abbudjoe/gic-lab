@@ -58,4 +58,4 @@ check: check-python site
 ci-check: lock-check sync lint typecheck agent-check validate site
 	test -n "$(BASE_SHA)"
 	test -n "$(HEAD_SHA)"
-	$(UV_RUN) python -m giclab.ci_pytest_parity --repository . --base-sha "$(BASE_SHA)" --head-sha "$(HEAD_SHA)"
+	$(UV_RUN) python -m giclab.ci_pytest_parity --repository . --base-sha "$(BASE_SHA)" --head-sha "$(HEAD_SHA)" $(if $(PARITY_EVIDENCE_ROOT),--evidence-root "$(PARITY_EVIDENCE_ROOT)")

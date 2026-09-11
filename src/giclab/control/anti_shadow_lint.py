@@ -22,7 +22,7 @@ from giclab.control.target import (
 )
 from giclab.registry import DuplicateKeyError, load_yaml, loads_json
 
-ANTI_SHADOW_LINT_SCHEMA_VERSION: Final = "3.0.0"
+ANTI_SHADOW_LINT_SCHEMA_VERSION: Final = "4.0.0"
 AUDITED_BASE_COMMIT: Final = "f1d872d59c4952eb98467c2506850af7772f4454"
 AUDITED_BASE_TREE: Final = "eb70e20024559d65b3fadd240f72d3522895ef04"
 SHARED_EFFECT_NEUTRAL_SOURCES: Final = (
@@ -31,8 +31,23 @@ SHARED_EFFECT_NEUTRAL_SOURCES: Final = (
     "src/giclab/control/consumers.py",
     "src/giclab/control/contracts.py",
     "src/giclab/control/effects.py",
+    "src/giclab/control/live_method_viability.py",
     "src/giclab/control/production.py",
+    "src/giclab/control/remote_bridge.py",
+    "src/giclab/harness/sira_gate_a_runtime.py",
+    "src/giclab/harness/t09_remote_host_phases.py",
+    "src/giclab/harness/t09_runtime_admission.py",
     "src/giclab/harness/t09_sira_pilot.py",
+)
+BRIDGE_LIVE_SOURCES: Final = (
+    "src/giclab/control/category3.py",
+    "src/giclab/control/effects.py",
+    "src/giclab/control/production.py",
+    "src/giclab/control/remote_bridge.py",
+    "src/giclab/harness/sira_gate_a_runtime.py",
+    "src/giclab/harness/t09_remote_host_phases.py",
+    "src/giclab/harness/t09_runtime_admission.py",
+    "containers/sira-smoke/pragmatic/t09_remote_runner.py",
 )
 INVENTORY_ROOTS: Final = (
     "src/giclab/control",
@@ -257,16 +272,59 @@ def _review_bypass_findings(source: str, *, relative_path: str) -> list[AntiShad
 
     findings: list[AntiShadowFinding] = []
     tree = ast.parse(source, filename=relative_path)
-    resolved_names = {
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and node.value.func.attr == "resolve"
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    }
+    # A local named "parent" in one function must not inherit the resolution
+    # state of an unrelated function. Preserve lexical captures and shadowing.
+    scopes: dict[ast.AST, ast.AST] = {}
+    parents: dict[ast.AST, ast.AST | None] = {tree: None}
+    bindings: dict[ast.AST, set[str]] = {}
+    resolved: dict[ast.AST, set[str]] = {}
+    globals_by_scope: dict[ast.AST, set[str]] = {}
+
+    def visit(node: ast.AST, scope: ast.AST) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            if not isinstance(node, ast.Lambda):
+                bindings.setdefault(scope, set()).add(node.name)
+            parents[node] = scope
+            scope = node
+        scopes[node] = scope
+        names = bindings.setdefault(scope, set())
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.Global):
+            globals_by_scope.setdefault(scope, set()).update(node.names)
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            value = node.value
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if (
+                isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Attribute)
+                and value.func.attr == "resolve"
+            ):
+                resolved.setdefault(scope, set()).update(
+                    t.id for t in targets if isinstance(t, ast.Name)
+                )
+        for child in ast.iter_child_nodes(node):
+            visit(child, scope)
+
+    visit(tree, tree)
+
+    def resolved_name(node: ast.AST, name: str) -> bool:
+        scope: ast.AST | None = scopes[node]
+        while scope is not None:
+            if name in globals_by_scope.get(scope, set()):
+                return name in resolved.get(tree, set())
+            if name in resolved.get(scope, set()):
+                return True
+            if name in bindings.get(scope, set()):
+                return False
+            parent = parents[scope]
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                while isinstance(parent, ast.ClassDef):
+                    parent = parents[parent]
+            scope = parent
+        return False
 
     def add(node: ast.AST, code: str, message: str) -> None:
         findings.append(
@@ -339,7 +397,10 @@ def _review_bypass_findings(source: str, *, relative_path: str) -> list[AntiShad
                     and isinstance(node.func.value.func, ast.Attribute)
                     and node.func.value.func.attr == "resolve"
                 )
-                or (isinstance(node.func.value, ast.Name) and node.func.value.id in resolved_names)
+                or (
+                    isinstance(node.func.value, ast.Name)
+                    and resolved_name(node, node.func.value.id)
+                )
             )
         ):
             add(
@@ -464,6 +525,329 @@ def _required_architecture_findings(
         if not release_in_finally:
             missing("T09S022", "Category 3 controller lacks guaranteed resource release")
     return findings
+
+
+def _definition(
+    tree: ast.AST,
+    name: str,
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    return next(
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name
+        ),
+        None,
+    )
+
+
+def _class_definition(tree: ast.AST, name: str) -> ast.ClassDef | None:
+    return next(
+        (node for node in ast.walk(tree) if isinstance(node, ast.ClassDef) and node.name == name),
+        None,
+    )
+
+
+def _called_name(node: ast.Call) -> str | None:
+    if isinstance(node.func, ast.Name):
+        return node.func.id
+    if isinstance(node.func, ast.Attribute):
+        return node.func.attr
+    return None
+
+
+def _calls(node: ast.AST, name: str) -> int:
+    return sum(
+        1 for child in ast.walk(node) if isinstance(child, ast.Call) and _called_name(child) == name
+    )
+
+
+def _bridge_bypass_findings(repository: Path) -> list[AntiShadowFinding]:
+    """Reject live-bridge shapes that would bypass the accepted shared control plane."""
+
+    findings: list[AntiShadowFinding] = []
+    sources: dict[str, str] = {}
+    trees: dict[str, ast.Module] = {}
+
+    def add(path: str, code: str, message: str, node: ast.AST | None = None) -> None:
+        findings.append(
+            AntiShadowFinding(
+                path=path,
+                line=getattr(node, "lineno", 1),
+                column=getattr(node, "col_offset", 0) + 1,
+                code=code,
+                message=message,
+            )
+        )
+
+    for relative in BRIDGE_LIVE_SOURCES:
+        path = repository / relative
+        if not path.is_file() or path.is_symlink():
+            add(relative, "T09S029", "required live-bridge source is unavailable")
+            continue
+        try:
+            sources[relative] = path.read_text(encoding="utf-8")
+            trees[relative] = ast.parse(sources[relative], filename=relative)
+        except (OSError, UnicodeError, SyntaxError):
+            add(relative, "T09S029", "required live-bridge source is unreadable")
+
+    effects_path = "src/giclab/control/effects.py"
+    effects_tree = trees.get(effects_path)
+    if effects_tree is not None:
+        protocol = _class_definition(effects_tree, "LowLevelEffects")
+        provider_launch = _definition(protocol, "provider_launch") if protocol is not None else None
+        campaign_transport = (
+            _definition(protocol, "campaign_transport") if protocol is not None else None
+        )
+        if provider_launch is not None or campaign_transport is None:
+            add(
+                effects_path,
+                "T09S033",
+                "LowLevelEffects exposes more or less than the sole campaign-transport launch seam",
+                provider_launch or protocol,
+            )
+
+    production_path = "src/giclab/control/production.py"
+    production_tree = trees.get(production_path)
+    production_source = sources.get(production_path, "")
+    if production_tree is not None:
+        if (
+            _calls(production_tree, "launch_campaign") != 1
+            or _calls(production_tree, "campaign_transport") != 1
+            or _calls(production_tree, "provider_launch") != 0
+        ):
+            add(
+                production_path,
+                "T09S033",
+                "shared production does not have exactly one "
+                "launch_campaign/campaign_transport seam",
+            )
+        for node in ast.walk(production_tree):
+            if not isinstance(node, ast.Dict):
+                continue
+            for key, value in zip(node.keys, node.values, strict=True):
+                if (
+                    isinstance(key, ast.Constant)
+                    and key.value == "uploaded"
+                    and isinstance(value, ast.Constant)
+                    and value.value is True
+                ):
+                    add(
+                        production_path,
+                        "T09S031",
+                        "pre-entry local package assembly claims a remote upload",
+                        value,
+                    )
+        if (
+            _calls(production_tree, "validate_full_dynamic_frozen_manifest") != 1
+            or "manifest_projection_sha256" not in production_source
+        ):
+            add(
+                production_path,
+                "T09S032",
+                "shared freeze does not require the full retained manifest validator",
+            )
+
+    admission_path = "src/giclab/harness/t09_runtime_admission.py"
+    admission_tree = trees.get(admission_path)
+    if admission_tree is not None:
+        duplex = _class_definition(admission_tree, "DuplexSupervisorPort")
+        if duplex is None or _calls(duplex, "ProviderBudgetBoundary"):
+            add(
+                admission_path,
+                "T09S030",
+                "duplex runtime path constructs a second authoritative ProviderBudgetBoundary",
+                duplex,
+            )
+        effect_methods = (
+            "model_call",
+            "browser_action",
+            "output_bytes",
+            "process_exit",
+            "completion",
+            "raw_published",
+        )
+        for method_name in effect_methods:
+            method = _definition(duplex, method_name) if duplex is not None else None
+            if method is None:
+                add(
+                    admission_path,
+                    "T09S034",
+                    f"duplex runtime lacks typed event method {method_name}",
+                    duplex,
+                )
+                continue
+            for loop in (
+                child
+                for child in ast.walk(method)
+                if isinstance(child, (ast.For, ast.AsyncFor, ast.While))
+            ):
+                if any(
+                    isinstance(call, ast.Call)
+                    and _called_name(call) in {"_write_event", "_read_event", "send", "perform"}
+                    for call in ast.walk(loop)
+                ):
+                    add(
+                        admission_path,
+                        "T09S036",
+                        "duplex/provider operation is hidden behind a retry loop",
+                        loop,
+                    )
+
+    bridge_path = "src/giclab/control/remote_bridge.py"
+    bridge_tree = trees.get(bridge_path)
+    bridge_source = sources.get(bridge_path, "")
+    if bridge_tree is not None:
+        frame = _class_definition(bridge_tree, "ConditionBridgeFrame")
+        frame_fields = (
+            {
+                node.target.id
+                for node in frame.body
+                if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+            }
+            if frame is not None
+            else set()
+        )
+        required_frame_fields = {
+            "protocol_version",
+            "session_id",
+            "provider_contract_version",
+            "plan_id",
+            "host_run_id",
+            "condition_run_id",
+            "evaluator_run_id",
+            "frozen_manifest_sha256",
+            "sequence_number",
+            "previous_frame_sha256",
+            "event_id",
+            "event_type",
+            "payload",
+            "payload_sha256",
+            "frame_sha256",
+        }
+        if not required_frame_fields <= frame_fields:
+            add(
+                bridge_path,
+                "T09S034",
+                "condition-session frame omits sequence, hash-chain, or run identity",
+                frame,
+            )
+        supervisor = _class_definition(bridge_tree, "ConditionSessionSupervisor")
+        if (
+            supervisor is None
+            or _calls(supervisor, "model_call") == 0
+            or "model-call-admitted" not in bridge_source
+            or "browser-action-admitted" not in bridge_source
+        ):
+            add(
+                bridge_path,
+                "T09S029",
+                "remote condition events are not admitted by the shared observer in real time",
+                supervisor,
+            )
+
+    runtime_path = "src/giclab/harness/sira_gate_a_runtime.py"
+    runtime_tree = trees.get(runtime_path)
+    runtime_source = sources.get(runtime_path, "")
+    if runtime_tree is not None:
+        run = _definition(runtime_tree, "run")
+        if (
+            run is None
+            or "build_private_socket_supervisor_port" not in runtime_source
+            or _calls(runtime_tree, "model_call") == 0
+            or _calls(run, "browser_action") == 0
+        ):
+            add(
+                runtime_path,
+                "T09S029",
+                "SiRA remote runtime can bypass the typed shared-admission client",
+                run,
+            )
+
+    runner_path = "containers/sira-smoke/pragmatic/t09_remote_runner.py"
+    runner_tree = trees.get(runner_path)
+    runner_source = sources.get(runner_path, "")
+    if runner_tree is not None:
+        condition = _definition(runner_tree, "condition_session")
+        if (
+            condition is None
+            or _calls(condition, "ProviderBudgetBoundary") != 0
+            or "_ConditionSessionBridge" not in runner_source
+            or "condition_bridge=bridge" not in runner_source
+        ):
+            add(
+                runner_path,
+                "T09S035",
+                "retained condition-session bypasses the transparent duplex relay",
+                condition,
+            )
+        if not all(
+            _definition(runner_tree, name) is not None
+            for name in (
+                "host_transfer_verify",
+                "host_preflight",
+                "host_qualify",
+                "host_freeze",
+                "condition_session",
+                "host_cleanup",
+            )
+        ):
+            add(
+                runner_path,
+                "T09S032",
+                "retained runner lacks one phase-specific host operation",
+            )
+
+    # Package-owned implementations are environmental adapters, not alternate
+    # lifecycle controllers. There is no real registration in V3-V16, but this
+    # scan automatically applies when a future package registers one.
+    from giclab.harness.t09_provider_contracts import PROVIDER_CONTRACTS
+
+    for contract in PROVIDER_CONTRACTS.values():
+        registration = contract.effect_registration
+        if registration is None:
+            continue
+        relative = registration.implementation_path
+        path = repository / relative
+        try:
+            package_source = path.read_text(encoding="utf-8")
+            package_tree = ast.parse(package_source, filename=relative)
+        except (OSError, UnicodeError, SyntaxError):
+            add(relative, "T09S035", "registered package-live effect source is unreadable")
+            continue
+        for node in ast.walk(package_tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name == "provider_launch" or _calls(node, "provider_launch"):
+                add(
+                    relative,
+                    "T09S033",
+                    "package effect exposes the removed secondary launch seam",
+                    node,
+                )
+            if node.name != "campaign_transport" and any(
+                isinstance(call, ast.Call)
+                and _called_name(call) in {"launch_campaign", "launch_instance", "create_instance"}
+                for call in ast.walk(node)
+            ):
+                add(
+                    relative,
+                    "T09S035",
+                    "package effect launches outside the selected campaign transport",
+                    node,
+                )
+    return findings
+
+
+def bridge_bypass_findings(repository: Path) -> tuple[AntiShadowFinding, ...]:
+    """Return the deterministic live-bridge anti-bypass findings."""
+
+    return tuple(
+        sorted(
+            _bridge_bypass_findings(repository.resolve(strict=True)),
+            key=lambda item: (item.path, item.line, item.column, item.code),
+        )
+    )
 
 
 def _topology_finding(path: str, code: str, message: str) -> AntiShadowFinding:
@@ -995,6 +1379,7 @@ def validate_anti_shadow_lint(
         validate_selected_seal=validate_selected_seal,
     )
     findings.extend(topology_findings)
+    findings.extend(bridge_bypass_findings(root))
     inventory = _inventory(root)
     counts = Counter(item.classification for item in inventory)
     commit, tree = repository_identity(root)
@@ -1008,9 +1393,10 @@ def validate_anti_shadow_lint(
         },
         "base_assumption_inventory": [asdict(item) for item in BASE_SHADOW_ASSUMPTION_INVENTORY],
         "shared_effect_neutral_sources": scanned,
+        "bridge_live_sources": list(BRIDGE_LIVE_SOURCES),
         "lint_definition_path": LINT_DEFINITION_PATH,
         "forbidden_rule_codes": [code for code, _pattern, _message in _FORBIDDEN_TEXT]
-        + [f"T09S{index:03d}" for index in range(11, 29)],
+        + [f"T09S{index:03d}" for index in range(11, 37)],
         "findings": [asdict(item) for item in findings],
         "assumption_inventory": [asdict(item) for item in inventory],
         "classification_counts": {
@@ -1032,7 +1418,9 @@ def validate_anti_shadow_lint(
 __all__ = [
     "ANTI_SHADOW_LINT_SCHEMA_VERSION",
     "BASE_SHADOW_ASSUMPTION_INVENTORY",
+    "BRIDGE_LIVE_SOURCES",
     "SHARED_EFFECT_NEUTRAL_SOURCES",
+    "bridge_bypass_findings",
     "lint_effect_neutral_source",
     "public_receipt_topology_findings",
     "validate_anti_shadow_lint",

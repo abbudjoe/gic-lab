@@ -141,8 +141,29 @@ def load_pinned_upstream_runner(
     }
 
 
-def run(attempt_root: Path) -> dict[str, object]:
+def run(
+    attempt_root: Path,
+    *,
+    source_inputs=None,
+    environment_binding=None,
+    package: Path | None = None,
+) -> dict[str, object]:
     root = attempt_root.resolve(strict=True)
+    runner_path, runner_sha = UPSTREAM_RUNNER, UPSTREAM_RUNNER_SHA256
+    if environment_binding is not None:
+        if source_inputs is None or package is None:
+            raise RuntimeError("offline runtime preflight lacks exact candidate inputs")
+        environment_binding.validate(source_inputs, package)
+        source_inputs.source_sha256(package, "containers/sira-smoke/pragmatic/runtime_preflight.py")
+        runner_member = next(
+            member
+            for member in environment_binding.document()["image_file_members"]
+            if member["runtime_path"] == str(UPSTREAM_RUNNER)
+        )
+        runner_path = environment_binding.root / runner_member["path"]
+        runner_sha = runner_member["sha256"]
+    elif source_inputs is not None:
+        raise RuntimeError("candidate runtime cannot fall back to historical image inputs")
     if sys.version_info[:3] != EXPECTED_PYTHON:
         raise RuntimeError(
             f"runtime Python must be exactly {'.'.join(map(str, EXPECTED_PYTHON))}; "
@@ -157,9 +178,9 @@ def run(attempt_root: Path) -> dict[str, object]:
     upstream_import_cwd = root / "upstream-import-cwd"
     upstream_import_cwd.mkdir(mode=0o700)
     upstream_runner = load_pinned_upstream_runner(
-        UPSTREAM_RUNNER,
+        runner_path,
         upstream_import_cwd,
-        expected_sha256=UPSTREAM_RUNNER_SHA256,
+        expected_sha256=runner_sha,
     )
     upstream_import_cwd.rmdir()
 
@@ -220,6 +241,7 @@ def run(attempt_root: Path) -> dict[str, object]:
     if not isinstance(commands, dict) or set(commands) != {"reactive", "simulative"}:
         raise RuntimeError("both condition commands are required for runtime rendering")
     rendered_hashes: dict[str, str] = {}
+    executable_projections = {}
     for mode in ("reactive", "simulative"):
         argv = commands.get(mode)
         if (
@@ -228,12 +250,26 @@ def run(attempt_root: Path) -> dict[str, object]:
             or any(not isinstance(part, str) or not part for part in argv)
         ):
             raise RuntimeError(f"{mode} command input is invalid")
-        rendered = render_command(CommandSpec(argv=tuple(argv), cwd=root, timeout_seconds=150))
+        selected_argv = list(argv)
+        if environment_binding is not None:
+            command_input = environment_binding.document()["command_probe_input"]
+            if selected_argv[0] != command_input["runtime_path"]:
+                raise RuntimeError("offline command executable differs from bound runtime path")
+            selected_argv[0] = str(environment_binding.root / command_input["path"])
+            executable_projections[mode] = {
+                "runtime_path": argv[0],
+                "fixture_file_sha256": command_input["sha256"],
+                "execution_performed": False,
+                "other_arguments_equal": selected_argv[1:] == argv[1:],
+            }
+        rendered = render_command(
+            CommandSpec(argv=tuple(selected_argv), cwd=root, timeout_seconds=150)
+        )
         rendered_argv = rendered.get("argv")
         if (
             not isinstance(rendered_argv, list)
             or rendered_argv[1:] != argv[1:]
-            or rendered_argv[0] != str(Path(argv[0]).resolve(strict=True))
+            or rendered_argv[0] != str(Path(selected_argv[0]).resolve(strict=True))
         ):
             raise RuntimeError(f"{mode} command renderer probe drifted")
         rendered_hashes[mode] = hashlib.sha256(
@@ -266,6 +302,15 @@ def run(attempt_root: Path) -> dict[str, object]:
         "rendered_condition_command_sha256": rendered_hashes,
         "owned_cleanup": "passed",
     }
+    if environment_binding is not None:
+        document["offline_inputs"] = {
+            "candidate_binding_sha256": source_inputs.digest,
+            "environment_sha256": environment_binding.digest,
+            "classification": "synthetic-environment-orchestration-only",
+            "command_executable_projection": executable_projections,
+            "real_image_runtime_qualification": False,
+            "historical_replay": False,
+        }
     _write_json_exclusive(root / "runtime-preflight.json", document)
     return document
 

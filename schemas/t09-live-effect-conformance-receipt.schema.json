@@ -25,7 +25,7 @@
     "schema_version": {"enum": ["1.0.0", "2.0.0", "3.0.0", "4.0.0"]},
     "control_implementation_commit": {"$ref": "#/$defs/git"},
     "control_implementation_tree": {"$ref": "#/$defs/git"},
-    "effect_protocol_version": {"const": "1.0.0"},
+    "effect_protocol_version": {"enum": ["1.0.0", "2.0.0"]},
     "shared_controller_entry_point": {
       "const": "giclab.control.category3.execute_category3_transaction"
     },
@@ -149,7 +149,7 @@
             "bytes": {"type": "integer", "minimum": 1},
             "sha256": {"$ref": "#/$defs/sha256"},
             "factory_entry_point": {"const": "build_package_effects"},
-            "protocol_version": {"const": "1.0.0"}
+            "protocol_version": {"enum": ["1.0.0", "2.0.0"]}
           }
         },
         "held_effect_source": {"$ref": "#/$defs/heldEffectSource"},
@@ -336,7 +336,7 @@
         "bytes": {"type": "integer", "minimum": 1},
         "sha256": {"$ref": "#/$defs/sha256"},
         "factory_entry_point": {"const": "build_package_effects"},
-        "protocol_version": {"const": "1.0.0"},
+        "protocol_version": {"enum": ["1.0.0", "2.0.0"]},
         "compiled_from_held_bytes": {"const": true},
         "git_blob_bytes_matched": {"const": true},
         "regular_current_user_single_link_safe_mode": {"const": true},

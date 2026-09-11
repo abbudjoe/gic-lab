@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import cast
 
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_provider_contracts import (
     MetadataPolicy,
     ProviderSelectorPolicy,
@@ -37,7 +38,12 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
-def render(repository: Path, *, provider_version: str) -> dict[str, object]:
+def render(
+    repository: Path,
+    *,
+    provider_version: str,
+    source_inputs: CandidateSourceSnapshot | None = None,
+) -> dict[str, object]:
     root = repository.resolve(strict=True)
     contract_identity = provider_contract(provider_version)
     if contract_identity.execution_contract_path is None:
@@ -57,16 +63,14 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
     if len(commits) != 1 or "unknown" in commits:
         raise ValueError("one reviewed implementation ancestor must be bound before rendering")
     implementation_commit = next(iter(commits))
-    runtime_sha256 = git_file_sha256(
-        root,
-        implementation_commit,
-        runtime_path.relative_to(root).as_posix(),
-    )
-    library_sha256 = git_file_sha256(
-        root,
-        implementation_commit,
-        library_path.relative_to(root).as_posix(),
-    )
+
+    def source_hash(relative: str) -> str:
+        if source_inputs is not None:
+            return source_inputs.source_sha256(root, relative)
+        return git_file_sha256(root, implementation_commit, relative)
+
+    runtime_sha256 = source_hash(runtime_path.relative_to(root).as_posix())
+    library_sha256 = source_hash(library_path.relative_to(root).as_posix())
     manifests = [
         render_command_manifest(
             contract,
@@ -123,11 +127,7 @@ def render(repository: Path, *, provider_version: str) -> dict[str, object]:
         "runtime_adaptation_sha256": runtime_sha256,
         "pilot_library_sha256": library_sha256,
         "generator_path": generator_path.relative_to(root).as_posix(),
-        "generator_sha256": git_file_sha256(
-            root,
-            implementation_commit,
-            generator_path.relative_to(root).as_posix(),
-        ),
+        "generator_sha256": source_hash(generator_path.relative_to(root).as_posix()),
         "manifests": manifests,
         "pair_diffs": pair_diffs,
     }

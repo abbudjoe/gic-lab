@@ -1,0 +1,3458 @@
+"""Typed, bounded bridge between the shared accountant and a remote condition client.
+
+The shared process owns policy and accounting.  The remote side can request
+admission and mirror the resulting journal, but it cannot admit a model send,
+browser action, or output growth by itself.  This module contains no SSH, provider,
+browser, container, secret, or scientific implementation.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import hashlib
+import json
+import math
+import os
+import re
+import select
+import signal
+import socket
+import stat
+import struct
+import subprocess
+import threading
+import time
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from types import MappingProxyType
+from typing import BinaryIO, Final, NoReturn, cast
+
+from jsonschema import Draft202012Validator
+
+from giclab.control.adapters import AdapterFailure
+from giclab.control.effects import (
+    ConditionAmbiguousSend,
+    ConditionBridgeEvidence,
+    ConditionBridgePrefixEvidence,
+    ConditionEventObserver,
+    ConditionKnownProviderError,
+    ConditionKnownTransportError,
+    ConditionModelCall,
+    ConditionModelResponse,
+    ConditionResponseAccountingIncomplete,
+)
+from giclab.harness.sira_gate_a import (
+    ModelRole,
+    ProviderBudgetExceeded,
+    ProviderRequest,
+    ProviderResponseUsage,
+)
+from giclab.harness.t09_provider_contracts import T09ProviderContract
+from giclab.registry import local_schema_registry
+
+BRIDGE_PROTOCOL_VERSION: Final = "1.0.0"
+RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION: Final = "0.1.0"
+MAX_BRIDGE_FRAME_BYTES: Final = 1_048_576
+MAX_BRIDGE_FRAMES: Final = 20_000
+MAX_BRIDGE_TRANSCRIPT_BYTES: Final = 67_108_864
+MAX_FROZEN_MANIFEST_BYTES: Final = 4_194_304
+_ZERO_HASH: Final = "0" * 64
+_HEX64: Final = re.compile(r"^[a-f0-9]{64}$")
+_SAFE_ID: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$")
+_HEADER: Final = struct.Struct("!I")
+
+
+class RemoteBridgeError(RuntimeError):
+    """A canonical bridge frame, ordering rule, or terminal handshake failed."""
+
+
+class RemoteBridgeDisconnected(RemoteBridgeError):
+    """The duplex channel closed before its required terminal acknowledgement."""
+
+
+class RemoteBridgeReplay(RemoteBridgeError):
+    """A sequence, event, or frame identity was replayed."""
+
+
+def _wait_ready(fd: int, *, writing: bool, remaining: Callable[[], float]) -> None:
+    """Poll a nonblocking descriptor, including cancellation in every wait."""
+    while True:
+        timeout = min(remaining(), 0.05)
+        try:
+            reads, writes, _ = select.select(
+                [] if writing else [fd], [fd] if writing else [], [], timeout
+            )
+        except InterruptedError:
+            continue
+        if reads or writes:
+            remaining()
+            return
+
+
+def _read_deadline(fd: int, size: int, remaining: Callable[[], float]) -> bytes:
+    result = bytearray()
+    while len(result) < size:
+        _wait_ready(fd, writing=False, remaining=remaining)
+        try:
+            chunk = os.read(fd, size - len(result))
+        except (BlockingIOError, InterruptedError):
+            continue
+        if not chunk:
+            raise RemoteBridgeDisconnected("bridge half-closed before terminal acknowledgement")
+        result.extend(chunk)
+    return bytes(result)
+
+
+def _write_deadline(fd: int, packet: bytes, remaining: Callable[[], float]) -> None:
+    # A partial transport write is resumed; the underlying effect is never retried.
+    offset = 0
+    while offset < len(packet):
+        _wait_ready(fd, writing=True, remaining=remaining)
+        try:
+            written = os.write(fd, memoryview(packet)[offset:])
+        except (BlockingIOError, InterruptedError):
+            continue
+        except BrokenPipeError as exc:
+            raise RemoteBridgeDisconnected(
+                "bridge peer closed before terminal acknowledgement"
+            ) from exc
+        if written <= 0:
+            raise RemoteBridgeDisconnected("bridge write made no progress")
+        offset += written
+
+
+def canonical_bytes(value: object) -> bytes:
+    """Encode duplicate-free bridge material in one reproducible form."""
+
+    return (
+        json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode("utf-8")
+
+
+def semantic_sha256(value: object) -> str:
+    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def _reject_constant(value: str) -> NoReturn:
+    raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+
+
+def strict_json_object(encoded: bytes, *, label: str) -> dict[str, object]:
+    def no_duplicates(pairs: list[tuple[str, object]]) -> dict[str, object]:
+        result: dict[str, object] = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError(f"{label} contains a duplicate key")
+            result[key] = value
+        return result
+
+    try:
+        document = json.loads(
+            encoded,
+            object_pairs_hook=no_duplicates,
+            parse_constant=_reject_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError(f"{label} is not strict JSON") from exc
+    if not isinstance(document, dict):
+        raise ValueError(f"{label} is not a JSON object")
+    return document
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionSessionBinding:
+    session_id: str
+    provider_contract_version: str
+    plan_id: str
+    host_run_id: str
+    condition_run_id: str
+    evaluator_run_id: str
+    frozen_manifest_sha256: str
+
+    def __post_init__(self) -> None:
+        for name in (
+            "session_id",
+            "provider_contract_version",
+            "plan_id",
+            "host_run_id",
+            "condition_run_id",
+            "evaluator_run_id",
+        ):
+            if _SAFE_ID.fullmatch(cast(str, getattr(self, name))) is None:
+                raise ValueError(f"condition session {name} is malformed")
+        if _HEX64.fullmatch(self.frozen_manifest_sha256) is None:
+            raise ValueError("condition session frozen-manifest identity is malformed")
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "session_id": self.session_id,
+            "provider_contract_version": self.provider_contract_version,
+            "plan_id": self.plan_id,
+            "host_run_id": self.host_run_id,
+            "condition_run_id": self.condition_run_id,
+            "evaluator_run_id": self.evaluator_run_id,
+            "frozen_manifest_sha256": self.frozen_manifest_sha256,
+        }
+
+
+def condition_call_id(binding: ConditionSessionBinding, sequence: int) -> str:
+    """Identity derives only from the immutable session and per-session sequence."""
+    if type(sequence) is not int or not 1 <= sequence <= 99_999_999:
+        raise RemoteBridgeReplay("condition call sequence is outside its bound")
+    return f"CALL-T09-{semantic_sha256(binding.to_document())}-{sequence:08d}"
+
+
+def validate_condition_call_ids(
+    binding: ConditionSessionBinding, sequence: int, call_id: str, logical_call_id: str
+) -> None:
+    expected = condition_call_id(binding, sequence)
+    if call_id != expected or logical_call_id != expected:
+        raise RemoteBridgeReplay("condition call/logical identity has wrong session or sequence")
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionBridgeFrame:
+    protocol_version: str
+    session_id: str
+    provider_contract_version: str
+    plan_id: str
+    host_run_id: str
+    condition_run_id: str
+    evaluator_run_id: str
+    frozen_manifest_sha256: str
+    sequence_number: int
+    previous_frame_sha256: str
+    event_id: str
+    event_type: str
+    payload: Mapping[str, object]
+    payload_sha256: str
+    frame_sha256: str
+
+    @classmethod
+    def create(
+        cls,
+        binding: ConditionSessionBinding,
+        *,
+        sequence_number: int,
+        previous_frame_sha256: str,
+        event_id: str,
+        event_type: str,
+        payload: Mapping[str, object],
+    ) -> ConditionBridgeFrame:
+        if type(sequence_number) is not int or not 1 <= sequence_number <= MAX_BRIDGE_FRAMES:
+            raise RemoteBridgeError("bridge frame sequence is outside its finite envelope")
+        if _HEX64.fullmatch(previous_frame_sha256) is None:
+            raise RemoteBridgeError("bridge previous-frame hash is malformed")
+        if _SAFE_ID.fullmatch(event_id) is None or _SAFE_ID.fullmatch(event_type) is None:
+            raise RemoteBridgeError("bridge event identity or type is malformed")
+        payload_document = dict(payload)
+        payload_sha = semantic_sha256(payload_document)
+        unsigned = {
+            "protocol_version": BRIDGE_PROTOCOL_VERSION,
+            **binding.to_document(),
+            "sequence_number": sequence_number,
+            "previous_frame_sha256": previous_frame_sha256,
+            "event_id": event_id,
+            "event_type": event_type,
+            "payload": payload_document,
+            "payload_sha256": payload_sha,
+        }
+        return cls(
+            protocol_version=BRIDGE_PROTOCOL_VERSION,
+            session_id=binding.session_id,
+            provider_contract_version=binding.provider_contract_version,
+            plan_id=binding.plan_id,
+            host_run_id=binding.host_run_id,
+            condition_run_id=binding.condition_run_id,
+            evaluator_run_id=binding.evaluator_run_id,
+            frozen_manifest_sha256=binding.frozen_manifest_sha256,
+            sequence_number=sequence_number,
+            previous_frame_sha256=previous_frame_sha256,
+            event_id=event_id,
+            event_type=event_type,
+            payload=payload_document,
+            payload_sha256=payload_sha,
+            frame_sha256=semantic_sha256(unsigned),
+        )
+
+    @classmethod
+    def from_document(cls, raw: Mapping[str, object]) -> ConditionBridgeFrame:
+        required = {
+            "protocol_version",
+            "session_id",
+            "provider_contract_version",
+            "plan_id",
+            "host_run_id",
+            "condition_run_id",
+            "evaluator_run_id",
+            "frozen_manifest_sha256",
+            "sequence_number",
+            "previous_frame_sha256",
+            "event_id",
+            "event_type",
+            "payload",
+            "payload_sha256",
+            "frame_sha256",
+        }
+        if set(raw) != required or not isinstance(raw.get("payload"), dict):
+            raise RemoteBridgeError("bridge frame fields are incomplete or unbound")
+        try:
+            binding = ConditionSessionBinding(
+                session_id=cast(str, raw["session_id"]),
+                provider_contract_version=cast(str, raw["provider_contract_version"]),
+                plan_id=cast(str, raw["plan_id"]),
+                host_run_id=cast(str, raw["host_run_id"]),
+                condition_run_id=cast(str, raw["condition_run_id"]),
+                evaluator_run_id=cast(str, raw["evaluator_run_id"]),
+                frozen_manifest_sha256=cast(str, raw["frozen_manifest_sha256"]),
+            )
+            frame = cls.create(
+                binding,
+                sequence_number=cast(int, raw["sequence_number"]),
+                previous_frame_sha256=cast(str, raw["previous_frame_sha256"]),
+                event_id=cast(str, raw["event_id"]),
+                event_type=cast(str, raw["event_type"]),
+                payload=cast(dict[str, object], raw["payload"]),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RemoteBridgeError("bridge frame types are malformed") from exc
+        if (
+            raw["protocol_version"] != BRIDGE_PROTOCOL_VERSION
+            or raw["payload_sha256"] != frame.payload_sha256
+            or raw["frame_sha256"] != frame.frame_sha256
+        ):
+            raise RemoteBridgeError("bridge frame or payload hash changed")
+        return frame
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "protocol_version": self.protocol_version,
+            "session_id": self.session_id,
+            "provider_contract_version": self.provider_contract_version,
+            "plan_id": self.plan_id,
+            "host_run_id": self.host_run_id,
+            "condition_run_id": self.condition_run_id,
+            "evaluator_run_id": self.evaluator_run_id,
+            "frozen_manifest_sha256": self.frozen_manifest_sha256,
+            "sequence_number": self.sequence_number,
+            "previous_frame_sha256": self.previous_frame_sha256,
+            "event_id": self.event_id,
+            "event_type": self.event_type,
+            "payload": dict(self.payload),
+            "payload_sha256": self.payload_sha256,
+            "frame_sha256": self.frame_sha256,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class TranscriptEntry:
+    direction: str
+    frame: ConditionBridgeFrame
+
+    def to_document(self) -> dict[str, object]:
+        return {"direction": self.direction, "frame": self.frame.to_document()}
+
+
+class RetainedProcessOwner:
+    """One owner for inherited-pipe process groups and nonblocking captures.
+
+    The child creates a dedicated session before exec. Its leader is kept
+    unreaped until group signals finish, preserving the owned process-group ID.
+    Captures are serviced by the calling bridge's readiness loop, with no worker
+    threads or delayed ownership transfer. This owns processes, never policy.
+    """
+
+    def __init__(self, deadline_monotonic: float) -> None:
+        self.deadline = deadline_monotonic
+        self.started = time.monotonic()
+        self._waitid = getattr(os, "waitid", None)
+        if self._waitid is None:
+            raise RuntimeError("retained supervision requires non-reaping waitid support")
+        remaining = self.deadline - self.started
+        if not math.isfinite(remaining) or remaining <= 0:
+            raise TimeoutError("retained process deadline unavailable")
+        self.teardown_reserve = min(1.0, remaining / 4)
+        self.work_deadline = self.deadline - self.teardown_reserve
+        self.process: subprocess.Popen[bytes] | None = None
+        self.group: int | None = None
+        self.descriptors: dict[int, tuple[int, int]] = {}
+        self.streams: list[BinaryIO] = []
+        self.captures: list[dict[str, object]] = []
+        self.errors: list[str] = []
+        self.signals: list[int] = []
+        self.closed = False
+        self.group_absent: bool | None = None
+        self.created_descriptors = 0
+        self.closed_descriptors = 0
+
+    def _error(self, stage: str, error: BaseException) -> None:
+        if len(self.errors) < 16:
+            self.errors.append(stage + ": " + type(error).__name__ + ": " + str(error)[:256])
+
+    def own_descriptor(self, fd: int) -> int:
+        if fd in self.descriptors:
+            raise RuntimeError("retained descriptor ownership is ambiguous")
+        try:
+            metadata = os.fstat(fd)
+            if len(self.descriptors) >= 16:
+                raise RuntimeError("retained descriptor registry full")
+        except BaseException:
+            os.close(fd)
+            raise
+        self.descriptors[fd] = (metadata.st_dev, metadata.st_ino)
+        self.created_descriptors += 1
+        return fd
+
+    def pipe(self) -> tuple[int, int]:
+        pair = os.pipe()
+        try:
+            self.own_descriptor(pair[0])
+        except BaseException:
+            os.close(pair[1])
+            raise
+        self.own_descriptor(pair[1])
+        return pair
+
+    def close_descriptor(self, fd: int) -> None:
+        identity = self.descriptors.get(fd)
+        if identity is None:
+            return
+        metadata = os.fstat(fd)
+        if (metadata.st_dev, metadata.st_ino) != identity:
+            raise RuntimeError("retained descriptor identity changed before close")
+        os.close(fd)
+        del self.descriptors[fd]
+        self.closed_descriptors += 1
+
+    def start(self, argv: list[str], **kwargs: object) -> subprocess.Popen[bytes]:
+        from typing import Any
+
+        if self.process is not None or self.closed or time.monotonic() >= self.work_deadline:
+            raise RuntimeError("retained process owner is already used or expired")
+        if any(key in kwargs for key in ("preexec_fn", "start_new_session", "process_group")):
+            raise RuntimeError("retained process ownership cannot be overridden")
+        # FileIO close cannot flush an unbounded buffered write during teardown.
+        self.process = subprocess.Popen(
+            argv, start_new_session=True, bufsize=0, **cast(dict[str, Any], kwargs)
+        )
+        self.streams = [
+            cast(BinaryIO, stream)
+            for stream in (self.process.stdin, self.process.stdout, self.process.stderr)
+            if stream is not None
+        ]
+        pid = self.process.pid
+        if pid <= 1 or os.getpgid(pid) != pid or os.getsid(pid) != pid:
+            raise RuntimeError("retained child did not establish its exact owned session")
+        self.group = pid
+        return self.process
+
+    def start_capture(
+        self,
+        stream: BinaryIO,
+        consume: Callable[[bytes], None],
+        finish: Callable[[], None] | None = None,
+    ) -> None:
+        if self.closed or stream not in self.streams or len(self.captures) >= 2:
+            raise RuntimeError("capture lacks a retained stream owner")
+        if any(row["stream"] is stream for row in self.captures):
+            raise RuntimeError("retained capture stream reused")
+        os.set_blocking(stream.fileno(), False)
+        self.captures.append(
+            {
+                "stream": stream,
+                "consume": consume,
+                "finish": finish,
+                "eof": False,
+                "failed": False,
+                "finalized": False,
+            }
+        )
+
+    def pump(self) -> None:
+        """At most one bounded nonblocking read per capture at each bridge poll."""
+        for capture in self.captures:
+            if capture["eof"] or capture["failed"]:
+                continue
+            stream = cast(BinaryIO, capture["stream"])
+            try:
+                chunk = os.read(stream.fileno(), 4096)
+                if chunk:
+                    cast(Callable[[bytes], None], capture["consume"])(chunk)
+                else:
+                    capture["eof"] = True
+            except (BlockingIOError, InterruptedError):
+                continue
+            except BaseException as error:
+                capture["failed"] = True
+                self._error("capture", error)
+
+    def cancelled(self) -> bool:
+        self.pump()
+        return bool(self.errors) or time.monotonic() >= self.work_deadline
+
+    def _exited_unreaped(self) -> bool:
+        if self.process is None:
+            return True
+        if self.process.returncode is not None:
+            raise RuntimeError("retained child was reaped before process-group release")
+        assert self._waitid is not None
+        return (
+            self._waitid(os.P_PID, self.process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+            is not None
+        )
+
+    def wait_for_completion(self) -> None:
+        while time.monotonic() < self.work_deadline:
+            self.pump()
+            if self.errors:
+                raise RuntimeError("retained capture failed: " + self.errors[0])
+            if self._exited_unreaped() and all(row["eof"] for row in self.captures):
+                return
+            time.sleep(min(0.005, max(0.0, self.work_deadline - time.monotonic())))
+        raise TimeoutError("retained process/capture consumed its original work deadline")
+
+    def close(self) -> dict[str, object]:
+        if self.closed:
+            return self.document()
+        self.closed = True
+        process = self.process
+        # Never signal a process group after freeing its leader's PID.
+        if process is not None:
+            try:
+                if process.returncode is not None:
+                    raise RuntimeError("process was externally reaped; group ownership unresolved")
+                # waitid(WNOWAIT) proves this remains our unreaped child; its
+                # live/zombie PID anchors the exact group until the last signal.
+                self._exited_unreaped()
+                if (
+                    self.group != process.pid
+                    or os.getpgid(process.pid) != process.pid
+                    or os.getsid(process.pid) != process.pid
+                ):
+                    raise RuntimeError("process group ownership changed or was never verified")
+                try:
+                    os.killpg(self.group, signal.SIGTERM)
+                    self.signals.append(int(signal.SIGTERM))
+                except ProcessLookupError:
+                    pass
+                grace = min(
+                    self.deadline,
+                    time.monotonic() + min(0.1, max(0.0, self.deadline - time.monotonic()) / 3),
+                )
+                while time.monotonic() < grace:
+                    self.pump()
+                    time.sleep(min(0.005, max(0.0, grace - time.monotonic())))
+                try:
+                    os.killpg(self.group, signal.SIGKILL)
+                    self.signals.append(int(signal.SIGKILL))
+                except ProcessLookupError:
+                    pass
+            except BaseException as error:
+                self._error("owned-group-stop", error)
+                # An unverified group gives no group signal authority. The exact
+                # unreaped Popen child remains ours, and is released independently.
+                if process.returncode is None:
+                    try:
+                        self._exited_unreaped()
+                        process.kill()
+                    except BaseException as child_error:
+                        self._error("owned-child-stop", child_error)
+            try:
+                while time.monotonic() < self.deadline and not all(
+                    row["eof"] or row["failed"] for row in self.captures
+                ):
+                    self.pump()
+                    time.sleep(min(0.005, max(0.0, self.deadline - time.monotonic())))
+                process.wait(timeout=max(0.0, self.deadline - time.monotonic()))
+            except BaseException as error:
+                self._error("owned-child-reap", error)
+            # Observation only after reaping; never signal a possibly reused ID.
+            if self.group is not None:
+                try:
+                    while True:
+                        try:
+                            os.killpg(self.group, 0)
+                        except ProcessLookupError:
+                            self.group_absent = True
+                            break
+                        if time.monotonic() >= self.deadline:
+                            self.group_absent = False
+                            raise TimeoutError(
+                                "owned group absence unresolved at original deadline"
+                            )
+                        time.sleep(min(0.005, max(0.0, self.deadline - time.monotonic())))
+                except BaseException as error:
+                    self._error("owned-group-observation", error)
+        for stream in self.streams:
+            try:
+                if not stream.closed:
+                    stream.close()
+            except BaseException as error:
+                self._error("stream-close", error)
+        for capture in self.captures:
+            try:
+                if capture["finish"] is not None:
+                    cast(Callable[[], None], capture["finish"])()
+                capture["finalized"] = True
+            except BaseException as error:
+                self._error("capture-finalization", error)
+        for fd in tuple(self.descriptors):
+            try:
+                self.close_descriptor(fd)
+            except BaseException as error:
+                self._error("descriptor-close", error)
+        return self.document()
+
+    def document(self) -> dict[str, object]:
+        return {
+            "deadline_monotonic": self.deadline,
+            "work_deadline_monotonic": self.work_deadline,
+            "teardown_reserve_seconds": self.teardown_reserve,
+            "elapsed_seconds": time.monotonic() - self.started,
+            "process_id": self.process.pid if self.process is not None else None,
+            "process_group": self.group,
+            "process_group_absent": self.group_absent,
+            "child_exit": self.process.returncode if self.process is not None else None,
+            "reaped": self.process is None or self.process.returncode is not None,
+            "captures": len(self.captures),
+            "captures_finalized": sum(bool(row["finalized"]) for row in self.captures),
+            "capture_workers": 0,
+            "streams_closed": all(stream.closed for stream in self.streams),
+            "created_descriptors": self.created_descriptors,
+            "closed_descriptors": self.closed_descriptors,
+            "open_owned_descriptors": list(self.descriptors),
+            "signals": self.signals,
+            "errors": list(self.errors),
+            "ownership": (
+                "unreaped dedicated-session leader anchors process-group signals; "
+                "no post-reap signals"
+            ),
+        }
+
+
+class FramedDuplexEndpoint:
+    """One length-prefixed canonical stream with a single global hash chain."""
+
+    def __init__(
+        self,
+        *,
+        reader: BinaryIO,
+        writer: BinaryIO,
+        binding: ConditionSessionBinding,
+        deadline_monotonic: float,
+        monotonic: Callable[[], float] = time.monotonic,
+        cancelled: Callable[[], bool] | None = None,
+    ) -> None:
+        if not math.isfinite(deadline_monotonic) or deadline_monotonic < monotonic():
+            raise ValueError("bridge deadline is unavailable or already expired")
+        self.reader = reader
+        self.writer = writer
+        os.set_blocking(reader.fileno(), False)
+        os.set_blocking(writer.fileno(), False)
+        self.binding = binding
+        self.deadline_monotonic = deadline_monotonic
+        self.monotonic = monotonic
+        self.cancelled = cancelled
+        self._next_sequence = 1
+        self._previous_hash = _ZERO_HASH
+        self._event_ids: set[str] = set()
+        self._entries: list[TranscriptEntry] = []
+        self._transcript_bytes = 0
+        self._write_closed = False
+
+    @property
+    def entries(self) -> tuple[TranscriptEntry, ...]:
+        return tuple(self._entries)
+
+    @property
+    def previous_frame_sha256(self) -> str:
+        return self._previous_hash
+
+    @property
+    def next_sequence(self) -> int:
+        return self._next_sequence
+
+    def _remaining(self) -> float:
+        if self.cancelled is not None and self.cancelled():
+            raise RemoteBridgeDisconnected("bridge owner cancelled within original deadline")
+        remaining = self.deadline_monotonic - self.monotonic()
+        if remaining <= 0:
+            raise RemoteBridgeDisconnected("bridge monotonic deadline expired")
+        return remaining
+
+    def receive_host_output_prefix(self) -> int:
+        """Continue the same shared chain after credential-free host setup.
+
+        The carrier transfers original frames, never replacement IDs or locally
+        minted grants. Only hello and successful output reservations can precede
+        the runtime; model/browser/completion events cannot enter via this path.
+        """
+        size = _HEADER.unpack(self._read_exact(_HEADER.size))[0]
+        if not 0 < size <= MAX_BRIDGE_FRAME_BYTES:
+            raise RemoteBridgeError("host output prefix exceeds its finite bound")
+        document = strict_json_object(self._read_exact(size), label="host output prefix")
+        return self.adopt_host_output_prefix(document)
+
+    def adopt_host_output_prefix(self, document: Mapping[str, object]) -> int:
+        if self.entries or set(document) != {"binding", "frames"}:
+            raise RemoteBridgeError("host output prefix selection is ambiguous")
+        frames = document.get("frames")
+        if (
+            document.get("binding") != self.binding.to_document()
+            or not isinstance(frames, list)
+            or len(frames) < 4
+            or len(frames) % 2
+            or len(canonical_bytes(document)) > MAX_BRIDGE_FRAME_BYTES
+        ):
+            raise RemoteBridgeError("host output prefix binding or shape differs")
+        allowance = 0
+        for index in range(0, len(frames), 2):
+            if not isinstance(frames[index], dict) or not isinstance(frames[index + 1], dict):
+                raise RemoteBridgeError("host output prefix member is malformed")
+            request = ConditionBridgeFrame.from_document(frames[index])
+            reply = ConditionBridgeFrame.from_document(frames[index + 1])
+            if index == 0:
+                valid = (
+                    request.event_type == "condition-session-hello"
+                    and request.payload
+                    == {
+                        "accounting_owner": "shared-condition-event-observer",
+                        "remote_authoritative_boundary": False,
+                        "zero_retry": True,
+                    }
+                    and reply.event_type == "condition-session-accepted"
+                    and reply.payload == {"accepted": True}
+                )
+            else:
+                total = _integer(request.payload, "total_bytes")
+                valid = (
+                    request.event_type == "output-allowance-request"
+                    and set(request.payload) == {"total_bytes"}
+                    and total > allowance
+                    and reply.event_type == "output-allowance-granted"
+                    and reply.payload == {"accepted": True, "total_bytes": total}
+                )
+                allowance = total
+            if not valid or reply.event_id != request.event_id + ".reply":
+                raise RemoteBridgeError("host output prefix contains an unadmitted operation")
+            for direction, frame in (("sent", request), ("received", reply)):
+                self._record(
+                    direction, frame, _HEADER.size + len(canonical_bytes(frame.to_document()))
+                )
+        return allowance
+
+    def _read_exact(self, size: int) -> bytes:
+        return _read_deadline(self.reader.fileno(), size, self._remaining)
+
+    def _record(self, direction: str, frame: ConditionBridgeFrame, encoded_bytes: int) -> None:
+        if frame.sequence_number != self._next_sequence:
+            raise RemoteBridgeReplay("bridge sequence was duplicated or out of order")
+        if frame.previous_frame_sha256 != self._previous_hash:
+            raise RemoteBridgeReplay("bridge frame hash chain diverged")
+        if frame.event_id in self._event_ids:
+            raise RemoteBridgeReplay("bridge event ID was replayed")
+        if frame.session_id != self.binding.session_id or {
+            "provider_contract_version": frame.provider_contract_version,
+            "plan_id": frame.plan_id,
+            "host_run_id": frame.host_run_id,
+            "condition_run_id": frame.condition_run_id,
+            "evaluator_run_id": frame.evaluator_run_id,
+            "frozen_manifest_sha256": frame.frozen_manifest_sha256,
+        } != {
+            key: value for key, value in self.binding.to_document().items() if key != "session_id"
+        }:
+            raise RemoteBridgeError("bridge frame belongs to another condition session")
+        projected_bytes = self._transcript_bytes + encoded_bytes
+        if projected_bytes > MAX_BRIDGE_TRANSCRIPT_BYTES:
+            raise RemoteBridgeError("bridge transcript exceeded its complete evidence cap")
+        self._entries.append(TranscriptEntry(direction, frame))
+        self._event_ids.add(frame.event_id)
+        self._next_sequence += 1
+        self._previous_hash = frame.frame_sha256
+        self._transcript_bytes = projected_bytes
+
+    def write_event(
+        self,
+        *,
+        event_id: str,
+        event_type: str,
+        payload: Mapping[str, object],
+    ) -> ConditionBridgeFrame:
+        if self._write_closed:
+            raise RemoteBridgeDisconnected("bridge write side is already closed")
+        self._remaining()
+        frame = ConditionBridgeFrame.create(
+            self.binding,
+            sequence_number=self._next_sequence,
+            previous_frame_sha256=self._previous_hash,
+            event_id=event_id,
+            event_type=event_type,
+            payload=payload,
+        )
+        encoded = canonical_bytes(frame.to_document())
+        if len(encoded) > MAX_BRIDGE_FRAME_BYTES:
+            raise RemoteBridgeError("bridge frame exceeds its finite byte cap")
+        packet = _HEADER.pack(len(encoded)) + encoded
+        _write_deadline(self.writer.fileno(), packet, self._remaining)
+        self._record("sent", frame, len(packet))
+        return frame
+
+    def read_event(self, *, expected: set[str] | None = None) -> ConditionBridgeFrame:
+        header = self._read_exact(_HEADER.size)
+        (size,) = _HEADER.unpack(header)
+        if not 0 < size <= MAX_BRIDGE_FRAME_BYTES:
+            raise RemoteBridgeError("bridge frame length is outside its finite cap")
+        encoded = self._read_exact(size)
+        try:
+            raw = strict_json_object(encoded, label="bridge frame")
+            frame = ConditionBridgeFrame.from_document(raw)
+        except ValueError as exc:
+            raise RemoteBridgeError(str(exc)) from exc
+        if expected is not None and frame.event_type not in expected:
+            raise RemoteBridgeError("bridge event arrived in the wrong phase")
+        self._record("received", frame, _HEADER.size + size)
+        return frame
+
+    def transcript_document(self, *, side: str) -> dict[str, object]:
+        frames = [entry.to_document() for entry in self._entries]
+        document: dict[str, object] = {
+            "schema_version": BRIDGE_PROTOCOL_VERSION,
+            "side": side,
+            "binding": self.binding.to_document(),
+            "frame_count": len(frames),
+            "terminal_sequence": self._next_sequence - 1,
+            "terminal_frame_sha256": self._previous_hash,
+            "frame_chain_sha256": self.frame_chain_sha256(),
+            "frames": frames,
+        }
+        document["transcript_sha256"] = semantic_sha256(document)
+        return document
+
+    def frame_chain_sha256(self, *, exclude_tail: int = 0) -> str:
+        """Return the direction-independent identity shared by both peers.
+
+        A local transcript records frames as ``sent`` or ``received``.  Those
+        labels necessarily invert at the other peer, so they are evidence about
+        the local transport but cannot establish cross-peer equality.  The
+        ordered canonical frame documents are identical on both sides and form
+        the authority-neutral transcript identity.
+        """
+
+        if type(exclude_tail) is not int or not 0 <= exclude_tail <= len(self._entries):
+            raise ValueError("bridge transcript exclusion is malformed")
+        stop = len(self._entries) - exclude_tail
+        retained = self._entries[:stop] if stop else []
+        frames = [entry.frame.to_document() for entry in retained]
+        return semantic_sha256(
+            {
+                "schema_version": BRIDGE_PROTOCOL_VERSION,
+                "binding": self.binding.to_document(),
+                "frame_count": len(frames),
+                "frames": frames,
+            }
+        )
+
+    def half_close_write(self) -> None:
+        if self._write_closed:
+            return
+        # All writes use the descriptor directly; no buffered flush is pending.
+        self._write_closed = True
+
+
+class HostOutputAdmission:
+    """Before-runtime client of the existing shared observer, not an allocator."""
+
+    def __init__(self, endpoint: FramedDuplexEndpoint) -> None:
+        self.endpoint = endpoint
+        self.total = 0
+        self.handed_off = False
+        self.denied = False
+        self.endpoint.write_event(
+            event_id="session.hello",
+            event_type="condition-session-hello",
+            payload={
+                "accounting_owner": "shared-condition-event-observer",
+                "remote_authoritative_boundary": False,
+                "zero_retry": True,
+            },
+        )
+        reply = self.endpoint.read_event(expected={"condition-session-accepted"})
+        if reply.payload != {"accepted": True} or reply.event_id != "session.hello.reply":
+            raise RemoteBridgeError("shared observer refused host bootstrap")
+
+    def reserve(self, count: int) -> None:
+        if self.handed_off or self.denied or type(count) is not int or count <= 0:
+            raise RemoteBridgeError("host output reservation is outside its admitted phase")
+        total = self.total + count
+        # A partial request/reply is unresolved, never permission to retry or
+        # reuse a previous grant after the caller catches the transport error.
+        self.denied = True
+        request = self.endpoint.write_event(
+            event_id=f"host.output.{self.endpoint.next_sequence}",
+            event_type="output-allowance-request",
+            payload={"total_bytes": total},
+        )
+        reply = self.endpoint.read_event(
+            expected={"output-allowance-granted", "output-allowance-rejected"}
+        )
+        if (
+            reply.event_type != "output-allowance-granted"
+            or reply.event_id != request.event_id + ".reply"
+            or reply.payload != {"accepted": True, "total_bytes": total}
+        ):
+            self.denied = True
+            raise RemoteBridgeError("shared observer denied host output before growth")
+        self.total = total
+        self.denied = False
+
+    def handoff(self, writer: BinaryIO) -> tuple[TranscriptEntry, ...]:
+        if self.handed_off or self.denied or self.total <= 0:
+            raise RemoteBridgeError("host output prefix cannot be handed off")
+        document = {
+            "binding": self.endpoint.binding.to_document(),
+            "frames": [entry.frame.to_document() for entry in self.endpoint.entries],
+        }
+        encoded = canonical_bytes(document)
+        if len(encoded) > MAX_BRIDGE_FRAME_BYTES:
+            raise RemoteBridgeError("host output prefix exceeds its finite bound")
+        self.handed_off = True
+        _write_deadline(
+            writer.fileno(), _HEADER.pack(len(encoded)) + encoded, self.endpoint._remaining
+        )
+        return self.endpoint.entries
+
+
+class CanonicalFrameRelay:
+    """Validate and forward one duplex session without owning its policy.
+
+    The relay is transport only. It cannot synthesize an admission response and has
+    no observer or budget boundary. Every byte sent by the runtime is forwarded to
+    the shared supervisor, and every response must come back from that supervisor.
+    """
+
+    _REMOTE_EVENTS: Final = frozenset(
+        {
+            "condition-session-hello",
+            "model-call-reserve",
+            "model-send-start",
+            "model-response",
+            "known-provider-error",
+            "known-transport-error-no-provider-acceptance",
+            "ambiguous-send",
+            "response-known-accounting-incomplete",
+            "browser-action-reserve",
+            "browser-action-complete",
+            "output-bytes-update",
+            "output-allowance-request",
+            "process-exit",
+            "completion",
+            "raw-artifact-published",
+            "runtime-client-complete",
+            "condition-session-terminal",
+        }
+    )
+    _SHARED_EVENTS: Final = frozenset(
+        {
+            "condition-session-accepted",
+            "model-call-admitted",
+            "model-call-rejected",
+            "model-call-terminal",
+            "browser-action-admitted",
+            "browser-action-rejected",
+            "browser-action-terminal",
+            "output-bytes-admitted",
+            "output-bytes-rejected",
+            "output-allowance-granted",
+            "output-allowance-rejected",
+            "process-exit-accepted",
+            "completion-accepted",
+            "raw-artifact-accepted",
+            "runtime-client-complete-accepted",
+            "condition-session-terminal-ack",
+        }
+    )
+
+    def __init__(
+        self,
+        *,
+        remote_reader: BinaryIO,
+        remote_writer: BinaryIO,
+        shared_reader: BinaryIO,
+        shared_writer: BinaryIO,
+        binding: ConditionSessionBinding,
+        deadline_monotonic: float,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        if not math.isfinite(deadline_monotonic) or deadline_monotonic <= monotonic():
+            raise ValueError("relay deadline is unavailable or expired")
+        self.remote_reader = remote_reader
+        self.remote_writer = remote_writer
+        self.shared_reader = shared_reader
+        self.shared_writer = shared_writer
+        for stream in (remote_reader, remote_writer, shared_reader, shared_writer):
+            os.set_blocking(stream.fileno(), False)
+        self.cancelled = threading.Event()
+        self.binding = binding
+        self.deadline_monotonic = deadline_monotonic
+        self.monotonic = monotonic
+        self._next_sequence = 1
+        self._previous_hash = _ZERO_HASH
+        self._event_ids: set[str] = set()
+        self._frames: list[dict[str, object]] = []
+        self._bytes = 0
+        self._terminal_acknowledged = False
+        self._runtime_detached = False
+
+    def _remaining(self) -> float:
+        if self.cancelled.is_set():
+            raise RemoteBridgeDisconnected("condition relay cancelled")
+        remaining = self.deadline_monotonic - self.monotonic()
+        if remaining <= 0:
+            raise RemoteBridgeDisconnected("condition relay deadline expired")
+        return remaining
+
+    def continue_host_output_prefix(self, entries: tuple[TranscriptEntry, ...]) -> None:
+        if self._frames:
+            raise RemoteBridgeReplay("relay bootstrap already selected")
+        for entry in entries:
+            self._validate(
+                entry.frame,
+                direction=("remote-to-shared" if entry.direction == "sent" else "shared-to-remote"),
+            )
+
+    def _read_exact(self, reader: BinaryIO, size: int) -> bytes:
+        return _read_deadline(reader.fileno(), size, self._remaining)
+
+    def _read_packet(self, reader: BinaryIO) -> tuple[bytes, ConditionBridgeFrame]:
+        header = self._read_exact(reader, _HEADER.size)
+        (size,) = _HEADER.unpack(header)
+        if not 0 < size <= MAX_BRIDGE_FRAME_BYTES:
+            raise RemoteBridgeError("condition relay frame length exceeds its finite cap")
+        encoded = self._read_exact(reader, size)
+        try:
+            frame = ConditionBridgeFrame.from_document(
+                strict_json_object(encoded, label="relayed condition frame")
+            )
+        except ValueError as exc:
+            raise RemoteBridgeError(str(exc)) from exc
+        return header + encoded, frame
+
+    def _write_packet(self, writer: BinaryIO, packet: bytes) -> None:
+        _write_deadline(writer.fileno(), packet, self._remaining)
+
+    def _validate(self, frame: ConditionBridgeFrame, *, direction: str) -> None:
+        expected_events = (
+            self._REMOTE_EVENTS if direction == "remote-to-shared" else self._SHARED_EVENTS
+        )
+        if frame.event_type not in expected_events:
+            raise RemoteBridgeError("condition relay event arrived from the wrong authority")
+        if (
+            frame.sequence_number != self._next_sequence
+            or frame.previous_frame_sha256 != self._previous_hash
+        ):
+            raise RemoteBridgeReplay("condition relay sequence/hash chain was replayed")
+        if frame.event_id in self._event_ids:
+            raise RemoteBridgeReplay("condition relay event identity was replayed")
+        if {
+            "session_id": frame.session_id,
+            "provider_contract_version": frame.provider_contract_version,
+            "plan_id": frame.plan_id,
+            "host_run_id": frame.host_run_id,
+            "condition_run_id": frame.condition_run_id,
+            "evaluator_run_id": frame.evaluator_run_id,
+            "frozen_manifest_sha256": frame.frozen_manifest_sha256,
+        } != self.binding.to_document():
+            raise RemoteBridgeError("condition relay frame belongs to another session")
+        projected = self._bytes + _HEADER.size + len(canonical_bytes(frame.to_document()))
+        if projected > MAX_BRIDGE_TRANSCRIPT_BYTES:
+            raise RemoteBridgeError("condition relay transcript exceeded its bounded cap")
+        self._frames.append({"direction": direction, "frame": frame.to_document()})
+        self._event_ids.add(frame.event_id)
+        self._next_sequence += 1
+        self._previous_hash = frame.frame_sha256
+        self._bytes = projected
+        if frame.event_type == "condition-session-terminal-ack":
+            self._terminal_acknowledged = True
+        if frame.event_type == "runtime-client-complete-accepted":
+            self._runtime_detached = True
+
+    def serve(self, *, stop_after_runtime_detach: bool = False) -> dict[str, object]:
+        """Relay until runtime detachment or the exact terminal acknowledgement."""
+
+        while not self._terminal_acknowledged and not (
+            stop_after_runtime_detach and self._runtime_detached
+        ):
+            try:
+                readable, _, _ = select.select(
+                    [self.remote_reader.fileno(), self.shared_reader.fileno()],
+                    [],
+                    [],
+                    min(self._remaining(), 0.05),
+                )
+            except InterruptedError:
+                continue
+            if not readable:
+                continue
+            if len(readable) != 1:
+                raise RemoteBridgeError("condition relay observed simultaneous ambiguous frames")
+            if readable[0] == self.remote_reader.fileno():
+                packet, frame = self._read_packet(self.remote_reader)
+                self._validate(frame, direction="remote-to-shared")
+                self._write_packet(self.shared_writer, packet)
+            else:
+                packet, frame = self._read_packet(self.shared_reader)
+                self._validate(frame, direction="shared-to-remote")
+                self._write_packet(self.remote_writer, packet)
+        return self.transcript_document()
+
+    def transcript_document(self) -> dict[str, object]:
+        document: dict[str, object] = {
+            "schema_version": BRIDGE_PROTOCOL_VERSION,
+            "side": "host-transparent-relay",
+            "binding": self.binding.to_document(),
+            "authoritative_accounting": False,
+            "admission_decisions_synthesized": 0,
+            "frame_count": len(self._frames),
+            "terminal_sequence": self._next_sequence - 1,
+            "terminal_frame_sha256": self._previous_hash,
+            "frame_chain_sha256": semantic_sha256(
+                {
+                    "schema_version": BRIDGE_PROTOCOL_VERSION,
+                    "binding": self.binding.to_document(),
+                    "frame_count": len(self._frames),
+                    "frames": [entry["frame"] for entry in self._frames],
+                }
+            ),
+            "runtime_detached": self._runtime_detached,
+            "terminal_acknowledged": self._terminal_acknowledged,
+            "frames": self._frames,
+        }
+        document["transcript_sha256"] = semantic_sha256(document)
+        return document
+
+    def reserve_host_output(self, count: int) -> None:
+        if type(count) is not int or count <= 0:
+            raise RemoteBridgeError("host output byte count is invalid")
+        total = max(
+            (
+                _integer(
+                    cast(
+                        Mapping[str, object], cast(Mapping[str, object], entry["frame"])["payload"]
+                    ),
+                    "total_bytes",
+                )
+                for entry in self._frames
+                if cast(Mapping[str, object], entry["frame"])["event_type"]
+                == "output-allowance-granted"
+            ),
+            default=0,
+        )
+        response = self._host_round_trip(
+            event_id=f"host.output.{self._next_sequence}",
+            event_type="output-allowance-request",
+            payload={"total_bytes": total + count},
+            expected_response="output-allowance-granted",
+        )
+        if response.payload != {"accepted": True, "total_bytes": total + count}:
+            raise RemoteBridgeError("host output grant differs from requested capacity")
+
+    def persist_transcript(
+        self,
+        path: Path,
+        *,
+        require_output_admission: bool = False,
+        consume_output_allowance: Callable[[int], None] | None = None,
+    ) -> None:
+        """Atomically retain the bounded relay journal at one exact private path."""
+
+        encoded = canonical_bytes(self.transcript_document())
+        if len(encoded) > MAX_BRIDGE_TRANSCRIPT_BYTES:
+            raise RemoteBridgeError("condition relay journal exceeded its evidence cap")
+        if consume_output_allowance is not None:
+            if require_output_admission:
+                raise RemoteBridgeError("relay publication selected two admission paths")
+            consume_output_allowance(len(encoded))
+        if require_output_admission:
+            # This immutable runtime-prefix snapshot precedes its publication
+            # reservation. The grant remains in the complete shared/relay chain,
+            # not retroactively inserted into the runtime's already sealed prefix.
+            self.reserve_host_output(len(encoded))
+        parent = path.parent.resolve(strict=True)
+        candidate = path.resolve(strict=False)
+        if candidate.parent != parent or path.is_symlink():
+            raise RemoteBridgeError("condition relay journal path is unsafe")
+        temporary = parent / f".{path.name}.tmp"
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+            0o600,
+        )
+        try:
+            offset = 0
+            while offset < len(encoded):
+                written = os.write(descriptor, encoded[offset:])
+                if written <= 0:
+                    raise RemoteBridgeError("relay publication write made no progress")
+                offset += written
+            os.fsync(descriptor)
+        finally:
+            # A failed admitted temporary remains bounded evidence. Retrying or
+            # removing it would hide a partial publication from cleanup.
+            os.close(descriptor)
+        os.replace(temporary, candidate)
+        directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
+
+    def _host_round_trip(
+        self,
+        *,
+        event_id: str,
+        event_type: str,
+        payload: Mapping[str, object],
+        expected_response: str,
+    ) -> ConditionBridgeFrame:
+        if not self._runtime_detached or self._terminal_acknowledged:
+            raise RemoteBridgeError("host evidence continuation is outside its exact phase")
+        frame = ConditionBridgeFrame.create(
+            self.binding,
+            sequence_number=self._next_sequence,
+            previous_frame_sha256=self._previous_hash,
+            event_id=event_id,
+            event_type=event_type,
+            payload=payload,
+        )
+        packet = _HEADER.pack(len(canonical_bytes(frame.to_document()))) + canonical_bytes(
+            frame.to_document()
+        )
+        self._validate(frame, direction="remote-to-shared")
+        self._write_packet(self.shared_writer, packet)
+        response_packet, response = self._read_packet(self.shared_reader)
+        self._validate(response, direction="shared-to-remote")
+        if response.event_type != expected_response:
+            raise RemoteBridgeError("shared supervisor returned the wrong host continuation reply")
+        # The response has no remaining remote process to receive it, but retaining
+        # the exact packet in the relay transcript proves what shared control sent.
+        del response_packet
+        return response
+
+    def finish_host_evidence(
+        self,
+        *,
+        exit_code: int,
+        completed: bool,
+        answer: str | None,
+        error: str,
+        raw_manifest_sha256: str,
+        raw_receipt_sha256: str,
+        remote_journal_bytes: int,
+        remote_journal_file_sha256: str,
+        remote_journal_sha256: str,
+        remote_terminal_sequence: int,
+        remote_terminal_frame_sha256: str,
+        remote_frame_chain_sha256: str,
+    ) -> dict[str, object]:
+        """Publish host-derived terminal evidence, then perform one terminal handshake."""
+
+        if type(exit_code) is not int or type(completed) is not bool:
+            raise RemoteBridgeError("host terminal process evidence is malformed")
+        if answer is not None and not isinstance(answer, str):
+            raise RemoteBridgeError("host terminal answer is malformed")
+        if (
+            not isinstance(error, str)
+            or type(remote_journal_bytes) is not int
+            or not 0 < remote_journal_bytes <= MAX_BRIDGE_TRANSCRIPT_BYTES
+            or type(remote_terminal_sequence) is not int
+            or remote_terminal_sequence < 1
+            or not all(
+                _HEX64.fullmatch(value) is not None
+                for value in (
+                    raw_manifest_sha256,
+                    raw_receipt_sha256,
+                    remote_journal_file_sha256,
+                    remote_journal_sha256,
+                    remote_terminal_frame_sha256,
+                    remote_frame_chain_sha256,
+                )
+            )
+        ):
+            raise RemoteBridgeError("host terminal raw evidence is malformed")
+        self._host_round_trip(
+            event_id="host.process.exit",
+            event_type="process-exit",
+            payload={"exit_code": exit_code},
+            expected_response="process-exit-accepted",
+        )
+        self._host_round_trip(
+            event_id="host.session.completion",
+            event_type="completion",
+            payload={"completed": completed, "answer": answer, "error": error},
+            expected_response="completion-accepted",
+        )
+        self._host_round_trip(
+            event_id="host.raw.published",
+            event_type="raw-artifact-published",
+            payload={
+                "manifest_sha256": raw_manifest_sha256,
+                "receipt_sha256": raw_receipt_sha256,
+            },
+            expected_response="raw-artifact-accepted",
+        )
+        prior_hash = self._previous_hash
+        prior_count = self._next_sequence - 1
+        prior_chain_sha = semantic_sha256(
+            {
+                "schema_version": BRIDGE_PROTOCOL_VERSION,
+                "binding": self.binding.to_document(),
+                "frame_count": len(self._frames),
+                "frames": [entry["frame"] for entry in self._frames],
+            }
+        )
+        terminal = self._host_round_trip(
+            event_id="host.session.terminal",
+            event_type="condition-session-terminal",
+            payload={
+                "prior_frame_sha256": prior_hash,
+                "prior_frame_count": prior_count,
+                "remote_journal_sha256": remote_journal_sha256,
+                "remote_journal_file_sha256": remote_journal_file_sha256,
+                "remote_journal_bytes": remote_journal_bytes,
+                "remote_terminal_sequence": remote_terminal_sequence,
+                "remote_terminal_frame_sha256": remote_terminal_frame_sha256,
+                "remote_frame_chain_sha256": remote_frame_chain_sha256,
+                "prior_frame_chain_sha256": prior_chain_sha,
+            },
+            expected_response="condition-session-terminal-ack",
+        )
+        if terminal.payload.get("accepted") is not True or not self._terminal_acknowledged:
+            raise RemoteBridgeError("shared supervisor did not terminalize the host relay")
+        return self.transcript_document()
+
+
+@dataclass(slots=True)
+class AcceptedPrivateConditionChannel:
+    """One accepted private IPC connection and its held stream objects."""
+
+    endpoint: FramedDuplexEndpoint
+    connection: socket.socket
+    reader: BinaryIO
+    writer: BinaryIO
+
+    def close(self) -> None:
+        for value in (self.reader, self.writer, self.connection):
+            with contextlib.suppress(OSError):
+                value.close()
+
+
+@contextlib.contextmanager
+def held_unix_socket_address(path: Path) -> Iterator[str]:
+    """Address the same owned socket through a held Linux directory descriptor.
+
+    Unix socket names have a small kernel limit even when the evidence tree is
+    valid. The descriptor alias changes only the syscall address, never the
+    socket's directory, binding manifest, ownership, or published relative path.
+    Short paths retain the portable existing behavior.
+    """
+    parent = path.parent
+    if path.name in {"", ".", ".."} or not path.is_absolute():
+        raise RemoteBridgeError("private socket address is not absolute")
+    before = parent.stat(follow_symlinks=False)
+    if (
+        parent.is_symlink()
+        or not stat.S_ISDIR(before.st_mode)
+        or before.st_uid != os.getuid()
+        or stat.S_IMODE(before.st_mode) != 0o700
+    ):
+        raise RemoteBridgeError("private socket parent is unsafe")
+    descriptor = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        held = os.fstat(descriptor)
+        identity = (held.st_dev, held.st_ino)
+        if identity != (before.st_dev, before.st_ino):
+            raise RemoteBridgeError("private socket directory changed before admission")
+        address = path
+        if len(os.fsencode(path)) >= 100:
+            alias = Path(f"/proc/self/fd/{descriptor}")
+            try:
+                actual = alias.stat()
+            except OSError as exc:
+                raise RemoteBridgeError(
+                    "long private socket requires held-directory addressing"
+                ) from exc
+            if (actual.st_dev, actual.st_ino) != identity:
+                raise RemoteBridgeError("private socket descriptor alias changed")
+            address = alias / path.name
+        yield str(address)
+        after = parent.stat(follow_symlinks=False)
+        if (after.st_dev, after.st_ino) != identity:
+            raise RemoteBridgeError("private socket directory changed during admission")
+    finally:
+        os.close(descriptor)
+
+
+def _private_binding_members(
+    root_path: Path,
+    root_identity: tuple[int, int],
+    members: tuple[tuple[Path, tuple[int, int], Callable[[int], bool]], ...],
+    *,
+    destroy: bool,
+) -> None:
+    """Validate the whole owned set before either setup rollback or close mutates it."""
+    descriptor = os.open(
+        root_path,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+    )
+    try:
+        root = os.fstat(descriptor)
+        if (
+            (root.st_dev, root.st_ino) != root_identity
+            or root.st_uid != os.getuid()
+            or stat.S_IMODE(root.st_mode) != 0o700
+        ):
+            raise RemoteBridgeError("private condition cleanup root was replaced")
+        present = []
+        for path, identity, category in members:
+            if path.parent != root_path:
+                raise RemoteBridgeError("private condition cleanup member escaped its root")
+            try:
+                metadata = os.stat(path.name, dir_fd=descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                if destroy:
+                    continue
+                raise RemoteBridgeError("private condition binding member disappeared") from None
+            if (
+                (metadata.st_dev, metadata.st_ino) != identity
+                or not category(metadata.st_mode)
+                or metadata.st_uid != os.getuid()
+                or stat.S_IMODE(metadata.st_mode) != 0o600
+                or metadata.st_nlink != 1
+            ):
+                raise RemoteBridgeError("private condition cleanup member was replaced")
+            present.append(path.name)
+        if destroy:
+            for name in present:
+                os.unlink(name, dir_fd=descriptor)
+            os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+@dataclass(slots=True)
+class PrivateConditionListener:
+    """Host-owned Unix-socket admission relay under one exact attempt root."""
+
+    listener: socket.socket
+    socket_path: Path
+    manifest_path: Path
+    binding: ConditionSessionBinding
+    deadline_monotonic: float
+    expected_peer_uid: int
+    supervisor_identity: tuple[int, int]
+    socket_identity: tuple[int, int]
+    manifest_identity: tuple[int, int]
+    cancelled: threading.Event = field(default_factory=threading.Event)
+    private_binding_destroyed: bool = False
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        supervisor_root: Path,
+        attempt_root: Path,
+        binding: ConditionSessionBinding,
+        transaction_root_identity: str,
+        deadline_monotonic: float,
+        remote_journal_relative_path: str,
+        expected_peer_uid: int | None = None,
+        host_output_prefix: bool = False,
+        reserve_output_bytes: Callable[[int], None] | None = None,
+    ) -> PrivateConditionListener:
+        root = supervisor_root.resolve(strict=True)
+        attempt = attempt_root.resolve(strict=True)
+        metadata = root.stat(follow_symlinks=False)
+        if (
+            supervisor_root.is_symlink()
+            or root.parent != attempt
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.getuid()
+            or stat.S_IMODE(metadata.st_mode) != 0o700
+        ):
+            raise RemoteBridgeError("private condition supervisor root is unsafe")
+        if _HEX64.fullmatch(transaction_root_identity) is None:
+            raise RemoteBridgeError("private condition transaction identity is malformed")
+        if not math.isfinite(deadline_monotonic) or deadline_monotonic <= time.monotonic():
+            raise RemoteBridgeError("private condition deadline is unavailable")
+        journal_relative = Path(remote_journal_relative_path)
+        if journal_relative.is_absolute() or ".." in journal_relative.parts:
+            raise RemoteBridgeError("private remote journal path escaped its attempt")
+        socket_path = root / "condition-admission.sock"
+        manifest_path = root / "condition-admission-binding.json"
+        if os.path.lexists(socket_path) or os.path.lexists(manifest_path):
+            raise RemoteBridgeError("private condition channel identity already exists")
+        listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        owned: list[tuple[Path, tuple[int, int], Callable[[int], bool]]] = []
+        try:
+            with held_unix_socket_address(socket_path) as address:
+                listener.bind(address)
+            os.chmod(socket_path, 0o600, follow_symlinks=False)
+            listener.listen(1)
+            listener.setblocking(False)
+            socket_metadata = socket_path.stat(follow_symlinks=False)
+            owned.append(
+                (socket_path, (socket_metadata.st_dev, socket_metadata.st_ino), stat.S_ISSOCK)
+            )
+            document = {
+                "schema_version": "1.0.0",
+                "protocol_version": BRIDGE_PROTOCOL_VERSION,
+                "binding": binding.to_document(),
+                "transaction_root_identity": transaction_root_identity,
+                "socket_relative_path": socket_path.name,
+                "socket_device": socket_metadata.st_dev,
+                "socket_inode": socket_metadata.st_ino,
+                "socket_uid": socket_metadata.st_uid,
+                "socket_mode": stat.S_IMODE(socket_metadata.st_mode),
+                "socket_link_count": socket_metadata.st_nlink,
+                "deadline_monotonic": deadline_monotonic,
+                "remote_journal_relative_path": remote_journal_relative_path,
+            }
+            if host_output_prefix:
+                if reserve_output_bytes is None:
+                    raise RemoteBridgeError("host bootstrap binding has no output admission")
+                document["host_output_prefix"] = True
+            encoded = canonical_bytes(document)
+            if reserve_output_bytes is not None:
+                reserve_output_bytes(len(encoded))
+            descriptor = os.open(
+                manifest_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
+                0o600,
+            )
+            try:
+                manifest_metadata = os.fstat(descriptor)
+                owned.append(
+                    (
+                        manifest_path,
+                        (manifest_metadata.st_dev, manifest_metadata.st_ino),
+                        stat.S_ISREG,
+                    )
+                )
+                offset = 0
+                while offset < len(encoded):
+                    written = os.write(descriptor, encoded[offset:])
+                    if written <= 0:
+                        raise RemoteBridgeError("private condition binding write made no progress")
+                    offset += written
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+            directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+            _private_binding_members(
+                root, (metadata.st_dev, metadata.st_ino), tuple(owned), destroy=False
+            )
+        except BaseException:
+            listener.close()
+            _private_binding_members(
+                root, (metadata.st_dev, metadata.st_ino), tuple(owned), destroy=True
+            )
+            raise
+        return cls(
+            listener=listener,
+            socket_path=socket_path,
+            manifest_path=manifest_path,
+            binding=binding,
+            deadline_monotonic=deadline_monotonic,
+            expected_peer_uid=(os.getuid() if expected_peer_uid is None else expected_peer_uid),
+            supervisor_identity=(metadata.st_dev, metadata.st_ino),
+            socket_identity=(socket_metadata.st_dev, socket_metadata.st_ino),
+            manifest_identity=(manifest_metadata.st_dev, manifest_metadata.st_ino),
+        )
+
+    def _remaining(self) -> float:
+        if self.cancelled.is_set():
+            raise RemoteBridgeDisconnected("private condition accept cancelled")
+        remaining = self.deadline_monotonic - time.monotonic()
+        if remaining <= 0:
+            raise RemoteBridgeDisconnected("private condition accept deadline expired")
+        return remaining
+
+    def accept(self) -> AcceptedPrivateConditionChannel:
+        while True:
+            _wait_ready(self.listener.fileno(), writing=False, remaining=self._remaining)
+            try:
+                connection, _ = self.listener.accept()
+                break
+            except (BlockingIOError, InterruptedError):
+                continue
+        try:
+            peer_uid: int | None = None
+            getpeereid = getattr(connection, "getpeereid", None)
+            if callable(getpeereid):
+                peer_uid = cast(tuple[int, int], getpeereid())[0]
+            elif hasattr(socket, "SO_PEERCRED"):
+                credentials = connection.getsockopt(
+                    socket.SOL_SOCKET,
+                    socket.SO_PEERCRED,
+                    struct.calcsize("3i"),
+                )
+                _pid, peer_uid, _gid = struct.unpack("3i", credentials)
+            if peer_uid is not None and peer_uid != self.expected_peer_uid:
+                raise RemoteBridgeError("private condition peer ownership changed")
+            reader = cast(BinaryIO, connection.makefile("rb", buffering=0))
+            writer = cast(BinaryIO, connection.makefile("wb", buffering=0))
+            return AcceptedPrivateConditionChannel(
+                endpoint=FramedDuplexEndpoint(
+                    reader=reader,
+                    writer=writer,
+                    binding=self.binding,
+                    deadline_monotonic=self.deadline_monotonic,
+                ),
+                connection=connection,
+                reader=reader,
+                writer=writer,
+            )
+        except BaseException:
+            connection.close()
+            raise
+
+    def close(self, *, destroy_private_binding: bool = True) -> None:
+        self.listener.close()
+        if self.private_binding_destroyed:
+            return
+        selected = [(self.socket_path, self.socket_identity, stat.S_ISSOCK)]
+        if destroy_private_binding:
+            selected.append((self.manifest_path, self.manifest_identity, stat.S_ISREG))
+        _private_binding_members(
+            self.socket_path.parent, self.supervisor_identity, tuple(selected), destroy=True
+        )
+        self.private_binding_destroyed = destroy_private_binding
+
+
+def _string(payload: Mapping[str, object], key: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str):
+        raise RemoteBridgeError(f"bridge payload {key} is not a string")
+    return value
+
+
+def _integer(payload: Mapping[str, object], key: str) -> int:
+    value = payload.get(key)
+    if type(value) is not int or value < 0:
+        raise RemoteBridgeError(f"bridge payload {key} is not a non-negative integer")
+    return value
+
+
+def provider_request_document(request: ProviderRequest) -> dict[str, object]:
+    return {
+        "role": request.role.value,
+        "model": request.model,
+        "input_tokens": request.input_tokens,
+        "max_output_tokens": request.max_output_tokens,
+        "service_tier": request.service_tier,
+        "implicit_transport_retries": request.implicit_transport_retries,
+        "retry_kind": request.retry_kind,
+    }
+
+
+def provider_request_from_document(payload: Mapping[str, object]) -> ProviderRequest:
+    try:
+        return ProviderRequest(
+            role=ModelRole(_string(payload, "role")),
+            model=_string(payload, "model"),
+            input_tokens=_integer(payload, "input_tokens"),
+            max_output_tokens=_integer(payload, "max_output_tokens"),
+            service_tier=_string(payload, "service_tier"),
+            implicit_transport_retries=_integer(payload, "implicit_transport_retries"),
+            retry_kind=_string(payload, "retry_kind"),
+        )
+    except ValueError as exc:
+        raise RemoteBridgeError("bridge provider request is invalid") from exc
+
+
+def usage_document(usage: ProviderResponseUsage) -> dict[str, object]:
+    return {
+        "input_tokens": usage.input_tokens,
+        "cached_input_tokens": usage.cached_input_tokens,
+        "output_tokens": usage.output_tokens,
+        "service_tier": usage.service_tier,
+    }
+
+
+def usage_from_document(payload: Mapping[str, object]) -> ProviderResponseUsage:
+    try:
+        return ProviderResponseUsage(
+            input_tokens=_integer(payload, "input_tokens"),
+            cached_input_tokens=_integer(payload, "cached_input_tokens"),
+            output_tokens=_integer(payload, "output_tokens"),
+            service_tier=_string(payload, "service_tier"),
+        )
+    except ValueError as exc:
+        raise RemoteBridgeError("bridge provider usage is invalid") from exc
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionSessionTerminalReceipt:
+    binding: ConditionSessionBinding
+    terminal_sequence: int
+    terminal_frame_sha256: str
+    transcript_sha256: str
+    shared_accounting_sha256: str
+    remote_journal_bytes: int
+    remote_journal_file_sha256: str
+    remote_journal_sha256: str
+    remote_terminal_sequence: int
+    remote_terminal_frame_sha256: str
+    remote_frame_chain_sha256: str
+    raw_manifest_sha256: str
+    raw_receipt_sha256: str
+    terminal_acknowledged: bool
+    receipt_sha256: str
+
+    def to_document(self) -> dict[str, object]:
+        return {
+            "schema_version": BRIDGE_PROTOCOL_VERSION,
+            "binding": self.binding.to_document(),
+            "terminal_sequence": self.terminal_sequence,
+            "terminal_frame_sha256": self.terminal_frame_sha256,
+            "transcript_sha256": self.transcript_sha256,
+            "shared_accounting_sha256": self.shared_accounting_sha256,
+            "remote_journal_bytes": self.remote_journal_bytes,
+            "remote_journal_file_sha256": self.remote_journal_file_sha256,
+            "remote_journal_sha256": self.remote_journal_sha256,
+            "remote_terminal_sequence": self.remote_terminal_sequence,
+            "remote_terminal_frame_sha256": self.remote_terminal_frame_sha256,
+            "remote_frame_chain_sha256": self.remote_frame_chain_sha256,
+            "raw_manifest_sha256": self.raw_manifest_sha256,
+            "raw_receipt_sha256": self.raw_receipt_sha256,
+            "terminal_acknowledged": self.terminal_acknowledged,
+            "receipt_sha256": self.receipt_sha256,
+        }
+
+
+class SharedCarrierOutput:
+    """Consume one shared-funded carrier reservation at the actual file writers.
+
+    This is a condition-local consumption guard, not a budget allocator. The
+    observer admits the sum of the existing finite per-role caps before any
+    producer starts. Partial writes consume capacity permanently; no retry can
+    recover it or borrow the remote runtime's reservation.
+    """
+
+    def __init__(
+        self,
+        observer: ConditionEventObserver,
+        *,
+        transcript_path: Path,
+        terminal_path: Path,
+        diagnostic_path: Path,
+    ) -> None:
+        self.observer = observer
+        self.caps = MappingProxyType(
+            {
+                transcript_path: MAX_BRIDGE_TRANSCRIPT_BYTES,
+                terminal_path: MAX_BRIDGE_FRAME_BYTES,
+                diagnostic_path: 65_536,
+            }
+        )
+        self._diagnostic_path = diagnostic_path
+        if len(self.caps) != 3 or any(not path.is_absolute() for path in self.caps):
+            raise RemoteBridgeError("shared carrier output roles are ambiguous")
+        self.consumed = dict.fromkeys(self.caps, 0)
+        self.observed = 0
+        self.denied = False
+        self._lock = threading.RLock()
+        observer.allocate_controller_output_bytes(count=sum(self.caps.values()))
+
+    def _consume(self, path: Path, count: int) -> None:
+        if (
+            self.denied
+            or path not in self.caps
+            or type(count) is not int
+            or count < 0
+            or self.consumed[path] + count > self.caps[path]
+            or any(item.is_symlink() for item in (path, *path.parents))
+        ):
+            self.denied = True
+            raise RemoteBridgeError("shared carrier output denied before growth")
+        self.consumed[path] += count
+
+    def _write(self, descriptor: int, encoded: bytes) -> None:
+        offset = 0
+        while offset < len(encoded):
+            try:
+                written = os.write(descriptor, encoded[offset:])
+            except InterruptedError:
+                continue
+            if written <= 0:
+                raise RemoteBridgeError("shared carrier evidence write made no progress")
+            offset += written
+            self.observed += written
+            self.observer.observe_controller_output_bytes(count=written)
+
+    def write_diagnostic(self, path: Path, descriptor: int, encoded: bytes) -> None:
+        with self._lock:
+            if path != self._diagnostic_path:
+                raise RemoteBridgeError("shared carrier diagnostic role changed")
+            self._consume(path, len(encoded))
+            current = os.stat(path, follow_symlinks=False)
+            held = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(held.st_mode)
+                or held.st_nlink != 1
+                or (held.st_dev, held.st_ino) != (current.st_dev, current.st_ino)
+                or held.st_uid != os.getuid()
+            ):
+                raise RemoteBridgeError("shared carrier diagnostic identity changed")
+            self._write(descriptor, encoded)
+
+    def publish(self, path: Path, value: Mapping[str, object]) -> None:
+        encoded = canonical_bytes(dict(value))
+        with self._lock:
+            if path == self._diagnostic_path:
+                raise RemoteBridgeError("shared carrier publication role changed")
+            self._consume(path, len(encoded))  # Before parent/file creation.
+            path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                0o600,
+            )
+            try:
+                self._write(descriptor, encoded)
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+
+
+class ConditionSessionSupervisor:
+    """Serve one remote event client through the shared authoritative observer."""
+
+    def __init__(
+        self,
+        endpoint: FramedDuplexEndpoint,
+        observer: ConditionEventObserver,
+        *,
+        accounting_document: Callable[[], Mapping[str, object]],
+    ) -> None:
+        self.endpoint = endpoint
+        self.observer = observer
+        self.accounting_document = accounting_document
+        self._terminal = False
+        self._remote_journal_sha256: str | None = None
+        self._remote_journal_bytes: int | None = None
+        self._remote_journal_file_sha256: str | None = None
+        self._remote_terminal_sequence: int | None = None
+        self._remote_terminal_frame_sha256: str | None = None
+        self._remote_frame_chain_sha256: str | None = None
+        self._raw_manifest_sha256: str | None = None
+        self._raw_receipt_sha256: str | None = None
+        self._call_sequence = 0
+        self._output_denied = False
+
+    def _write(
+        self,
+        request: ConditionBridgeFrame,
+        event_type: str,
+        payload: Mapping[str, object],
+    ) -> ConditionBridgeFrame:
+        return self.endpoint.write_event(
+            event_id=f"{request.event_id}.reply",
+            event_type=event_type,
+            payload=payload,
+        )
+
+    def _read_model_outcome(self, call_id: str) -> ConditionModelResponse:
+        started = self.endpoint.read_event(expected={"model-send-start"})
+        if _string(started.payload, "call_id") != call_id:
+            raise RemoteBridgeError("model send-start belongs to another call")
+        outcome = self.endpoint.read_event(
+            expected={
+                "model-response",
+                "known-provider-error",
+                "known-transport-error-no-provider-acceptance",
+                "ambiguous-send",
+                "response-known-accounting-incomplete",
+            }
+        )
+        if _string(outcome.payload, "call_id") != call_id:
+            raise RemoteBridgeError("model reconciliation belongs to another call")
+        if outcome.event_type == "model-response":
+            usage_raw = outcome.payload.get("usage")
+            if not isinstance(usage_raw, dict):
+                raise ConditionResponseAccountingIncomplete(
+                    "remote response lacks a typed usage receipt"
+                )
+            return ConditionModelResponse(
+                content=_string(outcome.payload, "content"),
+                usage=usage_from_document(usage_raw),
+            )
+        message = _string(outcome.payload, "error_type")
+        if outcome.event_type == "known-provider-error":
+            raise ConditionKnownProviderError(message)
+        if outcome.event_type == "known-transport-error-no-provider-acceptance":
+            raise ConditionKnownTransportError(message)
+        if outcome.event_type == "response-known-accounting-incomplete":
+            raise ConditionResponseAccountingIncomplete(message)
+        raise ConditionAmbiguousSend(message)
+
+    def _model_call(self, frame: ConditionBridgeFrame) -> None:
+        call_id = _string(frame.payload, "call_id")
+        logical_call_id = _string(frame.payload, "logical_call_id")
+        validate_condition_call_ids(
+            self.endpoint.binding, self._call_sequence + 1, call_id, logical_call_id
+        )
+        self._call_sequence += 1
+        request_raw = frame.payload.get("request")
+        if not isinstance(request_raw, dict):
+            raise RemoteBridgeError("model admission lacks a typed request")
+        event = ConditionModelCall(
+            call_id=call_id,
+            logical_call_id=logical_call_id,
+            request=provider_request_from_document(request_raw),
+        )
+
+        def admit() -> None:
+            self._write(
+                frame,
+                "model-call-admitted",
+                {"call_id": call_id, "logical_call_id": logical_call_id},
+            )
+
+        try:
+            self.observer.model_call(
+                event,
+                lambda: self._read_model_outcome(call_id),
+                before_send=admit,
+            )
+        except (ProviderBudgetExceeded, AdapterFailure) as exc:
+            # A pre-admission rejection has not emitted an admit frame.
+            if not any(
+                entry.frame.event_id == f"{frame.event_id}.reply" for entry in self.endpoint.entries
+            ):
+                self._write(
+                    frame,
+                    "model-call-rejected",
+                    {"call_id": call_id, "reason": type(exc).__name__},
+                )
+                return
+            self.endpoint.write_event(
+                event_id=f"{frame.event_id}.terminal",
+                event_type="model-call-terminal",
+                payload={"call_id": call_id, "status": "budget-failed-after-send"},
+            )
+        except ConditionKnownProviderError:
+            self.endpoint.write_event(
+                event_id=f"{frame.event_id}.terminal",
+                event_type="model-call-terminal",
+                payload={"call_id": call_id, "status": "known-provider-error"},
+            )
+        except ConditionKnownTransportError:
+            self.endpoint.write_event(
+                event_id=f"{frame.event_id}.terminal",
+                event_type="model-call-terminal",
+                payload={"call_id": call_id, "status": "known-transport-no-acceptance"},
+            )
+        except ConditionResponseAccountingIncomplete:
+            self.endpoint.write_event(
+                event_id=f"{frame.event_id}.terminal",
+                event_type="model-call-terminal",
+                payload={"call_id": call_id, "status": "response-accounting-incomplete"},
+            )
+        except ConditionAmbiguousSend:
+            self.endpoint.write_event(
+                event_id=f"{frame.event_id}.terminal",
+                event_type="model-call-terminal",
+                payload={"call_id": call_id, "status": "ambiguous-send"},
+            )
+        except RemoteBridgeDisconnected:
+            # A lost channel after admission is deliberately not rewritten as zero activity.
+            raise
+        else:
+            self.endpoint.write_event(
+                event_id=f"{frame.event_id}.terminal",
+                event_type="model-call-terminal",
+                payload={"call_id": call_id, "status": "response-reconciled"},
+            )
+
+    def _browser_action(self, frame: ConditionBridgeFrame) -> None:
+        action_id = _string(frame.payload, "action_id")
+
+        def perform() -> None:
+            self._write(frame, "browser-action-admitted", {"action_id": action_id})
+            completed = self.endpoint.read_event(expected={"browser-action-complete"})
+            if _string(completed.payload, "action_id") != action_id:
+                raise RemoteBridgeError("browser reconciliation belongs to another action")
+            if completed.payload.get("completed") is not True:
+                raise RemoteBridgeError("remote browser action did not complete")
+
+        try:
+            self.observer.browser_action(action_id=action_id, perform=perform)
+        except ProviderBudgetExceeded as exc:
+            if not any(
+                entry.frame.event_id == f"{frame.event_id}.reply" for entry in self.endpoint.entries
+            ):
+                self._write(
+                    frame,
+                    "browser-action-rejected",
+                    {"action_id": action_id, "reason": type(exc).__name__},
+                )
+                return
+            raise
+        self.endpoint.write_event(
+            event_id=f"{frame.event_id}.terminal",
+            event_type="browser-action-terminal",
+            payload={"action_id": action_id, "status": "completed"},
+        )
+
+    def _simple_event(self, frame: ConditionBridgeFrame) -> None:
+        if frame.event_type == "output-allowance-request":
+            total = _integer(frame.payload, "total_bytes")
+            try:
+                self.observer.reserve_output_bytes(total_bytes=total)
+            except ProviderBudgetExceeded as exc:
+                self._output_denied = True
+                self._write(
+                    frame,
+                    "output-allowance-rejected",
+                    {"accepted": False, "reason": type(exc).__name__},
+                )
+                return
+            self._write(frame, "output-allowance-granted", {"accepted": True, "total_bytes": total})
+            return
+        if frame.event_type == "output-bytes-update":
+            total = _integer(frame.payload, "total_bytes")
+            retained = (
+                _integer(frame.payload, "retained_output_bytes")
+                if "retained_output_bytes" in frame.payload
+                else 0
+            )
+            try:
+                self.observer.output_bytes(total_bytes=total, retained_output_bytes=retained)
+            except ProviderBudgetExceeded as exc:
+                self._output_denied = True
+                self._write(
+                    frame,
+                    "output-bytes-rejected",
+                    {"accepted": False, "reason": type(exc).__name__},
+                )
+                return
+            reply = "output-bytes-admitted"
+        elif frame.event_type == "process-exit":
+            exit_code = frame.payload.get("exit_code")
+            if type(exit_code) is not int:
+                raise RemoteBridgeError("process exit code is not an integer")
+            self.observer.process_exit(exit_code=exit_code)
+            reply = "process-exit-accepted"
+        elif frame.event_type == "completion":
+            completed = frame.payload.get("completed")
+            answer = frame.payload.get("answer")
+            error = frame.payload.get("error")
+            if (
+                type(completed) is not bool
+                or (answer is not None and not isinstance(answer, str))
+                or not isinstance(error, str)
+            ):
+                raise RemoteBridgeError("completion payload is malformed")
+            self.observer.completion(completed=completed, answer=answer, error=error)
+            reply = "completion-accepted"
+        elif frame.event_type == "raw-artifact-published":
+            manifest_sha = _string(frame.payload, "manifest_sha256")
+            receipt_sha = _string(frame.payload, "receipt_sha256")
+            self.observer.raw_artifact_published(
+                manifest_sha256=manifest_sha,
+                receipt_sha256=receipt_sha,
+            )
+            self._raw_manifest_sha256 = manifest_sha
+            self._raw_receipt_sha256 = receipt_sha
+            reply = "raw-artifact-accepted"
+        elif frame.event_type == "runtime-client-complete":
+            prefix_sequence = _integer(frame.payload, "prefix_sequence")
+            prefix_frame_sha = _string(frame.payload, "prefix_frame_sha256")
+            prefix_chain_sha = _string(frame.payload, "prefix_frame_chain_sha256")
+            prefix_journal_sha = _string(frame.payload, "prefix_journal_sha256")
+            if (
+                set(frame.payload)
+                != {
+                    "host_evidence_pending",
+                    "remote_authoritative_boundary",
+                    "prefix_sequence",
+                    "prefix_frame_sha256",
+                    "prefix_frame_chain_sha256",
+                    "prefix_journal_sha256",
+                }
+                or frame.payload.get("host_evidence_pending") is not True
+                or frame.payload.get("remote_authoritative_boundary") is not False
+                or prefix_sequence != frame.sequence_number - 1
+                or prefix_frame_sha != frame.previous_frame_sha256
+                or prefix_chain_sha != self.endpoint.frame_chain_sha256(exclude_tail=1)
+                or _HEX64.fullmatch(prefix_journal_sha) is None
+            ):
+                raise RemoteBridgeError("runtime detachment contradicts host evidence ownership")
+            reply = "runtime-client-complete-accepted"
+        else:  # pragma: no cover - caller controls the exact dispatch set
+            raise RemoteBridgeError("unsupported simple bridge event")
+        self._write(frame, reply, {"accepted": True})
+        if frame.event_type == "runtime-client-complete":
+            self._remote_terminal_sequence = self.endpoint.next_sequence - 1
+            self._remote_terminal_frame_sha256 = self.endpoint.previous_frame_sha256
+            self._remote_frame_chain_sha256 = self.endpoint.frame_chain_sha256()
+
+    def serve(self) -> ConditionSessionTerminalReceipt:
+        hello = self.endpoint.read_event(expected={"condition-session-hello"})
+        if hello.payload != {
+            "accounting_owner": "shared-condition-event-observer",
+            "remote_authoritative_boundary": False,
+            "zero_retry": True,
+        }:
+            raise RemoteBridgeError("condition session hello contradicts accounting ownership")
+        self._write(hello, "condition-session-accepted", {"accepted": True})
+        while not self._terminal:
+            frame = self.endpoint.read_event()
+            if self._output_denied and frame.event_type in {
+                "model-call-reserve",
+                "browser-action-reserve",
+                "output-allowance-request",
+                "output-bytes-update",
+            }:
+                raise RemoteBridgeError("condition attempted activity after denied output")
+            if frame.event_type == "model-call-reserve":
+                self._model_call(frame)
+            elif frame.event_type == "browser-action-reserve":
+                self._browser_action(frame)
+            elif frame.event_type in {
+                "output-bytes-update",
+                "output-allowance-request",
+                "process-exit",
+                "completion",
+                "raw-artifact-published",
+                "runtime-client-complete",
+            }:
+                self._simple_event(frame)
+            elif frame.event_type == "condition-session-terminal":
+                prior_hash = _string(frame.payload, "prior_frame_sha256")
+                prior_count = _integer(frame.payload, "prior_frame_count")
+                journal_sha = _string(frame.payload, "remote_journal_sha256")
+                journal_file_sha = _string(frame.payload, "remote_journal_file_sha256")
+                journal_bytes = _integer(frame.payload, "remote_journal_bytes")
+                remote_sequence = _integer(frame.payload, "remote_terminal_sequence")
+                remote_frame_sha = _string(frame.payload, "remote_terminal_frame_sha256")
+                remote_chain_sha = _string(frame.payload, "remote_frame_chain_sha256")
+                prior_chain_sha = _string(frame.payload, "prior_frame_chain_sha256")
+                expected_remote_sequence = (
+                    self._remote_terminal_sequence
+                    if self._remote_terminal_sequence is not None
+                    else frame.sequence_number - 1
+                )
+                expected_remote_frame_sha = (
+                    self._remote_terminal_frame_sha256
+                    if self._remote_terminal_frame_sha256 is not None
+                    else frame.previous_frame_sha256
+                )
+                expected_remote_chain_sha = (
+                    self._remote_frame_chain_sha256
+                    if self._remote_frame_chain_sha256 is not None
+                    else self.endpoint.frame_chain_sha256(exclude_tail=1)
+                )
+                if (
+                    prior_hash != frame.previous_frame_sha256
+                    or prior_count != frame.sequence_number - 1
+                    or _HEX64.fullmatch(journal_sha) is None
+                    or _HEX64.fullmatch(journal_file_sha) is None
+                    or not 0 < journal_bytes <= MAX_BRIDGE_TRANSCRIPT_BYTES
+                    or remote_sequence != expected_remote_sequence
+                    or remote_frame_sha != expected_remote_frame_sha
+                    or remote_chain_sha != expected_remote_chain_sha
+                    or prior_chain_sha != self.endpoint.frame_chain_sha256(exclude_tail=1)
+                ):
+                    raise RemoteBridgeError("remote terminal journal identity drifted")
+                self._remote_journal_sha256 = journal_sha
+                self._remote_journal_file_sha256 = journal_file_sha
+                self._remote_journal_bytes = journal_bytes
+                self._remote_terminal_sequence = remote_sequence
+                self._remote_terminal_frame_sha256 = remote_frame_sha
+                self._remote_frame_chain_sha256 = remote_chain_sha
+                self._write(
+                    frame,
+                    "condition-session-terminal-ack",
+                    {
+                        "accepted": True,
+                        "terminal_request_chain_sha256": self.endpoint.frame_chain_sha256(),
+                    },
+                )
+                self._terminal = True
+            else:
+                raise RemoteBridgeError("condition session event is unsupported or out of order")
+        accounting_sha = semantic_sha256(dict(self.accounting_document()))
+        transcript_sha = self.endpoint.frame_chain_sha256()
+        assert self._remote_journal_sha256 is not None
+        assert self._remote_journal_bytes is not None
+        assert self._remote_journal_file_sha256 is not None
+        assert self._remote_terminal_sequence is not None
+        assert self._remote_terminal_frame_sha256 is not None
+        assert self._remote_frame_chain_sha256 is not None
+        assert self._raw_manifest_sha256 is not None
+        assert self._raw_receipt_sha256 is not None
+        receipt_values = {
+            "schema_version": BRIDGE_PROTOCOL_VERSION,
+            "binding": self.endpoint.binding.to_document(),
+            "terminal_sequence": self.endpoint.next_sequence - 1,
+            "terminal_frame_sha256": self.endpoint.previous_frame_sha256,
+            "transcript_sha256": transcript_sha,
+            "shared_accounting_sha256": accounting_sha,
+            "remote_journal_bytes": self._remote_journal_bytes,
+            "remote_journal_file_sha256": self._remote_journal_file_sha256,
+            "remote_journal_sha256": self._remote_journal_sha256,
+            "remote_terminal_sequence": self._remote_terminal_sequence,
+            "remote_terminal_frame_sha256": self._remote_terminal_frame_sha256,
+            "remote_frame_chain_sha256": self._remote_frame_chain_sha256,
+            "raw_manifest_sha256": self._raw_manifest_sha256,
+            "raw_receipt_sha256": self._raw_receipt_sha256,
+            "terminal_acknowledged": True,
+        }
+        return ConditionSessionTerminalReceipt(
+            binding=self.endpoint.binding,
+            terminal_sequence=self.endpoint.next_sequence - 1,
+            terminal_frame_sha256=self.endpoint.previous_frame_sha256,
+            transcript_sha256=transcript_sha,
+            shared_accounting_sha256=accounting_sha,
+            remote_journal_bytes=self._remote_journal_bytes,
+            remote_journal_file_sha256=self._remote_journal_file_sha256,
+            remote_journal_sha256=self._remote_journal_sha256,
+            remote_terminal_sequence=self._remote_terminal_sequence,
+            remote_terminal_frame_sha256=self._remote_terminal_frame_sha256,
+            remote_frame_chain_sha256=self._remote_frame_chain_sha256,
+            raw_manifest_sha256=self._raw_manifest_sha256,
+            raw_receipt_sha256=self._raw_receipt_sha256,
+            terminal_acknowledged=True,
+            receipt_sha256=semantic_sha256(receipt_values),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedConditionBridgeEvidence:
+    """Cross-peer identity of one fully acknowledged duplex condition session."""
+
+    binding: ConditionSessionBinding
+    frame_count: int
+    runtime_prefix_frame_count: int
+    shared_transcript_file_sha256: str
+    shared_transcript_sha256: str
+    shared_frame_chain_sha256: str
+    remote_journal_file_sha256: str
+    remote_journal_sha256: str
+    relay_prefix_file_sha256: str
+    relay_prefix_sha256: str
+    relay_transcript_file_sha256: str
+    relay_transcript_sha256: str
+    runtime_detachment_file_sha256: str
+    host_terminal_receipt_file_sha256: str
+    host_terminal_receipt_sha256: str
+    shared_terminal_receipt_file_sha256: str
+    shared_terminal_receipt_sha256: str
+    evidence_binding_sha256: str
+
+
+def condition_session_id(run_id: str) -> str:
+    """Derive the one stable duplex identity for an immutable condition run."""
+
+    if _SAFE_ID.fullmatch(run_id) is None:
+        raise ValueError("condition run identity is malformed")
+    value = f"SESSION-{run_id}"
+    if _SAFE_ID.fullmatch(value) is None:
+        raise ValueError("derived condition session identity is malformed")
+    return value
+
+
+def expected_condition_bridge_evidence(
+    *,
+    transaction_root: Path,
+    raw_root: Path,
+    run_id: str,
+) -> ConditionBridgeEvidence:
+    """Return the exact shared/host evidence layout for one remote session."""
+
+    root = transaction_root.resolve(strict=True)
+    raw = raw_root.resolve(strict=True)
+    try:
+        raw.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("condition raw root escaped its transaction") from exc
+    attempt_root = raw.parent
+    shared_root = root / "control-private" / "condition-bridges" / run_id
+    return ConditionBridgeEvidence(
+        protocol_version=BRIDGE_PROTOCOL_VERSION,
+        session_id=condition_session_id(run_id),
+        shared_transcript_path=shared_root / "shared-authoritative-transcript.json",
+        remote_journal_path=raw / "duplex-remote-event-journal.json",
+        relay_prefix_path=raw / "duplex-transcript-prefix.json",
+        relay_transcript_path=attempt_root / "duplex-transcript-manifest.json",
+        runtime_detachment_path=raw / "duplex-runtime-detached.json",
+        host_terminal_receipt_path=(attempt_root / "condition-session-terminal-receipt.json"),
+        shared_terminal_receipt_path=shared_root / "shared-terminal-receipt.json",
+    )
+
+
+def retained_failure_bridge_evidence(
+    *, transaction_root: Path, essential_root: Path, run_id: str
+) -> tuple[ConditionBridgeEvidence | None, ConditionBridgePrefixEvidence | None]:
+    """Select the actual failed-session role without downgrading published terminals.
+
+    Essential sealing can precede a successful transport acknowledgement. That
+    remains an unscored failed workload, with a complete bridge if all terminal
+    artifacts exist. Missing/corrupt published terminal evidence must fail its
+    normal full validator; it cannot fall back to a prefix.
+    """
+    full = expected_condition_bridge_evidence(
+        transaction_root=transaction_root, raw_root=essential_root, run_id=run_id
+    )
+    terminals = (
+        full.relay_transcript_path,
+        full.host_terminal_receipt_path,
+        full.shared_terminal_receipt_path,
+    )
+    if any(os.path.lexists(path) for path in terminals):
+        for path in (
+            *terminals,
+            full.shared_transcript_path,
+            full.remote_journal_path,
+            full.relay_prefix_path,
+            full.runtime_detachment_path,
+        ):
+            _read_bounded_bridge_file(path)
+        return full, None
+    return None, ConditionBridgePrefixEvidence(
+        session_id=full.session_id,
+        shared_transcript_path=full.shared_transcript_path,
+        remote_journal_path=full.remote_journal_path,
+        relay_prefix_path=full.relay_prefix_path,
+    )
+
+
+def _read_bounded_bridge_file(path: Path) -> bytes:
+    """Read one current-user evidence file without following its final link."""
+
+    flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as exc:
+        raise RemoteBridgeError("condition bridge evidence is unavailable") from exc
+    try:
+        before = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(before.st_mode)
+            or before.st_uid != os.getuid()
+            or before.st_nlink != 1
+            or stat.S_IMODE(before.st_mode) & 0o022
+            or not 0 < before.st_size <= MAX_BRIDGE_TRANSCRIPT_BYTES
+        ):
+            raise RemoteBridgeError("condition bridge evidence identity is unsafe")
+        chunks: list[bytes] = []
+        remaining = before.st_size
+        while remaining:
+            chunk = os.read(descriptor, min(remaining, 1024 * 1024))
+            if not chunk:
+                raise RemoteBridgeError("condition bridge evidence was truncated")
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        if os.read(descriptor, 1):
+            raise RemoteBridgeError("condition bridge evidence exceeded its admitted size")
+        after = os.fstat(descriptor)
+        if (
+            after.st_dev,
+            after.st_ino,
+            after.st_uid,
+            stat.S_IMODE(after.st_mode),
+            after.st_nlink,
+            after.st_size,
+        ) != (
+            before.st_dev,
+            before.st_ino,
+            before.st_uid,
+            stat.S_IMODE(before.st_mode),
+            before.st_nlink,
+            before.st_size,
+        ):
+            raise RemoteBridgeError("condition bridge evidence changed while held")
+        return b"".join(chunks)
+    finally:
+        os.close(descriptor)
+
+
+def _load_bridge_document(
+    path: Path,
+    *,
+    label: str,
+    reader: Callable[[Path], bytes],
+) -> tuple[dict[str, object], bytes, str]:
+    encoded = reader(path)
+    if not 0 < len(encoded) <= MAX_BRIDGE_TRANSCRIPT_BYTES:
+        raise RemoteBridgeError(f"{label} exceeds its bounded evidence envelope")
+    try:
+        document = strict_json_object(encoded, label=label)
+    except ValueError as exc:
+        raise RemoteBridgeError(str(exc)) from exc
+    return document, encoded, hashlib.sha256(encoded).hexdigest()
+
+
+def _load_bridge_schema(repository: Path, name: str) -> dict[str, object]:
+    path = repository / "schemas" / name
+    try:
+        return strict_json_object(path.read_bytes(), label=f"{name} schema")
+    except (OSError, ValueError) as exc:
+        raise RemoteBridgeError(f"{name} schema is unavailable or malformed") from exc
+
+
+def _validate_schema(
+    repository: Path,
+    name: str,
+    document: Mapping[str, object],
+    *,
+    label: str,
+) -> None:
+    schema = _load_bridge_schema(repository, name)
+    errors = sorted(
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).iter_errors(document),
+        key=lambda error: tuple(str(item) for item in error.absolute_path),
+    )
+    if errors:
+        raise RemoteBridgeError(f"{label} failed its exact schema: {errors[0].message}")
+
+
+def _frame_chain_identity(
+    binding: ConditionSessionBinding,
+    frames: list[dict[str, object]],
+) -> str:
+    return semantic_sha256(
+        {
+            "schema_version": BRIDGE_PROTOCOL_VERSION,
+            "binding": binding.to_document(),
+            "frame_count": len(frames),
+            "frames": frames,
+        }
+    )
+
+
+def _remote_prefix_document(
+    binding: ConditionSessionBinding,
+    entries: list[dict[str, object]],
+) -> dict[str, object]:
+    frames: list[dict[str, object]] = []
+    for entry in entries:
+        direction = cast(str, entry["direction"])
+        frames.append(
+            {
+                "direction": "sent" if direction == "received" else "received",
+                "frame": entry["frame"],
+            }
+        )
+    frame_documents = [cast(dict[str, object], entry["frame"]) for entry in frames]
+    document: dict[str, object] = {
+        "schema_version": BRIDGE_PROTOCOL_VERSION,
+        "side": "remote-mirror",
+        "binding": binding.to_document(),
+        "frame_count": len(frames),
+        "terminal_sequence": len(frames),
+        "terminal_frame_sha256": cast(dict[str, object], frames[-1]["frame"])["frame_sha256"],
+        "frame_chain_sha256": _frame_chain_identity(binding, frame_documents),
+        "frames": frames,
+    }
+    document["transcript_sha256"] = semantic_sha256(document)
+    return document
+
+
+def _validate_transcript_document(
+    repository: Path,
+    document: Mapping[str, object],
+    *,
+    expected_side: str,
+    expected_binding: ConditionSessionBinding,
+    terminal_acknowledged: bool | None,
+    allow_interrupted_runtime: bool = False,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    _validate_schema(
+        repository,
+        "t09-condition-duplex-transcript.schema.json",
+        document,
+        label=f"{expected_side} condition transcript",
+    )
+    common = {
+        "schema_version",
+        "side",
+        "binding",
+        "frame_count",
+        "terminal_sequence",
+        "terminal_frame_sha256",
+        "frame_chain_sha256",
+        "frames",
+        "transcript_sha256",
+    }
+    relay_only = {
+        "authoritative_accounting",
+        "admission_decisions_synthesized",
+        "runtime_detached",
+        "terminal_acknowledged",
+    }
+    expected_fields = common | relay_only if expected_side == "host-transparent-relay" else common
+    if (
+        set(document) != expected_fields
+        or document.get("schema_version") != BRIDGE_PROTOCOL_VERSION
+        or document.get("side") != expected_side
+        or document.get("binding") != expected_binding.to_document()
+    ):
+        raise RemoteBridgeError(f"{expected_side} condition transcript identity drifted")
+    if expected_side == "host-transparent-relay" and (
+        document.get("authoritative_accounting") is not False
+        or document.get("admission_decisions_synthesized") != 0
+        or (document.get("runtime_detached") is not True and not allow_interrupted_runtime)
+        or document.get("terminal_acknowledged") is not terminal_acknowledged
+    ):
+        raise RemoteBridgeError("host relay claimed policy, admission, or the wrong phase")
+    raw_entries = document.get("frames")
+    if not isinstance(raw_entries, list) or not raw_entries:
+        raise RemoteBridgeError("condition transcript has no retained frames")
+    entries = cast(list[dict[str, object]], raw_entries)
+    frame_documents: list[dict[str, object]] = []
+    prior = _ZERO_HASH
+    event_ids: set[str] = set()
+    for index, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict) or set(entry) != {"direction", "frame"}:
+            raise RemoteBridgeError("condition transcript frame envelope is malformed")
+        raw_frame = entry.get("frame")
+        if not isinstance(raw_frame, dict):
+            raise RemoteBridgeError("condition transcript frame is malformed")
+        frame = ConditionBridgeFrame.from_document(raw_frame)
+        if (
+            frame.sequence_number != index
+            or frame.previous_frame_sha256 != prior
+            or frame.event_id in event_ids
+        ):
+            raise RemoteBridgeReplay("condition transcript sequence, chain, or event replayed")
+        frame_binding = {
+            "session_id": frame.session_id,
+            "provider_contract_version": frame.provider_contract_version,
+            "plan_id": frame.plan_id,
+            "host_run_id": frame.host_run_id,
+            "condition_run_id": frame.condition_run_id,
+            "evaluator_run_id": frame.evaluator_run_id,
+            "frozen_manifest_sha256": frame.frozen_manifest_sha256,
+        }
+        if frame_binding != expected_binding.to_document():
+            raise RemoteBridgeError("condition transcript contains a cross-session frame")
+        remote_event = frame.event_type in CanonicalFrameRelay._REMOTE_EVENTS
+        shared_event = frame.event_type in CanonicalFrameRelay._SHARED_EVENTS
+        direction = entry.get("direction")
+        expected_direction = {
+            "shared-authoritative": "received" if remote_event else "sent",
+            "remote-mirror": "sent" if remote_event else "received",
+            "host-transparent-relay": ("remote-to-shared" if remote_event else "shared-to-remote"),
+        }[expected_side]
+        if remote_event == shared_event or direction != expected_direction:
+            raise RemoteBridgeError("condition transcript reverses an authority direction")
+        event_ids.add(frame.event_id)
+        prior = frame.frame_sha256
+        frame_documents.append(frame.to_document())
+    unsigned = dict(document)
+    transcript_sha = unsigned.pop("transcript_sha256", None)
+    if (
+        document.get("frame_count") != len(entries)
+        or document.get("terminal_sequence") != len(entries)
+        or document.get("terminal_frame_sha256") != prior
+        or document.get("frame_chain_sha256")
+        != _frame_chain_identity(expected_binding, frame_documents)
+        or transcript_sha != semantic_sha256(unsigned)
+    ):
+        raise RemoteBridgeError("condition transcript aggregate identity drifted")
+    return entries, frame_documents
+
+
+def _require_reply(
+    frames: list[ConditionBridgeFrame],
+    index: int,
+    request: ConditionBridgeFrame,
+    expected_type: str,
+) -> ConditionBridgeFrame:
+    if index >= len(frames):
+        raise RemoteBridgeError("condition transcript ended before an admission response")
+    response = frames[index]
+    if response.event_type != expected_type or response.event_id != f"{request.event_id}.reply":
+        raise RemoteBridgeError("condition transcript response does not bind its request")
+    return response
+
+
+def _validate_runtime_session_order(
+    entries: list[dict[str, object]],
+    *,
+    binding: ConditionSessionBinding,
+) -> tuple[list[ConditionBridgeFrame], int, bool, int | None, int]:
+    frames = [
+        ConditionBridgeFrame.from_document(cast(dict[str, object], entry["frame"]))
+        for entry in entries
+    ]
+    if len(frames) < 4:
+        raise RemoteBridgeError("condition runtime transcript is too small")
+    hello, accepted = frames[:2]
+    if (
+        hello.event_type != "condition-session-hello"
+        or hello.payload
+        != {
+            "accounting_owner": "shared-condition-event-observer",
+            "remote_authoritative_boundary": False,
+            "zero_retry": True,
+        }
+        or accepted.event_type != "condition-session-accepted"
+        or accepted.event_id != f"{hello.event_id}.reply"
+        or accepted.payload != {"accepted": True}
+    ):
+        raise RemoteBridgeError("condition session handshake contradicts sole accounting")
+    call_ids: set[str] = set()
+    logical_ids: set[str] = set()
+    action_ids: set[str] = set()
+    index = 2
+    detach_index = -1
+    output_denied = False
+    output_allowance: int | None = None
+    output_observed = 0
+    while index < len(frames):
+        frame = frames[index]
+        if output_denied and frame.event_type != "runtime-client-complete":
+            raise RemoteBridgeError("runtime continued activity after denied output")
+        if frame.event_type == "model-call-reserve":
+            call_id = _string(frame.payload, "call_id")
+            logical_id = _string(frame.payload, "logical_call_id")
+            request = frame.payload.get("request")
+            if call_id in call_ids or logical_id in logical_ids or not isinstance(request, dict):
+                raise RemoteBridgeReplay("condition model identity was replayed")
+            validate_condition_call_ids(binding, len(call_ids) + 1, call_id, logical_id)
+            provider_request_from_document(request)
+            if index + 4 >= len(frames):
+                raise RemoteBridgeError("model admission transcript is incomplete")
+            admitted = _require_reply(frames, index + 1, frame, "model-call-admitted")
+            if admitted.payload != {"call_id": call_id, "logical_call_id": logical_id}:
+                raise RemoteBridgeError("model admission response identity drifted")
+            started = frames[index + 2]
+            outcome = frames[index + 3]
+            terminal = frames[index + 4]
+            allowed_outcomes = {
+                "model-response",
+                "known-provider-error",
+                "known-transport-error-no-provider-acceptance",
+                "ambiguous-send",
+                "response-known-accounting-incomplete",
+            }
+            if (
+                started.event_type != "model-send-start"
+                or started.payload != {"call_id": call_id}
+                or outcome.event_type not in allowed_outcomes
+                or outcome.payload.get("call_id") != call_id
+                or terminal.event_type != "model-call-terminal"
+                or terminal.event_id != f"{frame.event_id}.terminal"
+                or terminal.payload.get("call_id") != call_id
+            ):
+                raise RemoteBridgeError("model effect did not follow exact shared admission")
+            if outcome.event_type == "model-response":
+                usage = outcome.payload.get("usage")
+                if not isinstance(usage, dict):
+                    raise RemoteBridgeError("model response lacks typed usage")
+                usage_from_document(usage)
+            call_ids.add(call_id)
+            logical_ids.add(logical_id)
+            index += 5
+            continue
+        if frame.event_type == "browser-action-reserve":
+            action_id = _string(frame.payload, "action_id")
+            if action_id in action_ids:
+                raise RemoteBridgeReplay("condition browser identity was replayed")
+            if index + 3 >= len(frames):
+                raise RemoteBridgeError("browser admission transcript is incomplete")
+            admitted = _require_reply(frames, index + 1, frame, "browser-action-admitted")
+            completed = frames[index + 2]
+            terminal = frames[index + 3]
+            if (
+                admitted.payload != {"action_id": action_id}
+                or completed.event_type != "browser-action-complete"
+                or completed.payload != {"action_id": action_id, "completed": True}
+                or terminal.event_type != "browser-action-terminal"
+                or terminal.event_id != f"{frame.event_id}.terminal"
+                or terminal.payload != {"action_id": action_id, "status": "completed"}
+            ):
+                raise RemoteBridgeError("browser effect did not follow exact shared admission")
+            action_ids.add(action_id)
+            index += 4
+            continue
+        if frame.event_type in {"output-allowance-request", "output-bytes-update"}:
+            total = _integer(frame.payload, "total_bytes")
+            allowance = frame.event_type == "output-allowance-request"
+            retained = (
+                _integer(frame.payload, "retained_output_bytes")
+                if "retained_output_bytes" in frame.payload
+                else 0
+            )
+            allowed_fields = {"total_bytes"}
+            if not allowance:
+                allowed_fields.add("retained_output_bytes")
+            if not set(frame.payload).issubset(allowed_fields):
+                raise RemoteBridgeError("output request has unbound fields")
+            granted_type = "output-allowance-granted" if allowance else "output-bytes-admitted"
+            rejected_type = "output-allowance-rejected" if allowance else "output-bytes-rejected"
+            if index + 1 >= len(frames):
+                raise RemoteBridgeError("output request lacks its shared response")
+            response_type = frames[index + 1].event_type
+            if response_type not in {granted_type, rejected_type}:
+                raise RemoteBridgeError("output request has an unrelated shared response")
+            response = _require_reply(frames, index + 1, frame, response_type)
+            if response_type == rejected_type:
+                if response.payload != {"accepted": False, "reason": "ProviderBudgetExceeded"}:
+                    raise RemoteBridgeError("output denial has an invalid shared classification")
+                output_denied = True
+            elif response.payload != (
+                {"accepted": True, "total_bytes": total} if allowance else {"accepted": True}
+            ):
+                raise RemoteBridgeError("output request lacks exact shared admission")
+            else:
+                if allowance:
+                    if total < max(output_observed, output_allowance or 0):
+                        raise RemoteBridgeError("shared output allocation moved backward")
+                    output_allowance = total
+                else:
+                    if (
+                        total < output_observed
+                        or (output_allowance is None and retained != 0)
+                        or (output_allowance is not None and total + retained > output_allowance)
+                    ):
+                        raise RemoteBridgeError(
+                            "shared output observation consumed retained capacity"
+                        )
+                    output_observed = total
+            index += 2
+            continue
+        if frame.event_type == "runtime-client-complete":
+            response = _require_reply(
+                frames,
+                index + 1,
+                frame,
+                "runtime-client-complete-accepted",
+            )
+            preceding = frames[:index]
+            preceding_documents = [item.to_document() for item in preceding]
+            remote_prefix = _remote_prefix_document(binding, entries[:index])
+            if frame.payload != {
+                "host_evidence_pending": True,
+                "remote_authoritative_boundary": False,
+                "prefix_sequence": index,
+                "prefix_frame_sha256": preceding[-1].frame_sha256,
+                "prefix_frame_chain_sha256": _frame_chain_identity(
+                    binding,
+                    preceding_documents,
+                ),
+                "prefix_journal_sha256": remote_prefix["transcript_sha256"],
+            } or response.payload != {"accepted": True}:
+                raise RemoteBridgeError("runtime detachment prefix identity drifted")
+            detach_index = index + 1
+            index += 2
+            break
+        raise RemoteBridgeError("runtime transcript contains an unadmitted effect or phase")
+    if detach_index < 0:
+        raise RemoteBridgeError("condition session lacks runtime detachment")
+    return frames, index, output_denied, output_allowance, output_observed
+
+
+def _validate_complete_session_order(
+    entries: list[dict[str, object]],
+    *,
+    binding: ConditionSessionBinding,
+    raw_manifest_sha256: str,
+    raw_receipt_sha256: str,
+) -> int:
+    frames, index, output_denied, output_allowance, output_observed = (
+        _validate_runtime_session_order(entries, binding=binding)
+    )
+    detach_index = index - 1
+    expected_tail = (
+        "process-exit",
+        "process-exit-accepted",
+        "completion",
+        "completion-accepted",
+        "raw-artifact-published",
+        "raw-artifact-accepted",
+        "condition-session-terminal",
+        "condition-session-terminal-ack",
+    )
+    # After runtime detachment only the retained host may reserve publication
+    # capacity. Preserve the exact terminal ordering below; these pairs do not
+    # permit another runtime/model/browser operation or erase an output denial.
+    while index < len(frames) and frames[index].event_type == "output-allowance-request":
+        request = frames[index]
+        total = _integer(request.payload, "total_bytes")
+        reply = _require_reply(frames, index + 1, request, "output-allowance-granted")
+        if (
+            output_denied
+            or request.event_id != f"host.output.{request.sequence_number}"
+            or set(request.payload) != {"total_bytes"}
+            or total <= max(output_observed, output_allowance or 0)
+            or reply.payload != {"accepted": True, "total_bytes": total}
+        ):
+            raise RemoteBridgeError("host publication lacks exact post-detach admission")
+        output_allowance = total
+        index += 2
+    tail = frames[index:]
+    if tuple(frame.event_type for frame in tail) != expected_tail:
+        raise RemoteBridgeError("host-derived terminal evidence is incomplete or reordered")
+    for request_index in (0, 2, 4, 6):
+        request = tail[request_index]
+        response = tail[request_index + 1]
+        if response.event_id != f"{request.event_id}.reply":
+            raise RemoteBridgeError("host terminal response does not bind its request")
+    if output_denied and tail[0].payload.get("exit_code") == 0:
+        raise RemoteBridgeError("denied output cannot become a successful process")
+    raw = tail[4]
+    if raw.payload != {
+        "manifest_sha256": raw_manifest_sha256,
+        "receipt_sha256": raw_receipt_sha256,
+    }:
+        raise RemoteBridgeError("duplex transcript does not bind accepted raw evidence")
+    terminal = tail[6]
+    terminal_ack = tail[7]
+    preceding_terminal = frames[: len(frames) - 2]
+    if (
+        terminal.payload.get("prior_frame_sha256") != preceding_terminal[-1].frame_sha256
+        or terminal.payload.get("prior_frame_count") != len(preceding_terminal)
+        or terminal.payload.get("prior_frame_chain_sha256")
+        != _frame_chain_identity(
+            binding,
+            [item.to_document() for item in preceding_terminal],
+        )
+        or terminal_ack.payload
+        != {
+            "accepted": True,
+            "terminal_request_chain_sha256": _frame_chain_identity(
+                binding,
+                [item.to_document() for item in frames[:-1]],
+            ),
+        }
+    ):
+        raise RemoteBridgeError("condition terminal hash chain or acknowledgement drifted")
+    return detach_index + 1
+
+
+def remote_lifecycle_projection(
+    repository: Path,
+    journal: Mapping[str, object],
+    mirror: Mapping[str, object],
+    *,
+    expected_binding: ConditionSessionBinding,
+) -> dict[str, object]:
+    """Derive call facts from the sealed runtime prefix, without minting authority."""
+    entries, _ = _validate_transcript_document(
+        repository,
+        journal,
+        expected_side="remote-mirror",
+        expected_binding=expected_binding,
+        terminal_acknowledged=None,
+    )
+    # Order validation consumes shared-side envelopes. Frames remain exact;
+    # only the observer perspective of the already checked directions changes.
+    shared_entries = [
+        {"direction": "received" if e["direction"] == "sent" else "sent", "frame": e["frame"]}
+        for e in entries
+    ]
+    frames, end, _denied, _allowance, observed = _validate_runtime_session_order(
+        shared_entries, binding=expected_binding
+    )
+    if end != len(frames):
+        raise RemoteBridgeError("remote lifecycle journal extends past runtime detachment")
+    if (
+        set(mirror)
+        != {
+            "schema_version",
+            "authoritative",
+            "accounting_owner",
+            "unreconciled_provider_attempts",
+            "condition_usage_mirror",
+            "calls",
+        }
+        or mirror.get("schema_version") != "remote-mirror-1.0.0"
+        or mirror.get("authoritative") is not False
+        or mirror.get("accounting_owner") != "shared-condition-event-observer"
+        or mirror.get("unreconciled_provider_attempts") != 0
+    ):
+        raise RemoteBridgeError("remote lifecycle mirror has unresolved or conflicting authority")
+    calls: list[dict[str, object]] = []
+    expected_calls: dict[str, object] = {}
+    unknown = 0
+    for index, frame in enumerate(frames):
+        if frame.event_type != "model-call-reserve":
+            continue
+        call_id = _string(frame.payload, "call_id")
+        outcome, terminal = frames[index + 3 : index + 5]
+        statuses = {
+            "model-response": ("response-reconciled", "sent_response_reconciled"),
+            "known-provider-error": ("known-provider-error", "known-provider-error"),
+            "known-transport-error-no-provider-acceptance": (
+                "known-transport-no-acceptance",
+                "known-transport-no-acceptance",
+            ),
+            "response-known-accounting-incomplete": (
+                "response-accounting-incomplete",
+                "response-accounting-incomplete",
+            ),
+            "ambiguous-send": ("ambiguous-send", "ambiguous-send"),
+        }
+        reply_state, mirror_state = statuses[outcome.event_type]
+        if terminal.payload != {"call_id": call_id, "status": reply_state}:
+            raise RemoteBridgeError("remote lifecycle terminal status differs from its outcome")
+        actual_usage = (
+            outcome.payload.get("usage") if outcome.event_type == "model-response" else None
+        )
+        expected_calls[call_id] = {"terminal_state": mirror_state, "actual_usage": actual_usage}
+        unknown += mirror_state in {"ambiguous-send", "response-accounting-incomplete"}
+        calls.append(
+            {
+                "call_id": call_id,
+                "logical_call_id": frame.payload["logical_call_id"],
+                "history": ["admitted", "send_started", mirror_state],
+                "terminal_state": mirror_state,
+                "actual_usage": actual_usage,
+                "source_sequences": [item.sequence_number for item in frames[index : index + 5]],
+            }
+        )
+    usage = mirror.get("condition_usage_mirror")
+    if mirror.get("calls") != expected_calls or not isinstance(usage, dict):
+        raise RemoteBridgeError("remote lifecycle mirror differs from its admission journal")
+    if usage.get("model_call_attempts") != len(calls) or usage.get("output_bytes") != observed:
+        raise RemoteBridgeError("remote lifecycle usage differs from its admitted prefix")
+    return {
+        "schema_version": "remote-lifecycle-projection-1.0.0",
+        "authoritative": False,
+        "accounting_owner": "shared-condition-event-observer",
+        "binding": expected_binding.to_document(),
+        "journal_semantic_sha256": semantic_sha256(journal),
+        "mirror_semantic_sha256": semantic_sha256(mirror),
+        "calls": calls,
+        "unknown_outcomes": unknown,
+    }
+
+
+def validate_condition_bridge_prefix(
+    repository: Path,
+    evidence: ConditionBridgePrefixEvidence,
+    *,
+    expected_binding: ConditionSessionBinding,
+    shared_accounting: Mapping[str, object],
+    reader: Callable[[Path], bytes],
+) -> str:
+    """Bind observed prefixes for an unscored failure without inventing a terminal.
+
+    The runtime may die after the shared reply but before persisting its mirror.
+    Require exact prefix relationships; do not append those missing frames to it.
+    The existing authoritative accountant retains possible-send reservations.
+    """
+    if evidence.session_id != expected_binding.session_id:
+        raise RemoteBridgeError("interrupted bridge belongs to another session")
+    paths = (
+        evidence.shared_transcript_path,
+        evidence.remote_journal_path,
+        evidence.relay_prefix_path,
+    )
+    if len(set(paths)) != 3:
+        raise RemoteBridgeError("interrupted bridge roles alias")
+    frames = []
+    hashes = []
+    for path, side in zip(
+        paths, ("shared-authoritative", "remote-mirror", "host-transparent-relay"), strict=True
+    ):
+        document, _encoded, digest = _load_bridge_document(path, label=side, reader=reader)
+        _entries, selected = _validate_transcript_document(
+            repository,
+            document,
+            expected_side=side,
+            expected_binding=expected_binding,
+            terminal_acknowledged=False if side == "host-transparent-relay" else None,
+            allow_interrupted_runtime=True,
+        )
+        if document.get("terminal_acknowledged") is True:
+            raise RemoteBridgeError("completed bridge cannot select interrupted evidence")
+        frames.append(selected)
+        hashes.append(digest)
+    shared, remote, relay = frames
+    if any(frame["event_type"] == "condition-session-terminal-ack" for frame in shared):
+        raise RemoteBridgeError("fully acknowledged condition selected interrupted evidence")
+    if not remote or not relay or remote != shared[: len(remote)] or relay != shared[: len(relay)]:
+        raise RemoteBridgeError("interrupted bridge prefixes diverge")
+    if len(remote) > len(shared) or len(relay) > len(shared):
+        raise RemoteBridgeError("interrupted bridge exceeds its shared source")
+    requests = [f for f in shared if f["event_type"] == "model-call-reserve"]
+    calls = shared_accounting.get("calls")
+    if not isinstance(calls, list):
+        raise RemoteBridgeError("interrupted bridge lacks authoritative accounting")
+    # Request frames precede admission; a rejected request need not mint a call.
+    requested = {str(cast(Mapping[str, object], f["payload"]).get("call_id")): f for f in requests}
+    if len(requested) != len(requests):
+        raise RemoteBridgeError("interrupted bridge repeats a call identity")
+    for call in calls:
+        if not isinstance(call, dict) or call.get("call_id") not in requested:
+            raise RemoteBridgeError("interrupted accounting call lacks its actual request")
+        frame = requested[str(call["call_id"])]
+        if call.get("logical_call_id") != cast(Mapping[str, object], frame["payload"]).get(
+            "logical_call_id"
+        ):
+            raise RemoteBridgeError("interrupted logical call differs from its request")
+    return semantic_sha256(
+        {
+            "classification": "interrupted-bridge-prefix-unscored",
+            "binding": expected_binding.to_document(),
+            "source_file_sha256s": hashes,
+            "frame_counts": [len(value) for value in frames],
+            "shared_accounting_sha256": semantic_sha256(dict(shared_accounting)),
+            "terminal_completion_claimed": False,
+        }
+    )
+
+
+def validate_condition_bridge_evidence(
+    repository: Path,
+    evidence: ConditionBridgeEvidence,
+    *,
+    expected_binding: ConditionSessionBinding,
+    raw_manifest_sha256: str,
+    raw_receipt_sha256: str,
+    shared_accounting: Mapping[str, object],
+    reader: Callable[[Path], bytes] | None = None,
+) -> ValidatedConditionBridgeEvidence:
+    """Validate and cross-bind every side of one completed remote condition stream."""
+
+    if (
+        evidence.protocol_version != BRIDGE_PROTOCOL_VERSION
+        or evidence.session_id != expected_binding.session_id
+        or _HEX64.fullmatch(raw_manifest_sha256) is None
+        or _HEX64.fullmatch(raw_receipt_sha256) is None
+    ):
+        raise RemoteBridgeError("condition bridge evidence selector is malformed")
+    paths = {
+        "shared transcript": evidence.shared_transcript_path,
+        "remote journal": evidence.remote_journal_path,
+        "relay prefix": evidence.relay_prefix_path,
+        "relay transcript": evidence.relay_transcript_path,
+        "runtime detachment": evidence.runtime_detachment_path,
+        "host terminal receipt": evidence.host_terminal_receipt_path,
+        "shared terminal receipt": evidence.shared_terminal_receipt_path,
+    }
+    if len(set(paths.values())) != len(paths):
+        raise RemoteBridgeError("condition bridge evidence roles reuse one path")
+    selected_reader = reader or _read_bounded_bridge_file
+    documents: dict[str, dict[str, object]] = {}
+    encoded: dict[str, bytes] = {}
+    file_hashes: dict[str, str] = {}
+    for label, path in paths.items():
+        document, data, digest = _load_bridge_document(
+            path,
+            label=label,
+            reader=selected_reader,
+        )
+        documents[label] = document
+        encoded[label] = data
+        file_hashes[label] = digest
+
+    shared_entries, shared_frames = _validate_transcript_document(
+        repository,
+        documents["shared transcript"],
+        expected_side="shared-authoritative",
+        expected_binding=expected_binding,
+        terminal_acknowledged=None,
+    )
+    remote_entries, remote_frames = _validate_transcript_document(
+        repository,
+        documents["remote journal"],
+        expected_side="remote-mirror",
+        expected_binding=expected_binding,
+        terminal_acknowledged=None,
+    )
+    prefix_entries, prefix_frames = _validate_transcript_document(
+        repository,
+        documents["relay prefix"],
+        expected_side="host-transparent-relay",
+        expected_binding=expected_binding,
+        terminal_acknowledged=False,
+    )
+    relay_entries, relay_frames = _validate_transcript_document(
+        repository,
+        documents["relay transcript"],
+        expected_side="host-transparent-relay",
+        expected_binding=expected_binding,
+        terminal_acknowledged=True,
+    )
+    runtime_prefix_count = _validate_complete_session_order(
+        shared_entries,
+        binding=expected_binding,
+        raw_manifest_sha256=raw_manifest_sha256,
+        raw_receipt_sha256=raw_receipt_sha256,
+    )
+    if (
+        relay_frames != shared_frames
+        or remote_frames != shared_frames[:runtime_prefix_count]
+        or prefix_frames != shared_frames[:runtime_prefix_count]
+        or relay_entries[:runtime_prefix_count] != prefix_entries
+        or [entry["frame"] for entry in remote_entries]
+        != [entry["frame"] for entry in prefix_entries]
+    ):
+        raise RemoteBridgeError("shared, remote, and relay transcript frames diverged")
+
+    detachment = documents["runtime detachment"]
+    _validate_schema(
+        repository,
+        "t09-condition-runtime-detachment.schema.json",
+        detachment,
+        label="runtime detachment",
+    )
+    remote = documents["remote journal"]
+    if (
+        detachment.get("terminal_sequence") != remote.get("terminal_sequence")
+        or detachment.get("terminal_frame_sha256") != remote.get("terminal_frame_sha256")
+        or detachment.get("frame_chain_sha256") != remote.get("frame_chain_sha256")
+        or detachment.get("remote_journal_bytes") != len(encoded["remote journal"])
+        or detachment.get("remote_journal_file_sha256") != file_hashes["remote journal"]
+        or detachment.get("remote_journal_sha256") != remote.get("transcript_sha256")
+    ):
+        raise RemoteBridgeError("runtime detachment does not bind its remote journal")
+
+    shared_terminal = documents["shared terminal receipt"]
+    host_terminal = documents["host terminal receipt"]
+    _validate_schema(
+        repository,
+        "t09-condition-session-terminal-receipt.schema.json",
+        shared_terminal,
+        label="shared condition terminal receipt",
+    )
+    _validate_schema(
+        repository,
+        "t09-condition-host-terminal-receipt.schema.json",
+        host_terminal,
+        label="host condition terminal receipt",
+    )
+    shared_unsigned = dict(shared_terminal)
+    shared_receipt_sha = shared_unsigned.pop("receipt_sha256", None)
+    host_unsigned = dict(host_terminal)
+    host_receipt_sha = host_unsigned.pop("receipt_sha256", None)
+    shared_transcript = documents["shared transcript"]
+    relay_transcript = documents["relay transcript"]
+    relay_prefix = documents["relay prefix"]
+    if (
+        shared_receipt_sha != semantic_sha256(shared_unsigned)
+        or host_receipt_sha != semantic_sha256(host_unsigned)
+        or shared_terminal.get("binding") != expected_binding.to_document()
+        or host_terminal.get("binding") != expected_binding.to_document()
+        or shared_terminal.get("terminal_sequence") != shared_transcript.get("terminal_sequence")
+        or shared_terminal.get("terminal_frame_sha256")
+        != shared_transcript.get("terminal_frame_sha256")
+        or shared_terminal.get("transcript_sha256") != shared_transcript.get("frame_chain_sha256")
+        or shared_terminal.get("shared_accounting_sha256")
+        != semantic_sha256(dict(shared_accounting))
+        or shared_terminal.get("remote_journal_bytes") != len(encoded["remote journal"])
+        or shared_terminal.get("remote_journal_file_sha256") != file_hashes["remote journal"]
+        or shared_terminal.get("remote_journal_sha256") != remote.get("transcript_sha256")
+        or shared_terminal.get("remote_terminal_sequence") != remote.get("terminal_sequence")
+        or shared_terminal.get("remote_terminal_frame_sha256")
+        != remote.get("terminal_frame_sha256")
+        or shared_terminal.get("remote_frame_chain_sha256") != remote.get("frame_chain_sha256")
+        or shared_terminal.get("raw_manifest_sha256") != raw_manifest_sha256
+        or shared_terminal.get("raw_receipt_sha256") != raw_receipt_sha256
+        or shared_terminal.get("terminal_acknowledged") is not True
+        or host_terminal.get("runtime_prefix_transcript_sha256")
+        != relay_prefix.get("transcript_sha256")
+        or host_terminal.get("remote_event_journal_file_sha256") != file_hashes["remote journal"]
+        or host_terminal.get("remote_event_journal_semantic_sha256")
+        != remote.get("transcript_sha256")
+        or host_terminal.get("relay_transcript_sha256") != relay_transcript.get("transcript_sha256")
+        or host_terminal.get("terminal_sequence") != relay_transcript.get("terminal_sequence")
+        or host_terminal.get("terminal_frame_sha256")
+        != relay_transcript.get("terminal_frame_sha256")
+        or host_terminal.get("raw_manifest_sha256") != raw_manifest_sha256
+        or host_terminal.get("raw_receipt_sha256") != raw_receipt_sha256
+        or host_terminal.get("shared_accounting_owner") != "ConditionEventObserver"
+        or host_terminal.get("remote_authoritative_boundary") is not False
+        or host_terminal.get("terminal_acknowledged") is not True
+    ):
+        raise RemoteBridgeError("condition bridge terminal evidence is not cross-bound")
+    binding_document = {
+        "protocol_version": BRIDGE_PROTOCOL_VERSION,
+        "binding": expected_binding.to_document(),
+        "frame_count": len(shared_frames),
+        "runtime_prefix_frame_count": runtime_prefix_count,
+        "shared_transcript_file_sha256": file_hashes["shared transcript"],
+        "shared_transcript_sha256": shared_transcript["transcript_sha256"],
+        "shared_frame_chain_sha256": shared_transcript["frame_chain_sha256"],
+        "remote_journal_file_sha256": file_hashes["remote journal"],
+        "remote_journal_sha256": remote["transcript_sha256"],
+        "relay_prefix_file_sha256": file_hashes["relay prefix"],
+        "relay_prefix_sha256": relay_prefix["transcript_sha256"],
+        "relay_transcript_file_sha256": file_hashes["relay transcript"],
+        "relay_transcript_sha256": relay_transcript["transcript_sha256"],
+        "runtime_detachment_file_sha256": file_hashes["runtime detachment"],
+        "host_terminal_receipt_file_sha256": file_hashes["host terminal receipt"],
+        "host_terminal_receipt_sha256": host_receipt_sha,
+        "shared_terminal_receipt_file_sha256": file_hashes["shared terminal receipt"],
+        "shared_terminal_receipt_sha256": shared_receipt_sha,
+    }
+    return ValidatedConditionBridgeEvidence(
+        binding=expected_binding,
+        frame_count=len(shared_frames),
+        runtime_prefix_frame_count=runtime_prefix_count,
+        shared_transcript_file_sha256=file_hashes["shared transcript"],
+        shared_transcript_sha256=cast(str, shared_transcript["transcript_sha256"]),
+        shared_frame_chain_sha256=cast(str, shared_transcript["frame_chain_sha256"]),
+        remote_journal_file_sha256=file_hashes["remote journal"],
+        remote_journal_sha256=cast(str, remote["transcript_sha256"]),
+        relay_prefix_file_sha256=file_hashes["relay prefix"],
+        relay_prefix_sha256=cast(str, relay_prefix["transcript_sha256"]),
+        relay_transcript_file_sha256=file_hashes["relay transcript"],
+        relay_transcript_sha256=cast(str, relay_transcript["transcript_sha256"]),
+        runtime_detachment_file_sha256=file_hashes["runtime detachment"],
+        host_terminal_receipt_file_sha256=file_hashes["host terminal receipt"],
+        host_terminal_receipt_sha256=host_receipt_sha,
+        shared_terminal_receipt_file_sha256=file_hashes["shared terminal receipt"],
+        shared_terminal_receipt_sha256=shared_receipt_sha,
+        evidence_binding_sha256=semantic_sha256(binding_document),
+    )
+
+
+_RETAINED_REQUIRED_MANIFEST_FIELDS: Final = frozenset(
+    {
+        "schema_version",
+        "manifest_id",
+        "plan_id",
+        "host_run_id",
+        "qualification_id",
+        "qualification_count",
+        "build_count",
+        "image_materialization_policy",
+        "source_contract_sha256",
+        "clean_package_commit",
+        "plan_sha256",
+        "execution_contract_sha256",
+        "runtime_contract_sha256",
+        "command_manifests_sha256",
+        "provider_entry_receipt_sha256",
+        "owned_instance_identity_sha256",
+        "provider_preflight_started_at_epoch",
+        "owned_lambda_started_at_epoch",
+        "first_pair_started_at_epoch",
+        "launch_slot",
+        "launch_count",
+        "replacement_image_id",
+        "python_interpreter_path",
+        "python_interpreter_sha256",
+        "runtime_preflight_sha256",
+        "offline_preflight_sha256",
+        "core_suppression_preflight_sha256",
+        "sealing_primitives_preflight_sha256",
+        "browser_preflight_sha256",
+        "evaluator_materialization_sha256",
+        "final_image_file_hashes_sha256",
+        "model_metadata_receipt_sha256",
+        "model_metadata_credential_scan_sha256",
+        "model_metadata_request_count",
+        "model_task_request_count",
+        "task_browser_action_count",
+        "actual_credential_exposure_detected",
+        "credential_safety_stop_detected",
+        "core_safety_stop_detected",
+        "local_finalizer_qualification_sha256",
+        "local_finalizer_interpreter_sha256",
+        "local_finalizer_interpreter_dependency_manifest_sha256",
+        "local_finalizer_interpreter_dependency_tree_sha256",
+        "local_finalizer_evaluator_dependency_tree_sha256",
+        "command_argv_sha256s",
+        "pair_diffs",
+        "attempt_order",
+        "empirical_entry_crossed",
+        "post_entry_code_science_image_freeze",
+        "source_receipts",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedFullFrozenManifest:
+    schema_version: str
+    file_sha256: str
+    projection: Mapping[str, object]
+    projection_sha256: str
+    full_field_count: int
+
+
+def load_full_frozen_manifest(path: Path) -> tuple[dict[str, object], str]:
+    metadata = path.stat(follow_symlinks=False)
+    if (
+        path.is_symlink()
+        or not path.is_file()
+        or metadata.st_nlink != 1
+        or metadata.st_size > MAX_FROZEN_MANIFEST_BYTES
+    ):
+        raise AdapterFailure("full frozen manifest is unsafe or oversized")
+    encoded = path.read_bytes()
+    try:
+        document = strict_json_object(encoded, label="full frozen manifest")
+    except ValueError as exc:
+        raise AdapterFailure(str(exc)) from exc
+    return document, hashlib.sha256(encoded).hexdigest()
+
+
+def validate_full_dynamic_frozen_manifest(
+    repository: Path,
+    path: Path,
+    *,
+    contract: T09ProviderContract,
+    expected_projection: Mapping[str, object],
+) -> ValidatedFullFrozenManifest:
+    """Validate the retained full manifest through an explicit schema handler."""
+
+    document, file_sha = load_full_frozen_manifest(path)
+    version = document.get("schema_version")
+    handlers = {RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION: _validate_retained_manifest_v0_1}
+    handler = handlers.get(version) if isinstance(version, str) else None
+    if handler is None:
+        raise AdapterFailure("full frozen manifest schema version has no explicit handler")
+    schema_path = repository / "schemas/t09-full-dynamic-frozen-manifest.schema.json"
+    try:
+        schema = strict_json_object(schema_path.read_bytes(), label="frozen manifest schema")
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).validate(document)
+    except Exception as exc:
+        raise AdapterFailure("full frozen manifest failed its exact schema") from exc
+    projection = handler(document, contract=contract, expected_projection=expected_projection)
+    return ValidatedFullFrozenManifest(
+        schema_version=cast(str, version),
+        file_sha256=file_sha,
+        projection=projection,
+        projection_sha256=semantic_sha256(projection),
+        full_field_count=len(document),
+    )
+
+
+def _validate_retained_manifest_v0_1(
+    document: Mapping[str, object],
+    *,
+    contract: T09ProviderContract,
+    expected_projection: Mapping[str, object],
+) -> dict[str, object]:
+    missing = sorted(_RETAINED_REQUIRED_MANIFEST_FIELDS - set(document))
+    if missing:
+        raise AdapterFailure("full frozen manifest omitted retained fields: " + ", ".join(missing))
+    if (
+        document.get("manifest_id") != contract.frozen_run_manifest_id
+        or document.get("plan_id") != contract.plan_id
+        or document.get("host_run_id") != contract.host_run_id
+        or document.get("qualification_id") != contract.active_image_qualification_id
+        or document.get("qualification_count") != 1
+        or document.get("attempt_order") != list(contract.run_ids)
+        or document.get("empirical_entry_crossed") is not False
+        or document.get("post_entry_code_science_image_freeze") is not True
+        or document.get("model_task_request_count") != 0
+        or document.get("task_browser_action_count") != 0
+        or document.get("actual_credential_exposure_detected") is not False
+        or document.get("credential_safety_stop_detected") is not False
+        or document.get("core_safety_stop_detected") is not False
+    ):
+        raise AdapterFailure("full frozen manifest contradicts its selected package or phase")
+    argv_hashes = document.get("command_argv_sha256s")
+    pair_diffs = document.get("pair_diffs")
+    source_receipts = document.get("source_receipts")
+    if (
+        not isinstance(argv_hashes, list)
+        or len(argv_hashes) != len(contract.run_ids)
+        or any(
+            not isinstance(value, str) or _HEX64.fullmatch(value) is None for value in argv_hashes
+        )
+        or not isinstance(pair_diffs, list)
+        or not pair_diffs
+        or any(
+            not isinstance(value, dict) or value.get("valid") is not True for value in pair_diffs
+        )
+        or not isinstance(source_receipts, dict)
+        or len(source_receipts) < 8
+    ):
+        raise AdapterFailure("full frozen manifest lacks retained command/pair/source evidence")
+    projection = dict(expected_projection)
+    for key, expected in projection.items():
+        if document.get(key) != expected:
+            raise AdapterFailure(f"full frozen manifest projection drifted at {key}")
+    projection["schema_version"] = RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION
+    projection["full_manifest_validated"] = True
+    projection["full_field_count"] = len(document)
+    return projection
+
+
+def validate_postfreeze_receipt(
+    path: Path,
+    *,
+    contract: T09ProviderContract,
+    manifest_sha256: str,
+) -> dict[str, object]:
+    try:
+        document = strict_json_object(path.read_bytes(), label="post-freeze receipt")
+    except (OSError, ValueError) as exc:
+        raise AdapterFailure("post-freeze receipt is unavailable or malformed") from exc
+    if document.get("schema_version") != RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION:
+        raise AdapterFailure("post-freeze receipt schema has no explicit handler")
+    if (
+        document.get("plan_id") != contract.plan_id
+        or document.get("host_run_id") != contract.host_run_id
+        or document.get("frozen_run_manifest_sha256") != manifest_sha256
+        or document.get("frozen_manifest_published_before_empirical_clock") is not True
+        or document.get("model_task_request_count") != 0
+        or document.get("task_browser_action_count") != 0
+    ):
+        raise AdapterFailure("post-freeze receipt does not bind the full manifest")
+    return document
+
+
+__all__ = [
+    "BRIDGE_PROTOCOL_VERSION",
+    "MAX_BRIDGE_FRAMES",
+    "MAX_BRIDGE_FRAME_BYTES",
+    "MAX_BRIDGE_TRANSCRIPT_BYTES",
+    "RETAINED_FROZEN_MANIFEST_SCHEMA_VERSION",
+    "AcceptedPrivateConditionChannel",
+    "CanonicalFrameRelay",
+    "ConditionBridgeFrame",
+    "ConditionSessionBinding",
+    "ConditionSessionSupervisor",
+    "ConditionSessionTerminalReceipt",
+    "FramedDuplexEndpoint",
+    "PrivateConditionListener",
+    "RemoteBridgeDisconnected",
+    "RemoteBridgeError",
+    "RemoteBridgeReplay",
+    "ValidatedConditionBridgeEvidence",
+    "ValidatedFullFrozenManifest",
+    "canonical_bytes",
+    "condition_session_id",
+    "expected_condition_bridge_evidence",
+    "load_full_frozen_manifest",
+    "provider_request_document",
+    "provider_request_from_document",
+    "semantic_sha256",
+    "strict_json_object",
+    "usage_document",
+    "usage_from_document",
+    "validate_condition_bridge_evidence",
+    "validate_full_dynamic_frozen_manifest",
+    "validate_postfreeze_receipt",
+]

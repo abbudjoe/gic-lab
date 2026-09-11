@@ -1,4 +1,20 @@
 schema_version: 0.1.0
+t09_pr15_retained_transaction_review_repair:
+  status: blocked
+  reviewed_head: a98b4b875ab4d101709d62bc7222b5c90681a893
+  reviewed_tree: b75ce4579c934440c7679cbf289b3294d01d6caf
+  review_id: 5122766860
+  blocking_incident: INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW
+  all_six_findings_closed: false
+  integrated_retained_transaction_proven: false
+  live_method_completeness_proven: false
+  historical_receipts_rebound: false
+  live_authority: false
+  scientific_interpretation_allowed: false
+  blocker: source108 selected tests and source106 original joined paths pass; source109 GIC storage I/O errors prevented result collection and container removal, VM stopped with cleanup unresolved; remaining R1-R6 coverage, exact output-role reconciliation, immutable source and receipt binding, and final gates are independently incomplete
+  historical_archive_replay: not-run-required-archive-unavailable
+  offline_archive_fixture: observed-in-source-bound-offline-joined-paths-historical-replay-not-run
+  evidence_index: docs/harness/T09_REMOTE_EXECUTION_BRIDGE_IMPLEMENTATION_LEDGER.md
 phase: '1'
 phase_name: artifact-execution
 phase_status: in-progress

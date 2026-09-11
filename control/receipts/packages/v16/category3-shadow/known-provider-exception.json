@@ -3,7 +3,7 @@
     {
       "adapter": "host",
       "index": 1,
-      "operation": "host.stage",
+      "operation": "host.assemble_local",
       "outcome": "passed",
       "subject": "tracked-package-archive"
     },
@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
+      "subject": "bed3df43d9a3b1ae408f85b3c0fdd3f0c07431a74125b7cc7502be66b1c510f4"
     },
     {
       "adapter": "provider",
@@ -52,83 +52,90 @@
     {
       "adapter": "host",
       "index": 8,
-      "operation": "host.preflight",
+      "operation": "host.transfer",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "host",
       "index": 9,
+      "operation": "host.preflight",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "host",
+      "index": 10,
       "operation": "host.qualify",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 10,
+      "index": 11,
       "operation": "evidence.record",
-      "outcome": "retained:1fa79da2ce3d",
+      "outcome": "retained:127494a10aae",
       "subject": "qualification"
     },
     {
       "adapter": "host",
-      "index": 11,
+      "index": 12,
       "operation": "host.freeze",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 12,
+      "index": 13,
       "operation": "evidence.record",
-      "outcome": "retained:534c48dd71fa",
+      "outcome": "retained:866d146f353f",
       "subject": "scientific-freeze"
     },
     {
       "adapter": "condition",
-      "index": 13,
+      "index": 14,
       "operation": "condition.reserve",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 14,
+      "index": 15,
       "operation": "condition.enter",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 15,
+      "index": 16,
       "operation": "condition.run",
       "outcome": "essential-failure-sealed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "host",
-      "index": 16,
+      "index": 17,
       "operation": "host.cleanup",
       "outcome": "passed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "evidence",
-      "index": 17,
+      "index": 18,
       "operation": "evidence.scan_privacy",
       "outcome": "passed",
       "subject": "effect-evidence"
     },
     {
       "adapter": "provider",
-      "index": 18,
+      "index": 19,
       "operation": "provider.terminate",
       "outcome": "accepted",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "provider",
-      "index": 19,
+      "index": 20,
       "operation": "provider.inventory",
       "outcome": "zero",
       "subject": "owned-resources"
@@ -161,7 +168,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "composition_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -170,19 +177,19 @@
   ],
   "earliest_stopping_phase": "condition-execution",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+  "effect_authorization_context_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [
       {
         "essential_file_count": 7,
-        "essential_total_bytes": 5784,
-        "evidence_binding_sha256": "3f113a923c7934a2c94aa1f78fbf18ed04c4d9c7ec99b815d133a3115549ff03",
-        "export_receipt_sha256": "17562968f6e9e256904401f1a433ce7ab536382ef5a75acce2482b6e93797ad4",
+        "essential_total_bytes": 5917,
+        "evidence_binding_sha256": "32eb4180048e53e21164ad446f2512e5e3bcf7366571776fd8f9fee548fe6013",
+        "export_receipt_sha256": "3fe0fe4a2b9eb4bd759b92b23bfa12b28707919b99c29a1ec3d8005639b799dd",
         "failure_class": "known-provider-error",
         "infrastructure_invalid": true,
-        "manifest_sha256": "38d43a9afd2efe92b1f54f07a82bf7737bb46f1d0fd1e3a046d36075dadf5036",
-        "receipt_sha256": "20c28b5ea727e9428790bfa3c6171880a60f2f57cf8a786ee15d4332ba43979f",
+        "manifest_sha256": "92bd884e7d96852e11540e6355f585315b7366ee24c16f328d383dd86d9023bc",
+        "receipt_sha256": "3d9bc82fa446873282e1b9e81c8d5a6346d9e007b12ff97fc4e35f48af035bcc",
         "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "stopping_phase": "condition-execution",
         "unscored": true
@@ -199,7 +206,7 @@
     {
       "kind": "essential-infrastructure-failure",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "3f113a923c7934a2c94aa1f78fbf18ed04c4d9c7ec99b815d133a3115549ff03",
+      "sha256": "32eb4180048e53e21164ad446f2512e5e3bcf7366571776fd8f9fee548fe6013",
       "shadow_only": true
     }
   ],
@@ -229,7 +236,7 @@
     {
       "index": 5,
       "outcome": "passed",
-      "phase": "local-staging"
+      "phase": "local-package-assembly"
     },
     {
       "index": 6,
@@ -265,43 +272,48 @@
     {
       "index": 12,
       "outcome": "passed",
-      "phase": "host-preflight"
+      "phase": "host-package-transfer"
     },
     {
       "index": 13,
       "outcome": "passed",
-      "phase": "image-finalizer-qualification"
+      "phase": "host-preflight"
     },
     {
       "index": 14,
+      "outcome": "passed",
+      "phase": "image-finalizer-qualification"
+    },
+    {
+      "index": 15,
       "outcome": "passed",
       "phase": "scientific-freeze"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 15,
+      "index": 16,
       "outcome": "passed",
       "phase": "condition-reservation"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 16,
+      "index": 17,
       "outcome": "passed",
       "phase": "empirical-entry"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009: known-provider-error",
-      "index": 17,
+      "index": 18,
       "outcome": "essential-failure-sealed",
       "phase": "condition-execution"
     },
     {
-      "index": 18,
+      "index": 19,
       "outcome": "passed",
       "phase": "cleanup"
     },
     {
-      "index": 19,
+      "index": 20,
       "outcome": "passed",
       "phase": "terminal-provider-security-verification"
     }
@@ -344,6 +356,11 @@
               "terminal_state": "sent_provider_error_reconciled"
             }
           ],
+          "campaign_output": {
+            "condition_identity": null,
+            "granted_bytes": 67137575,
+            "observed_bytes": 28711
+          },
           "observed_lower_bound": {
             "aggregate": {
               "browser_actions": 0,
@@ -352,7 +369,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 1,
-              "output_bytes": 0,
+              "output_bytes": 34504,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -363,7 +380,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 1,
-              "output_bytes": 0,
+              "output_bytes": 5793,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -376,7 +393,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134216129,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -387,7 +404,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134216129,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -401,7 +418,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 1,
-              "output_bytes": 0,
+              "output_bytes": 201359497,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -412,7 +429,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 1,
-              "output_bytes": 0,
+              "output_bytes": 134221922,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -440,33 +457,33 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+    "authorization_context_semantic_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
     "cleanup_handoff_sha256": "e5dd668066b83ef6e565748ad99ff440ececacd45cf25705ae6ca38b4629a251",
     "cleanup_receipt_sha256": "4a19c3269e424d63a5687108edc54937faef9684eb797808ff41ecf88c3fd45a",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 100560,
+      "bytes": 111256,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
-      "protocol_version": "1.0.0",
-      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+      "protocol_version": "2.0.0",
+      "sha256": "7aa76fca39098dfc6d1bbc8fdc87cc211067765f32e3cbe9d4d7c5de2e479586"
     },
-    "effect_protocol_version": "1.0.0",
+    "effect_protocol_version": "2.0.0",
     "essential_failures": {
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
         "completed": false,
-        "export_receipt_sha256": "17562968f6e9e256904401f1a433ce7ab536382ef5a75acce2482b6e93797ad4",
+        "export_receipt_sha256": "3fe0fe4a2b9eb4bd759b92b23bfa12b28707919b99c29a1ec3d8005639b799dd",
         "export_resumed": false,
         "failure_class": "known-provider-error",
         "file_count": 7,
-        "held_artifact_binding_sha256": "335d6472cef8f6e4063790610e735d95c9b14991c6ab1f922758e9adf5cfd43f",
-        "manifest_sha256": "38d43a9afd2efe92b1f54f07a82bf7737bb46f1d0fd1e3a046d36075dadf5036",
+        "held_artifact_binding_sha256": "07d7faeb1117ad86e8f1af659f73b2129242e688a9e0054ee96495194b4f1ccb",
+        "manifest_sha256": "92bd884e7d96852e11540e6355f585315b7366ee24c16f328d383dd86d9023bc",
         "process_exit_code": null,
-        "receipt_sha256": "20c28b5ea727e9428790bfa3c6171880a60f2f57cf8a786ee15d4332ba43979f",
+        "receipt_sha256": "3d9bc82fa446873282e1b9e81c8d5a6346d9e007b12ff97fc4e35f48af035bcc",
         "retry_count": 0,
-        "total_bytes": 5784,
+        "total_bytes": 5917,
         "unknown_call_ids": [],
         "unscored": true
       }
@@ -474,8 +491,9 @@
     "evaluations": {},
     "first_pair_checkpoint": null,
     "held_evidence": {
+      "condition_bridge": {},
       "essential_failure": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "335d6472cef8f6e4063790610e735d95c9b14991c6ab1f922758e9adf5cfd43f"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "07d7faeb1117ad86e8f1af659f73b2129242e688a9e0054ee96495194b4f1ccb"
       },
       "finalized": {},
       "raw": {},
@@ -492,11 +510,35 @@
       "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "4fd322f992a410f39cb0395a10518498088b788f6f89f44af0cd947f60196306",
-      "postfreeze_validation": "a452149d74ddef7d0a49b44564a8be56eb3e80ef3f676c3d24da66e1fb796956",
-      "qualification": "1fa79da2ce3dea6217e7a4b8453d441fd7c182c661645c9c7dc49d164fd4eb6c"
+      "frozen_manifest": "67a3b01744c1e3fe01e7ff94966a942bd3e69684a769056bd1e59b03885bfab3",
+      "postfreeze_validation": "4ac8ffe5ce439196a3183ddc65a75471189f9542e79a83e1280ea780b0e3e997",
+      "qualification": "127494a10aae12196c82bdf683a8773794f6967f4a67fe312f632a83e19e2eee"
+    },
+    "host_transfers": {
+      "1": {
+        "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+        "host_acknowledgement_sha256": "3c69eddce04a5d0a04d975496a7e1e7cb6e1b238fa5802bf5df2dfc4cb0f5532",
+        "member_manifest_sha256": "8fe2559a455ab4e87ebbd68b89b951fd878c2c82ac9da6acf7e8597ddba07fc6",
+        "receipt_sha256": "bc809ef634a1d414ddf1e7349eb0d317d2399bd8ad846d5a83e9547ade33efd8"
+      }
     },
     "implementation_flavor": "production-wrapper",
+    "package_assembly": {
+      "archive_bytes": 204800,
+      "archive_member_count": 11,
+      "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "contains_provider_handle": false,
+      "contains_remote_path": false,
+      "deterministic_render_count": 2,
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "package_source": "working-tree",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "source_manifest_sha256": "b100bf13dc91157e14513af28ca3015cc428b66df7ce92c30b778ccafbb32c4d",
+      "tracked_only": true,
+      "uploaded": false,
+      "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
+    },
     "package_budget": {
       "aggregate_caps": {
         "max_browser_actions": 120,
@@ -574,25 +616,15 @@
       "service_tier": "default",
       "zero_retry": true
     },
-    "package_staging": {
-      "archive_bytes": 194560,
-      "archive_member_count": 11,
-      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
-      "host_acknowledgement_sha256": "331e343f966ccac051d127ab7031b02d08cca4f55a353ed983a2588a4ef5d0f0",
-      "host_rehash_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "package_source": "working-tree",
-      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "tracked_only": true
-    },
     "production_primitives": [
       "ProviderBudgetBoundary.invoke",
       "T09ProviderContract.validate_owner",
       "admit_model_metadata_receipt_at_prelaunch_boundary",
+      "assemble_local_package:two-byte-identical-renders",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "create_model_metadata_receipt",
       "export_essential_failure_bundle",
+      "host-transfer-verify",
       "immutable_cleanup_export_handoff",
       "initialize_pilot_state",
       "launch_campaign",
@@ -605,7 +637,6 @@
       "publish_dynamic_frozen_run_manifest",
       "reserve_condition_start",
       "resolve_registered_command_package",
-      "stage_verified_archive",
       "validate_campaign_launch_projection",
       "validate_cleanup_execution_receipt",
       "validate_entry_receipt_source_bound",
@@ -659,6 +690,22 @@
         1005.0,
         1006.0,
         1006.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
+        1011.0,
         1011.0,
         1011.0,
         1011.0,
@@ -733,14 +780,18 @@
         1800001011.0,
         1800001011.0,
         1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
+        1800001011.0,
         1800001011.0
       ]
     }
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
   "scenario": "known-provider-exception",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -751,7 +802,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "59f058cad19e7b932fa6270aacbb3bc21d71788356a3c99343afb0046536072b",
+  "semantic_sha256": "62bcccefbb4209c62e497a4f1fad2c411d019f75e42ca1b56d53777cf3c542b5",
   "shadow_only": true,
   "stop_reason": "consumed condition stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

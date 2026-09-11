@@ -2431,6 +2431,13 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
             "lambda_started_at_epoch": 1.0,
         },
     )
+    cleanup_journal = _early_cleanup_journal(
+        tmp_path,
+        host,
+        package_commit="d" * 40,
+        provider_contract=V11_PROVIDER_CONTRACT,
+    )
+    cleanup_journal.begin_freeze_publication()
     _write_json(
         pilot_root / "frozen-run-manifest.json",
         {
@@ -2478,12 +2485,6 @@ def test_retry5_cleanup_rejects_unacknowledged_raw_before_any_destructive_action
 
     monkeypatch.setattr(host, "docker_prefix", forbidden)
     monkeypatch.setattr(host, "destroy_secret", forbidden)
-    cleanup_journal = _early_cleanup_journal(
-        tmp_path,
-        host,
-        package_commit="d" * 40,
-        provider_contract=V11_PROVIDER_CONTRACT,
-    )
     cleanup_journal.advance_lifecycle(CleanupLifecycleStage.EMPIRICAL_ENTRY)
     with pytest.raises(Exception, match="lacks its off-host verification acknowledgement"):
         host.cleanup(

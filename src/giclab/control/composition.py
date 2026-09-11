@@ -19,6 +19,7 @@ from giclab.control.registry_validation import (
 )
 from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness import t09_pragmatic_provider as pragmatic_provider
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_provider_contracts import (
     CleanupFamily,
     CommandPackageFamily,
@@ -215,6 +216,7 @@ def compose_control_plane(
     registry_receipt: Mapping[str, object] | None = None,
     version_lint_receipt: Mapping[str, object] | None = None,
     lifecycle_loader: LifecycleLoader | None = None,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> dict[str, object]:
     """Compose every deterministic dependency without accepting an effect adapter."""
 
@@ -223,7 +225,7 @@ def compose_control_plane(
     lint = (
         dict(version_lint_receipt)
         if version_lint_receipt is not None
-        else validate_active_version_dispatch(root)
+        else validate_active_version_dispatch(root, source_inputs=source_inputs)
     )
     if lint.get("complete") is not True:
         raise CompositionError("active-version dispatch lint is incomplete")
@@ -233,6 +235,7 @@ def compose_control_plane(
         else validate_registry_completeness(
             root,
             lifecycle_loader=selected_lifecycle_loader,
+            source_inputs=source_inputs,
         )
     )
     if registry.get("complete") is not True:
@@ -253,7 +256,7 @@ def compose_control_plane(
     if contract.capabilities.command_package_family is CommandPackageFamily.AUTONOMOUS:
         try:
             command_package, command_sha256, _source = resolve_registered_command_package(
-                root, contract
+                root, contract, source_inputs=source_inputs
             )
         except Exception as exc:
             raise CompositionError(f"command package composition failed: {exc}") from exc
@@ -269,7 +272,9 @@ def compose_control_plane(
         elif contract.version not in {"V8"}:  # giclab-version-lint: historical-identity
             raise CompositionError("execution-contract bytes drifted")
 
-    commit, tree = _git_identity(root)
+    commit, tree = (
+        _git_identity(root) if source_inputs is None else source_inputs.package_identity(root)
+    )
     contract_document = asdict(contract)
     lifecycle_document = {
         "family": contract.capabilities.lifecycle_family.value,

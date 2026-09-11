@@ -260,15 +260,19 @@ def test_v15_plan_binds_current_sources_artifacts_and_stopped_v14_record() -> No
         group = cast(dict[str, object], bindings[group_name])
         for path_field, hash_field in fields:
             relative = str(group[path_field])
-            observed = _sha256(ROOT / relative)
-            if observed != group[hash_field]:
-                assert Path(relative).suffix == ".py"
+            # Implementation code and the shared cleanup schema belong to the frozen reviewed
+            # source; versioned experimental artifacts remain current byte pins.
+            if Path(relative).suffix == ".py" or (
+                relative == "schemas/t09-early-cleanup-state.schema.json"
+            ):
                 retained = subprocess.run(
                     ["git", "-C", ROOT, "show", f"{REVIEWED_HEAD}:{relative}"],
                     check=True,
                     capture_output=True,
                 ).stdout
                 observed = hashlib.sha256(retained).hexdigest()
+            else:
+                observed = _sha256(ROOT / relative)
             assert observed == group[hash_field]
     stopped = cast(dict[str, object], bindings["v14_stopped_disposition"])
     assert stopped == {

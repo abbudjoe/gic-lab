@@ -23,6 +23,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final, cast
 
+from giclab.harness.campaign_output import (
+    CampaignWriterRole,
+    admit_campaign_write,
+    observe_campaign_write,
+    prepare_campaign_temporary,
+    verify_campaign_write,
+)
+
 EARLY_CLEANUP_SCHEMA_VERSION: Final = "1.0.0"
 EARLY_CLEANUP_RECEIPT_SCHEMA_VERSION: Final = "1.0.0"
 CLEANUP_EXPORT_HANDOFF_SCHEMA_VERSION: Final = "1.0.0"
@@ -188,6 +196,7 @@ class CleanupTargetKind(StrEnum):
     TEMPORARY_LOCAL_CREDENTIAL = "temporary-local-secret"
     TEMPORARY_REMOTE_CREDENTIAL = "temporary-remote-secret"
     OWNED_CONTAINER = "owned-container"
+    SOURCE_PACKAGE_ARCHIVE = "source-package-archive"
 
 
 class CleanupTargetState(StrEnum):
@@ -229,6 +238,9 @@ _ALLOWED_TERMINAL_STATES: Final = {
         {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
     ),
     CleanupTargetKind.OWNED_CONTAINER: frozenset(
+        {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
+    ),
+    CleanupTargetKind.SOURCE_PACKAGE_ARCHIVE: frozenset(
         {CleanupTargetState.ABSENT, CleanupTargetState.REMOVED}
     ),
 }
@@ -291,7 +303,10 @@ def _validate_locator(value: str, *, kind: CleanupTargetKind | None = None) -> N
             not path.is_absolute() or ".." in path.parts or path == Path(path.anchor)
         ):
             raise EarlyCleanupStateError("temporary-secret cleanup locator is not an exact path")
-    if kind is CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL:
+    if kind in {
+        CleanupTargetKind.TEMPORARY_REMOTE_CREDENTIAL,
+        CleanupTargetKind.SOURCE_PACKAGE_ARCHIVE,
+    }:
         path = Path(value)
         if not path.is_absolute() or ".." in path.parts or path == Path(path.anchor):
             raise EarlyCleanupStateError("temporary-secret cleanup locator is not an exact path")
@@ -506,6 +521,9 @@ class EarlyCleanupState:
     targets: tuple[CleanupTarget, ...]
     cleanup_attempts: tuple[CleanupAttempt, ...]
     terminal_cleanup_disposition: TerminalCleanupDisposition
+    # None preserves an older journal whose writer did not track this boundary.
+    freeze_publication_started: bool | None = None
+    freeze_publication_aborted: bool | None = None
 
     def to_document(self) -> dict[str, object]:
         return {
@@ -533,6 +551,16 @@ class EarlyCleanupState:
             "targets": [target.to_document() for target in self.targets],
             "cleanup_attempts": [attempt.to_document() for attempt in self.cleanup_attempts],
             "terminal_cleanup_disposition": self.terminal_cleanup_disposition.value,
+            **(
+                {"freeze_publication_started": self.freeze_publication_started}
+                if self.freeze_publication_started is not None
+                else {}
+            ),
+            **(
+                {"freeze_publication_aborted": self.freeze_publication_aborted}
+                if self.freeze_publication_aborted is not None
+                else {}
+            ),
         }
 
     @classmethod
@@ -564,6 +592,14 @@ class EarlyCleanupState:
             "cleanup_attempts",
             "terminal_cleanup_disposition",
         }
+        if "freeze_publication_started" in document:
+            expected.add("freeze_publication_started")
+            if type(document["freeze_publication_started"]) is not bool:
+                raise EarlyCleanupStateError("freeze publication tracking is malformed")
+        if "freeze_publication_aborted" in document:
+            expected.add("freeze_publication_aborted")
+            if type(document["freeze_publication_aborted"]) is not bool:
+                raise EarlyCleanupStateError("freeze publication abort tracking is malformed")
         if set(document) != expected:
             raise EarlyCleanupStateError("early cleanup state fields drifted")
         if (
@@ -631,6 +667,12 @@ class EarlyCleanupState:
                 for item in _require_list(document["cleanup_attempts"], label="cleanup attempts")
             ),
             terminal_cleanup_disposition=disposition,
+            freeze_publication_started=cast(
+                bool | None, document.get("freeze_publication_started")
+            ),
+            freeze_publication_aborted=cast(
+                bool | None, document.get("freeze_publication_aborted")
+            ),
         )
         state.validate()
         return state
@@ -647,6 +689,11 @@ class EarlyCleanupState:
             or self.recorded_at_epoch < self.created_at_epoch
         ):
             raise EarlyCleanupStateError("early cleanup state identity or chronology drifted")
+        if self.freeze_publication_aborted is True and (
+            self.freeze_publication_started is not True
+            or self.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+        ):
+            raise EarlyCleanupStateError("aborted publication contradicts freeze/entry history")
         target_ids = [target.target_id for target in self.targets]
         if len(target_ids) != len(set(target_ids)) or "provider-instance" not in target_ids:
             raise EarlyCleanupStateError("cleanup targets are duplicated or lack the provider")
@@ -678,7 +725,10 @@ class EarlyCleanupState:
 class EarlyCleanupJournal:
     """Hash-chained version store for one exact provider ownership scope."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(
+        self, root: Path, *, before_write: Callable[[Path, int], None] | None = None
+    ) -> None:
+        self.before_write = before_write
         self.root = root
         self.versions = root / "versions"
         self.lock_path = root / ".lock"
@@ -701,6 +751,7 @@ class EarlyCleanupJournal:
         temporary_local_secret_locator: str | None = None,
         temporary_remote_secret_locator: str | None = None,
         clock: Callable[[], float] = time.time,
+        before_write: Callable[[Path, int], None] | None = None,
     ) -> EarlyCleanupJournal:
         if root.exists():
             raise EarlyCleanupStateError("early cleanup journal already exists")
@@ -709,7 +760,7 @@ class EarlyCleanupJournal:
         versions = root / "versions"
         versions.mkdir(mode=0o700, exist_ok=False)
         cls._fsync_directory(root)
-        journal = cls(root)
+        journal = cls(root, before_write=before_write)
         created = clock()
         provider_target = CleanupTarget(
             target_id="provider-instance",
@@ -787,6 +838,7 @@ class EarlyCleanupJournal:
             targets=tuple(targets),
             cleanup_attempts=(),
             terminal_cleanup_disposition=TerminalCleanupDisposition.PENDING,
+            freeze_publication_started=False,
         )
         state.validate()
         with journal._lock():
@@ -877,6 +929,8 @@ class EarlyCleanupJournal:
             targets=after.targets,
             cleanup_attempts=after.cleanup_attempts,
             terminal_cleanup_disposition=after.terminal_cleanup_disposition,
+            freeze_publication_started=after.freeze_publication_started,
+            freeze_publication_aborted=after.freeze_publication_aborted,
         )
         if immutable_before != after:
             raise EarlyCleanupStateError("early cleanup immutable identity changed")
@@ -892,6 +946,16 @@ class EarlyCleanupJournal:
             and after.empirical_entry_status is not EmpiricalEntryStatus.ENTERED
         ):
             raise EarlyCleanupStateError("empirical entry status moved backwards")
+        if (
+            after.freeze_publication_started is not before.freeze_publication_started
+            and after.freeze_publication_started is not True
+        ):
+            raise EarlyCleanupStateError("freeze publication tracking moved backwards")
+        if after.freeze_publication_aborted is not before.freeze_publication_aborted and (
+            after.freeze_publication_aborted is not True
+            or before.freeze_publication_started is not True
+        ):
+            raise EarlyCleanupStateError("freeze publication abort tracking moved backwards")
         before_targets = {target.target_id: target for target in before.targets}
         after_targets = {target.target_id: target for target in after.targets}
         if not before_targets.keys() <= after_targets.keys():
@@ -914,6 +978,12 @@ class EarlyCleanupJournal:
         pending_name = f".{final_name}.pending.{uuid.uuid4().hex}"
         pending_path = self.versions / pending_name
         final_path = self.versions / final_name
+        allowance = admit_campaign_write(
+            final_path, len(encoded), CampaignWriterRole.CLEANUP_JOURNAL
+        )
+        if allowance is None and self.before_write is not None:
+            self.before_write(final_path, len(encoded))
+        prepare_campaign_temporary(allowance, pending_path)
         descriptor = os.open(
             pending_path,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -925,6 +995,7 @@ class EarlyCleanupJournal:
                 written = os.write(descriptor, encoded[offset:])
                 if written <= 0:
                     raise OSError("short early cleanup state write")
+                observe_campaign_write(allowance, written)
                 offset += written
             os.fsync(descriptor)
         finally:
@@ -932,6 +1003,7 @@ class EarlyCleanupJournal:
         if final_path.exists():
             raise EarlyCleanupStateError("early cleanup version already exists")
         os.rename(pending_path, final_path)
+        verify_campaign_write(allowance, final_path)
         self._fsync_directory(self.versions)
 
     def load(self) -> EarlyCleanupState:
@@ -973,6 +1045,8 @@ class EarlyCleanupJournal:
         targets: tuple[CleanupTarget, ...] | None = None,
         cleanup_attempts: tuple[CleanupAttempt, ...] | None = None,
         terminal_cleanup_disposition: TerminalCleanupDisposition | None = None,
+        freeze_publication_started: bool | None = None,
+        freeze_publication_aborted: bool | None = None,
     ) -> EarlyCleanupState:
         successor = replace(
             state,
@@ -989,6 +1063,16 @@ class EarlyCleanupJournal:
                 terminal_cleanup_disposition
                 if terminal_cleanup_disposition is not None
                 else state.terminal_cleanup_disposition
+            ),
+            freeze_publication_started=(
+                freeze_publication_started
+                if freeze_publication_started is not None
+                else state.freeze_publication_started
+            ),
+            freeze_publication_aborted=(
+                freeze_publication_aborted
+                if freeze_publication_aborted is not None
+                else state.freeze_publication_aborted
             ),
         )
         successor.validate()
@@ -1084,6 +1168,54 @@ class EarlyCleanupJournal:
             if imported != continuation_state:
                 raise EarlyCleanupStateError("cleanup continuation import was not exact")
             return imported
+
+    def begin_freeze_publication(
+        self, *, clock: Callable[[], float] = time.time
+    ) -> EarlyCleanupState:
+        """Record a durable intent before the first frozen-manifest publication."""
+        with self._lock():
+            state, previous_sha256 = self._load_unlocked()
+            if state.freeze_publication_started is True:
+                raise EarlyCleanupStateError("freeze publication cannot be repeated")
+            if state.lifecycle_stage in {
+                CleanupLifecycleStage.CLEANUP_IN_PROGRESS,
+                CleanupLifecycleStage.CLEANUP_FINISHED,
+            }:
+                raise EarlyCleanupStateError("cleanup does not authorize freeze publication")
+            successor = self._next_state(
+                state, previous_sha256, clock=clock, freeze_publication_started=True
+            )
+            self._append_unlocked(successor)
+            return successor
+
+    def abort_unpublished_freeze(
+        self, *, clock: Callable[[], float] = time.time
+    ) -> EarlyCleanupState:
+        """Publisher-only failure continuation; a missing file alone is no proof.
+
+        The exclusive writer calls this only before successful publication. An
+        abrupt loss without this durable continuation remains unresolved.
+        """
+        with self._lock():
+            state, previous_sha256 = self._load_unlocked()
+            if (
+                state.freeze_publication_started is not True
+                or state.freeze_publication_aborted is True
+                or state.empirical_entry_status is not EmpiricalEntryStatus.NOT_ENTERED
+                or state.lifecycle_stage
+                in {
+                    CleanupLifecycleStage.CLEANUP_IN_PROGRESS,
+                    CleanupLifecycleStage.CLEANUP_FINISHED,
+                }
+            ):
+                raise EarlyCleanupStateError(
+                    "unpublished freeze abort lacks a live publication intent"
+                )
+            successor = self._next_state(
+                state, previous_sha256, clock=clock, freeze_publication_aborted=True
+            )
+            self._append_unlocked(successor)
+            return successor
 
     def register_target(
         self,
@@ -1267,6 +1399,9 @@ class EarlyCleanupJournal:
             if path.is_symlink() or path.read_bytes() != encoded:
                 raise EarlyCleanupStateError("basic cleanup closeout receipt drifted")
             return path
+        allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.CLEANUP_RECEIPT)
+        if allowance is None and self.before_write is not None:
+            self.before_write(path, len(encoded))
         descriptor = os.open(
             path,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0),
@@ -1278,9 +1413,11 @@ class EarlyCleanupJournal:
                 written = os.write(descriptor, encoded[offset:])
                 if written <= 0:
                     raise OSError("short basic cleanup closeout write")
+                observe_campaign_write(allowance, written)
                 offset += written
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
+        verify_campaign_write(allowance, path)
         self._fsync_directory(path.parent)
         return path

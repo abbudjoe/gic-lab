@@ -30,6 +30,8 @@ _V16_PLAN = f"{_EXPERIMENT}/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V16.ya
 _V17_PLAN = f"{_EXPERIMENT}/run-plans/proposals/T09_PILOT_RUNTIME_PROFILE_V17.yaml"
 _V16_EXECUTION = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V16.json"
 _V17_EXECUTION = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_EXECUTION_CONTRACT_V17.json"
+_V16_RUNTIME = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V16.json"
+_V17_RUNTIME = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_RUNTIME_IDENTITY_V17.json"
 _V16_COMMAND = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V16.json"
 _V17_COMMAND = f"{_EXPERIMENT}/contracts/proposals/T09_PILOT_COMMAND_MANIFESTS_V17.json"
 _V17_EFFECT = f"{_EXPERIMENT}/runtime/t09_package_effects_v17.py"
@@ -203,6 +205,13 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
     command = _successor_value(json.loads((source / _V16_COMMAND).read_bytes()))
     assert isinstance(plan, dict) and isinstance(execution, dict) and isinstance(command, dict)
 
+    # The retained freeze consumer reads this role directly. Materialize the
+    # test-owned bytes and bind every referring fixture to their actual digest.
+    runtime = _successor_value(json.loads((source / _V16_RUNTIME).read_bytes()))
+    encoded_runtime = _json_bytes(runtime)
+    _write_relative(repository, _V17_RUNTIME, encoded_runtime)
+    runtime_sha256 = hashlib.sha256(encoded_runtime).hexdigest()
+
     encoded_plan = yaml.safe_dump(plan, sort_keys=False).encode()
     _write_relative(repository, _V17_PLAN, encoded_plan)
     plan_sha256 = hashlib.sha256(encoded_plan).hexdigest()
@@ -211,18 +220,21 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
     bindings["plan"].update(
         {"path": _V17_PLAN, "sha256": plan_sha256, "size_bytes": len(encoded_plan)}
     )
+    bindings["runtime"] = {"path": _V17_RUNTIME, "sha256": runtime_sha256}
 
     raw_attempts = execution["attempts"]
     assert isinstance(raw_attempts, list)
     condition_identities: dict[str, tuple[int, str]] = {}
     for attempt in raw_attempts:
         assert isinstance(attempt, dict)
+        attempt["environment_sha256"] = runtime_sha256
         source_condition = str(attempt["condition_plan_path"]).replace("v17", "v16")
         condition = _successor_value(
             yaml.safe_load((source / source_condition).read_text(encoding="utf-8"))
         )
         assert isinstance(condition, dict)
         condition["profile_sha256"] = plan_sha256
+        condition["sources"]["environment_sha256"] = runtime_sha256
         authorization = condition["execution"]["authorization"]
         assert isinstance(authorization, dict)
         authorization["command_sha256"] = _canonical_sha256(attempt["upstream_argv"])
@@ -265,6 +277,7 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
         manifest["argv_sha256"] = command_argv_sha256(manifest["argv"])
         manifest["execution_contract_sha256"] = execution_sha256
         manifest["condition_plan_sha256"] = attempt["condition_plan_sha256"]
+        manifest["equality_surface"]["environment_sha256"] = runtime_sha256
         permitted = manifest.get("permitted_condition_owned")
         if isinstance(permitted, dict):
             permitted["condition_plan_sha256"] = attempt["condition_plan_sha256"]
@@ -278,6 +291,7 @@ def materialize_synthetic_successor(source: Path, repository: Path) -> dict[str,
         "plan_bytes": len(encoded_plan),
         "plan_sha256": plan_sha256,
         "execution_sha256": execution_sha256,
+        "runtime_sha256": runtime_sha256,
         "command_sha256": command_sha256,
         "condition_identities": condition_identities,
         "effect_path": _V17_EFFECT,
@@ -330,7 +344,7 @@ def synthetic_contract(
             implementation_sha256=str(identities["effect_sha256"]),
             factory_entry_point=str(identities["effect_factory"]),
             authority_grant_schema_version="1.0.0",
-            effect_protocol_version="1.0.0",
+            effect_protocol_version="2.0.0",
         ),
     )
 

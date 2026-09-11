@@ -179,7 +179,7 @@ class PackageEffectRegistration:
             raise T09ProviderContractError("package effect factory is malformed")
         if self.authority_grant_schema_version != "1.0.0":
             raise T09ProviderContractError("package effect authority schema is unsupported")
-        if self.effect_protocol_version != "1.0.0":
+        if self.effect_protocol_version != "2.0.0":
             raise T09ProviderContractError("package effect protocol is unsupported")
 
 

@@ -18,6 +18,13 @@ from typing import Any, cast
 import spacy
 
 from giclab.harness.sira_gate_a import ProviderBudgetUsage
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
+from giclab.harness.t09_environment_fixture import OfflineEnvironmentBinding
+from giclab.harness.t09_qualification_fixture import (
+    DATASET_PATH,
+    EVALUATOR_ROOT,
+    DeterministicQualificationArchive,
+)
 from giclab.harness.t09_sira_pilot import (
     EvaluatorIdentity,
     PilotExecutionContract,
@@ -219,11 +226,16 @@ def _run_evaluator_fixtures(
     attempt_root: Path,
     evaluator_root: Path,
     dataset: Path,
+    fixture_subset: bool = False,
 ) -> list[dict[str, object]]:
     fixture_root = attempt_root / "evaluator-fixtures"
     fixture_root.mkdir(mode=0o700)
-    task_a = EvaluatorIdentity(root=evaluator_root, dataset_path=dataset, task_index=0)
-    task_b = EvaluatorIdentity(root=evaluator_root, dataset_path=dataset, task_index=1)
+    task_a = EvaluatorIdentity(
+        root=evaluator_root, dataset_path=dataset, task_index=0, fixture_subset=fixture_subset
+    )
+    task_b = EvaluatorIdentity(
+        root=evaluator_root, dataset_path=dataset, task_index=1, fixture_subset=fixture_subset
+    )
     cases = [
         (
             "correct",
@@ -394,6 +406,7 @@ def _run_finalizer_raw_fixture(
     raw_fixture: Path,
     evaluator_root: Path,
     dataset: Path,
+    fixture_subset: bool = False,
 ) -> dict[str, object]:
     """Execute the same raw semantic primitive used by the live finalizer."""
 
@@ -418,6 +431,7 @@ def _run_finalizer_raw_fixture(
         task_index=0,
         task_id="7dcbbbdc7f1120cd",
         condition="SIRA-REACTIVE",
+        evaluator_fixture_subset=fixture_subset,
     )
     if not isinstance(observed, dict):
         raise PreflightError("finalizer semantic fixture returned a non-object")
@@ -451,7 +465,30 @@ def _run_finalizer_raw_fixture(
     }
 
 
-def run(args: argparse.Namespace) -> dict[str, object]:
+def run(
+    args: argparse.Namespace,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
+    environment_binding: OfflineEnvironmentBinding | None = None,
+    fixture_binding: DeterministicQualificationArchive | None = None,
+    package: Path | None = None,
+) -> dict[str, object]:
+    fixture_subset = False
+    if environment_binding is not None:
+        if source_inputs is None or fixture_binding is None or package is None:
+            raise PreflightError("offline preflight lacks complete explicit input binding")
+        environment_binding.validate(source_inputs, package)
+        fixture_binding.validate(package)
+        if (
+            fixture_binding.document() != source_inputs.document()["qualification_fixture"]
+            or args.dataset.resolve(strict=True) != (package / DATASET_PATH).resolve(strict=True)
+            or args.evaluator_root.resolve(strict=True)
+            != (package / EVALUATOR_ROOT).resolve(strict=True)
+        ):
+            raise PreflightError("offline preflight switched archive/dataset/evaluator inputs")
+        fixture_subset = True
+    elif source_inputs is not None or fixture_binding is not None:
+        raise PreflightError("candidate preflight cannot fall back to historical inputs")
     if platform.python_version() != EXPECTED_PYTHON:
         raise PreflightError(
             f"preflight Python must be {EXPECTED_PYTHON}; observed {platform.python_version()}"
@@ -478,13 +515,31 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     if file_sha256(command_path) != args.command_manifests_sha256:
         raise PreflightError("command manifest set hash drifted")
     command_document = _load_object(command_path)
+    aggregate_render_path = str(args.aggregate_ledger)
+    state_render_path = str(args.pilot_state)
+    if fixture_subset:
+        from giclab.harness.t09_provider_contracts import provider_contract
+
+        selected = provider_contract(contract.provider_contract_version)
+        control = args.attempt_root.parent
+        if (
+            control.name != selected.control_root_name
+            or args.aggregate_ledger != control / "runtime-budget/aggregate-budget.json"
+            or args.pilot_state != control / "pilot-state.json"
+        ):
+            raise PreflightError("offline runtime file mapping differs from selected contract")
+        # These remain the exact original command paths. Only filesystem access
+        # uses the explicitly mapped local test root; argv equality stays active.
+        runtime_control = f"/opt/giclab-artifacts/{selected.control_root_name}"
+        aggregate_render_path = runtime_control + "/runtime-budget/aggregate-budget.json"
+        state_render_path = runtime_control + "/pilot-state.json"
     validate_command_manifest_package(
         contract=contract,
         command_document=command_document,
         runtime_adaptation_sha256=args.runtime_adaptation_sha256,
         pilot_library_sha256=args.pilot_library_sha256,
-        aggregate_ledger_path=str(args.aggregate_ledger),
-        pilot_state_path=str(args.pilot_state),
+        aggregate_ledger_path=aggregate_render_path,
+        pilot_state_path=state_render_path,
     )
 
     attempt_root = args.attempt_root.resolve(strict=True)
@@ -526,12 +581,14 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         root=args.evaluator_root.resolve(strict=True),
         dataset_path=args.dataset.resolve(strict=True),
         task_index=0,
+        fixture_subset=fixture_subset,
     )
     evaluator.verify()
     EvaluatorIdentity(
         root=evaluator.root,
         dataset_path=evaluator.dataset_path,
         task_index=1,
+        fixture_subset=fixture_subset,
     ).verify()
     spacy.load("en_core_web_sm")
     expected_versions = {
@@ -550,6 +607,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         attempt_root=attempt_root,
         evaluator_root=evaluator.root,
         dataset=evaluator.dataset_path,
+        fixture_subset=fixture_subset,
     )
     finalizer_fixture = _run_finalizer_raw_fixture(
         source=args.finalizer_source,
@@ -557,6 +615,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         raw_fixture=args.finalizer_raw_fixture,
         evaluator_root=evaluator.root,
         dataset=evaluator.dataset_path,
+        fixture_subset=fixture_subset,
     )
 
     result = {
@@ -583,6 +642,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "execution_contract_sha256": contract.sha256,
         "command_manifests_sha256": args.command_manifests_sha256,
     }
+    if environment_binding is not None:
+        assert source_inputs is not None and fixture_binding is not None
+        result["offline_inputs"] = {
+            "candidate_binding_sha256": source_inputs.digest,
+            "environment_sha256": environment_binding.digest,
+            "qualification_fixture": fixture_binding.document(),
+            "historical_replay": False,
+            "real_image_runtime_qualification": False,
+        }
     _write_exclusive(attempt_root / "offline-runtime-preflight.json", result)
     return result
 

@@ -1,0 +1,35 @@
+{
+  "build_status": "not-run-runtime-unavailable-and-storage-floor",
+  "built_image_id": null,
+  "classification": "outer-local-ci-dependencies-not-experimental-image",
+  "dependency_lock_sha256": "bec09cf0d326c56af9f717782eef9160579e7720dff701083570df9aa712b34b",
+  "python": {
+    "discovery_tag": "3.11.14-bookworm",
+    "index_digest": "sha256:7489d7e0542e9e5548fb1b0a8689ae7dfefc10bae31c21aa11f1046a2e5bc37f",
+    "platform": "linux/arm64",
+    "platform_digest": "sha256:80c55071c580609f3f1e787825e001ea571cee4dfce4f375c537bc790d76258f",
+    "reference": "registry-1.docker.io/library/python"
+  },
+  "quarto_assets": [
+    {
+      "bytes": 1031,
+      "digest": "sha256:a936197982c2e5df434d9a10117df232650c48bdcd82320e61d085c36c60c2b7",
+      "name": "quarto-1.9.38-checksums.txt",
+      "url": "https://github.com/quarto-dev/quarto-cli/releases/download/v1.9.38/quarto-1.9.38-checksums.txt"
+    },
+    {
+      "bytes": 133976767,
+      "digest": "sha256:75fbc5c1121ffe65e564e9d24711db2ad8f617f9552f5dc7d8a06307d72dde38",
+      "name": "quarto-1.9.38-linux-arm64.tar.gz",
+      "url": "https://github.com/quarto-dev/quarto-cli/releases/download/v1.9.38/quarto-1.9.38-linux-arm64.tar.gz"
+    }
+  ],
+  "schema_version": "1.0.0",
+  "uv": {
+    "discovery_tag": "0.11.7",
+    "index_digest": "sha256:240fb85ab0f263ef12f492d8476aa3a2e4e1e333f7d67fbdd923d00a506a516a",
+    "platform": "linux/arm64",
+    "platform_digest": "sha256:40edad71a1710a9d5d988c6a034304e9c414d7f794dab44a0781d619bba41d33",
+    "reference": "ghcr.io/astral-sh/uv"
+  }
+}

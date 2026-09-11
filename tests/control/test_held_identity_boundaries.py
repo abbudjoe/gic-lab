@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from _category3_test_support import execute_shadow_plan, validated_rehearsal
 from _live_effect_fixture import RuntimePackage, materialize_runtime_package
+from _synthetic_successor import install_synthetic_registry
 
 from giclab.control.adapters import AdapterFailure
 from giclab.control.category3 import (
@@ -320,6 +321,7 @@ def test_symlink_hardlink_swap_or_mutation_never_reaches_scientific_acceptance(
 
 def test_cleanup_uses_held_owned_root_after_original_path_replacement(
     package: RuntimePackage,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     loaded = package.load()
     world = build_production_adapter_assembly(
@@ -331,6 +333,10 @@ def test_cleanup_uses_held_owned_root_after_original_path_replacement(
         held_transaction_root=package.held_root,
         held_effect_source=loaded.held_source,
     )
+    # Admit the real package policy before its held root is displaced. Cleanup
+    # still uses the held identity and shared-approved writer allowance.
+    install_synthetic_registry(monkeypatch, package.contract)
+    world.assemble_local_package()
     original = package.held_root.path
     displaced = original.with_name(original.name + "-owned-displaced")
     original.rename(displaced)

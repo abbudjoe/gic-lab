@@ -25,6 +25,13 @@ from types import ModuleType
 from typing import Any, cast
 from unittest import mock
 
+from giclab.harness.t09_qualification_fixture import (
+    DATASET_PATH,
+    EVALUATOR_ROOT,
+    DeterministicQualificationArchive,
+    validate_fixture_regression_receipt,
+)
+
 ARCHIVE_SHA256 = "63ed19b35bcb4cb62c3796a80a48004937340eb3826f9657a1006e251772255d"
 DISPOSITION_SHA256 = "ecc0e135695e16f68d52b7aa85b70d42b1f1e945f7dd119fb7c7ff0e42fc8231"
 PRIOR_RUN_ID = "RUN-T09-TASK-A-REACTIVE-0002"
@@ -313,10 +320,25 @@ def _evaluator_closure(
     }
 
 
-def run(args: argparse.Namespace) -> dict[str, object]:
+def run(
+    args: argparse.Namespace,
+    *,
+    fixture_binding: DeterministicQualificationArchive | None = None,
+    fixture_repository: Path | None = None,
+) -> dict[str, object]:
     archive = args.archive.resolve(strict=True)
-    disposition = args.public_disposition.resolve(strict=True)
-    if (
+    disposition = args.public_disposition.resolve(strict=fixture_binding is None)
+    if fixture_binding is not None:
+        if fixture_repository is None:
+            raise RegressionError("offline binding lacks its repository source")
+        fixture_binding.validate(fixture_repository, archive_path=archive)
+        if (
+            args.dataset.resolve(strict=True) != (fixture_repository / DATASET_PATH).resolve()
+            or args.evaluator_root.resolve(strict=True)
+            != (fixture_repository / EVALUATOR_ROOT).resolve()
+        ):
+            raise RegressionError("offline evaluator inputs differ from their binding")
+    elif (
         archive.is_symlink()
         or not archive.is_file()
         or not 0 < archive.stat().st_size <= MAX_ARCHIVE_BYTES
@@ -328,21 +350,27 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     reconstruct = getattr(finalizer, "reconstruct_semantic_projection", None)
     if not callable(reconstruct):
         raise RegressionError("repaired finalizer semantic primitive is unavailable")
-    public = _load_json_bytes(disposition.read_bytes(), label="public V4 disposition")
-    public_attempt = public.get("attempts", {}).get("task_a_reactive")
-    if not isinstance(public_attempt, dict):
-        raise RegressionError("public V4 accepted attempt projection is unavailable")
+    public_attempt: dict[str, Any] = {}
+    if fixture_binding is None:
+        public = _load_json_bytes(disposition.read_bytes(), label="public V4 disposition")
+        public_attempt = public.get("attempts", {}).get("task_a_reactive")
+        if not isinstance(public_attempt, dict):
+            raise RegressionError("public V4 accepted attempt projection is unavailable")
     dataset = args.dataset.resolve(strict=True)
-    if (
+    if fixture_binding is None and (
         dataset.is_symlink()
         or dataset.stat().st_size != DATASET_BYTES
         or file_sha256(dataset) != DATASET_SHA256
     ):
         raise RegressionError("full pinned FanOutQA dataset identity drifted")
-    evaluator_closure = _evaluator_closure(
-        evaluator_root=args.evaluator_root,
-        evaluator_contract=args.evaluator_contract,
-        dependency_site_packages=args.dependency_site_packages,
+    evaluator_closure = (
+        _evaluator_closure(
+            evaluator_root=args.evaluator_root,
+            evaluator_contract=args.evaluator_contract,
+            dependency_site_packages=args.dependency_site_packages,
+        )
+        if fixture_binding is None
+        else None
     )
     with tempfile.TemporaryDirectory(prefix="giclab-t09-v4-regression-") as temporary:
         raw_root = Path(temporary) / "raw"
@@ -367,7 +395,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 task_index=0,
                 task_id=TASK_ID,
                 condition="SIRA-REACTIVE",
-                evaluator_fixture_subset=False,
+                evaluator_fixture_subset=fixture_binding is not None,
             )
             repeated_projection: object = reconstruct(
                 raw_root=raw_root,
@@ -376,12 +404,39 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                 task_index=0,
                 task_id=TASK_ID,
                 condition="SIRA-REACTIVE",
-                evaluator_fixture_subset=False,
+                evaluator_fixture_subset=fixture_binding is not None,
             )
         if not isinstance(projection, dict):
             raise RegressionError("real-evidence semantic projection is not an object")
         if repeated_projection != projection:
             raise RegressionError("same raw evidence produced a different semantic projection")
+        if fixture_binding is not None:
+            assert fixture_repository is not None
+            # Same bounded extraction and retained semantic primitive as the historical
+            # lane, with a separate declared oracle and no historical disposition.
+            fixture_receipt: dict[str, object] = {
+                "schema_version": "1.0.0",
+                "fixture_binding": fixture_binding.document(),
+                "classification": "non-scientific-no-network-non-live",
+                "historical_replay": False,
+                "live_qualification": False,
+                "source_archive_sha256": file_sha256(archive),
+                "source_archive_bytes": archive.stat().st_size,
+                "finalizer_source_sha256": args.finalizer_source_sha256,
+                "regression_source_sha256": file_sha256(Path(__file__)),
+                "selected_raw_members": selected_manifest,
+                "semantic_projection": projection,
+                "deterministic_repeat_projection": repeated_projection,
+                "network_disabled": True,
+                "additional_model_requests": 0,
+                "additional_browser_actions": 0,
+            }
+            fixture_binding.validate(fixture_repository, archive_path=archive)
+            validate_fixture_regression_receipt(
+                fixture_repository, fixture_binding, fixture_receipt
+            )
+            _write_exclusive(args.output.resolve(strict=False), fixture_receipt)
+            return fixture_receipt
         repeat_files: list[dict[str, object]] = []
         for ordinal, value in enumerate((projection, repeated_projection), start=1):
             repeat_root = Path(temporary) / f"finalization-{ordinal:04d}"

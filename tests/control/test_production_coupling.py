@@ -226,17 +226,29 @@ def test_breaking_empirical_prefix_cleanup_handoff_fails_cleanup(
     rehearsal: ValidatedShadowRehearsal,
 ) -> None:
     retained: Callable[..., object] = production.pilot.load_validated_pilot_state
+    retained_cleanup = production.ProductionCategory3World.cleanup
     calls = 0
+    in_cleanup = False
+
+    def cleanup_scope(world, handle):
+        nonlocal in_cleanup
+        in_cleanup = True
+        try:
+            return retained_cleanup(world, handle)
+        finally:
+            in_cleanup = False
 
     def broken_cleanup(*args: object, **kwargs: object) -> object:
         nonlocal calls
-        calls += 1
-        if calls == 3:
+        if in_cleanup:
+            calls += 1
             raise RuntimeError("mutated empirical-prefix cleanup handoff")
         return retained(*args, **kwargs)
 
+    monkeypatch.setattr(production.ProductionCategory3World, "cleanup", cleanup_scope)
     monkeypatch.setattr(production.pilot, "load_validated_pilot_state", broken_cleanup)
     receipt = _execute(rehearsal)
+    assert calls == 1
     assert receipt["earliest_stopping_phase"] == Category3Phase.CLEANUP.value
     cleanup = receipt["cleanup"]
     assert isinstance(cleanup, dict) and cleanup["state"] == "unresolved"
@@ -331,12 +343,30 @@ def test_effect_outcome_output_bytes_must_match_observed_event(
 @pytest.mark.parametrize(
     ("method_name", "field_name", "phase"),
     [
-        ("stage_package", "plan_id", Category3Phase.LOCAL_STAGING),
-        ("preflight_host", "stage_receipt_sha256", Category3Phase.HOST_PREFLIGHT),
+        pytest.param(
+            "assemble_local_package",
+            "plan_id",
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
+            # Preserve the exact collected base node while the assertion now
+            # exercises the replacement typed local-assembly boundary.
+            id="stage_package-plan_id-local-staging",
+        ),
         (
+            "transfer_package_to_host",
+            "remote_archive_sha256",
+            Category3Phase.HOST_PACKAGE_TRANSFER,
+        ),
+        pytest.param(
+            "preflight_host",
+            "metadata_receipt_sha256",
+            Category3Phase.HOST_PREFLIGHT,
+            id="preflight_host-stage_receipt_sha256-host-preflight",
+        ),
+        pytest.param(
             "qualify_host",
-            "provider_entry_receipt_sha256",
+            "image_digest",
             Category3Phase.QUALIFICATION,
+            id="qualify_host-provider_entry_receipt_sha256-image-finalizer-qualification",
         ),
         ("freeze_science", "manifest_sha256", Category3Phase.SCIENTIFIC_FREEZE),
     ],

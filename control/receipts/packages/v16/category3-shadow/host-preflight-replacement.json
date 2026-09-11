@@ -3,7 +3,7 @@
     {
       "adapter": "host",
       "index": 1,
-      "operation": "host.stage",
+      "operation": "host.assemble_local",
       "outcome": "passed",
       "subject": "tracked-package-archive"
     },
@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
+      "subject": "bed3df43d9a3b1ae408f85b3c0fdd3f0c07431a74125b7cc7502be66b1c510f4"
     },
     {
       "adapter": "provider",
@@ -52,63 +52,63 @@
     {
       "adapter": "host",
       "index": 8,
+      "operation": "host.transfer",
+      "outcome": "passed",
+      "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
+    },
+    {
+      "adapter": "host",
+      "index": 9,
       "operation": "host.preflight",
       "outcome": "failed",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "provider",
-      "index": 9,
+      "index": 10,
       "operation": "provider.terminate",
       "outcome": "accepted",
       "subject": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
     },
     {
       "adapter": "provider",
-      "index": 10,
+      "index": 11,
       "operation": "provider.inventory",
       "outcome": "zero",
       "subject": "owned-resources"
     },
     {
       "adapter": "provider",
-      "index": 11,
+      "index": 12,
       "operation": "provider.launch",
       "outcome": "accepted",
       "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
     },
     {
       "adapter": "provider",
-      "index": 12,
+      "index": 13,
       "operation": "provider.enter",
       "outcome": "passed",
       "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
     },
     {
       "adapter": "host",
-      "index": 13,
+      "index": 14,
+      "operation": "host.transfer",
+      "outcome": "passed",
+      "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
+    },
+    {
+      "adapter": "host",
+      "index": 15,
       "operation": "host.preflight",
       "outcome": "passed",
       "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
     },
     {
       "adapter": "host",
-      "index": 14,
-      "operation": "host.qualify",
-      "outcome": "passed",
-      "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
-    },
-    {
-      "adapter": "evidence",
-      "index": 15,
-      "operation": "evidence.record",
-      "outcome": "retained:888b76f125ab",
-      "subject": "qualification"
-    },
-    {
-      "adapter": "host",
       "index": 16,
-      "operation": "host.freeze",
+      "operation": "host.qualify",
       "outcome": "passed",
       "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
     },
@@ -116,48 +116,48 @@
       "adapter": "evidence",
       "index": 17,
       "operation": "evidence.record",
-      "outcome": "retained:595f61b05d7b",
+      "outcome": "retained:e053c63ae043",
+      "subject": "qualification"
+    },
+    {
+      "adapter": "host",
+      "index": 18,
+      "operation": "host.freeze",
+      "outcome": "passed",
+      "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
+    },
+    {
+      "adapter": "evidence",
+      "index": 19,
+      "operation": "evidence.record",
+      "outcome": "retained:99f62568f389",
       "subject": "scientific-freeze"
     },
     {
       "adapter": "condition",
-      "index": 18,
+      "index": 20,
       "operation": "condition.reserve",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 19,
+      "index": 21,
       "operation": "condition.enter",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 20,
+      "index": 22,
       "operation": "condition.run",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 21,
-      "operation": "condition.export_raw",
-      "outcome": "passed",
-      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
-    },
-    {
-      "adapter": "evidence",
-      "index": 22,
-      "operation": "evidence.record",
-      "outcome": "retained:f6cb62295ceb",
-      "subject": "raw"
-    },
-    {
-      "adapter": "condition",
       "index": 23,
-      "operation": "condition.finalize",
+      "operation": "condition.export_raw",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
@@ -165,13 +165,13 @@
       "adapter": "evidence",
       "index": 24,
       "operation": "evidence.record",
-      "outcome": "retained:d012a5ff5574",
-      "subject": "finalized"
+      "outcome": "retained:92539bacbb6e",
+      "subject": "raw"
     },
     {
       "adapter": "condition",
       "index": 25,
-      "operation": "condition.evaluate",
+      "operation": "condition.finalize",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
     },
@@ -179,48 +179,48 @@
       "adapter": "evidence",
       "index": 26,
       "operation": "evidence.record",
-      "outcome": "retained:540dd20f0baa",
-      "subject": "evaluator"
+      "outcome": "retained:2c4d487c72d2",
+      "subject": "finalized"
     },
     {
       "adapter": "condition",
       "index": 27,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 28,
+      "operation": "evidence.record",
+      "outcome": "retained:dc9715626d8a",
+      "subject": "evaluator"
+    },
+    {
+      "adapter": "condition",
+      "index": 29,
       "operation": "condition.reserve",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 28,
+      "index": 30,
       "operation": "condition.enter",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 29,
+      "index": 31,
       "operation": "condition.run",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 30,
-      "operation": "condition.export_raw",
-      "outcome": "passed",
-      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
-    },
-    {
-      "adapter": "evidence",
-      "index": 31,
-      "operation": "evidence.record",
-      "outcome": "retained:21412e5759dd",
-      "subject": "raw"
-    },
-    {
-      "adapter": "condition",
       "index": 32,
-      "operation": "condition.finalize",
+      "operation": "condition.export_raw",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
     },
@@ -228,13 +228,13 @@
       "adapter": "evidence",
       "index": 33,
       "operation": "evidence.record",
-      "outcome": "retained:b0a48299b47d",
-      "subject": "finalized"
+      "outcome": "retained:ba92314960a7",
+      "subject": "raw"
     },
     {
       "adapter": "condition",
       "index": 34,
-      "operation": "condition.evaluate",
+      "operation": "condition.finalize",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
     },
@@ -242,55 +242,55 @@
       "adapter": "evidence",
       "index": 35,
       "operation": "evidence.record",
-      "outcome": "retained:470e0b308a0f",
+      "outcome": "retained:ac5262d9be4a",
+      "subject": "finalized"
+    },
+    {
+      "adapter": "condition",
+      "index": 36,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 37,
+      "operation": "evidence.record",
+      "outcome": "retained:da27c643f008",
       "subject": "evaluator"
     },
     {
       "adapter": "evidence",
-      "index": 36,
+      "index": 38,
       "operation": "evidence.checkpoint",
       "outcome": "continue-to-task-b",
       "subject": "task-a-pair"
     },
     {
       "adapter": "condition",
-      "index": 37,
+      "index": 39,
       "operation": "condition.reserve",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 38,
+      "index": 40,
       "operation": "condition.enter",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 39,
+      "index": 41,
       "operation": "condition.run",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 40,
-      "operation": "condition.export_raw",
-      "outcome": "passed",
-      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
-    },
-    {
-      "adapter": "evidence",
-      "index": 41,
-      "operation": "evidence.record",
-      "outcome": "retained:1cadf069c820",
-      "subject": "raw"
-    },
-    {
-      "adapter": "condition",
       "index": 42,
-      "operation": "condition.finalize",
+      "operation": "condition.export_raw",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
     },
@@ -298,13 +298,13 @@
       "adapter": "evidence",
       "index": 43,
       "operation": "evidence.record",
-      "outcome": "retained:21dac26e7f6e",
-      "subject": "finalized"
+      "outcome": "retained:b73473488c65",
+      "subject": "raw"
     },
     {
       "adapter": "condition",
       "index": 44,
-      "operation": "condition.evaluate",
+      "operation": "condition.finalize",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
     },
@@ -312,48 +312,48 @@
       "adapter": "evidence",
       "index": 45,
       "operation": "evidence.record",
-      "outcome": "retained:80efb3207e40",
-      "subject": "evaluator"
+      "outcome": "retained:bdd73dc79758",
+      "subject": "finalized"
     },
     {
       "adapter": "condition",
       "index": 46,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 47,
+      "operation": "evidence.record",
+      "outcome": "retained:cb0b3c45b1b4",
+      "subject": "evaluator"
+    },
+    {
+      "adapter": "condition",
+      "index": 48,
       "operation": "condition.reserve",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 47,
+      "index": 49,
       "operation": "condition.enter",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 48,
+      "index": 50,
       "operation": "condition.run",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
     },
     {
       "adapter": "condition",
-      "index": 49,
-      "operation": "condition.export_raw",
-      "outcome": "passed",
-      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
-    },
-    {
-      "adapter": "evidence",
-      "index": 50,
-      "operation": "evidence.record",
-      "outcome": "retained:c230d364027d",
-      "subject": "raw"
-    },
-    {
-      "adapter": "condition",
       "index": 51,
-      "operation": "condition.finalize",
+      "operation": "condition.export_raw",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
     },
@@ -361,13 +361,13 @@
       "adapter": "evidence",
       "index": 52,
       "operation": "evidence.record",
-      "outcome": "retained:d33b7cd60717",
-      "subject": "finalized"
+      "outcome": "retained:4a04d68a21c9",
+      "subject": "raw"
     },
     {
       "adapter": "condition",
       "index": 53,
-      "operation": "condition.evaluate",
+      "operation": "condition.finalize",
       "outcome": "passed",
       "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
     },
@@ -375,33 +375,47 @@
       "adapter": "evidence",
       "index": 54,
       "operation": "evidence.record",
-      "outcome": "retained:0d46be9f0008",
+      "outcome": "retained:59c1fb51c96a",
+      "subject": "finalized"
+    },
+    {
+      "adapter": "condition",
+      "index": 55,
+      "operation": "condition.evaluate",
+      "outcome": "passed",
+      "subject": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009"
+    },
+    {
+      "adapter": "evidence",
+      "index": 56,
+      "operation": "evidence.record",
+      "outcome": "retained:800ca316495b",
       "subject": "evaluator"
     },
     {
       "adapter": "host",
-      "index": 55,
+      "index": 57,
       "operation": "host.cleanup",
       "outcome": "passed",
       "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
     },
     {
       "adapter": "evidence",
-      "index": 56,
+      "index": 58,
       "operation": "evidence.scan_privacy",
       "outcome": "passed",
       "subject": "effect-evidence"
     },
     {
       "adapter": "provider",
-      "index": 57,
+      "index": 59,
       "operation": "provider.terminate",
       "outcome": "accepted",
       "subject": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
     },
     {
       "adapter": "provider",
-      "index": 58,
+      "index": 60,
       "operation": "provider.inventory",
       "outcome": "zero",
       "subject": "owned-resources"
@@ -434,7 +448,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "composition_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
     "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -449,7 +463,7 @@
   ],
   "earliest_stopping_phase": null,
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+  "effect_authorization_context_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -467,7 +481,7 @@
     ],
     "pair_checkpoint_decision": "continue-to-task-b",
     "pair_checkpoint_reasons": [],
-    "pair_checkpoint_sha256": "a5bce8d0de8ea6b182184c36eab9ba9056f0b44d6ab4458665d1ceed955f4bec",
+    "pair_checkpoint_sha256": "4c8dd9b238c7ef66939f1db75e01236a8a1731431a244ff5aea3dce7848df57b",
     "raw": [
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
@@ -479,73 +493,73 @@
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "f6cb62295cebacb2bee0666a3a3592bc8fc9ab076bcdbccc3698b99e8d8b2c4f",
+      "sha256": "92539bacbb6ea5dd1b70db4ff0aca4128affce1deccca77aa285540ef1d5f954",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "d012a5ff557437a0db36509780033d7c7ffc2b47f5eabad8e157d031e6d7bd69",
+      "sha256": "2c4d487c72d258b2ed186218144ad257863bf1931f5526790c440fe790117469",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "540dd20f0baa9d25790faf23f6ee9e743be31fa3173035702439bdcc19f542be",
+      "sha256": "dc9715626d8a533f7770f60389eba6f88eb8fab9a4a5a6a51dfb6a919898170c",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "21412e5759ddf559c41acbe59a4ecbd0e087368c540c2a3d5f962412c640f8ae",
+      "sha256": "ba92314960a7c020d45bb798e9050c7e7b1cc8b0b2c851c65d1ace1a9c5a79ae",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "b0a48299b47d0c59f541c9da69b68dd97cbd96c1b7b5455e715993a17cf66058",
+      "sha256": "ac5262d9be4a4f76744b19081ef2ff5e07a66f7605f5e6ae7a091331a3a71d9b",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "470e0b308a0fde3a1e4cfbb8d6ac95fe7ad55aabfa0efd71c2128eb1bd7b902f",
+      "sha256": "da27c643f00887b8ff36cfb90acf9763777881cef0775314452c93a75f487921",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "1cadf069c820f1e762a0001175aef46224175eb15f95b3df77fd49b5d0c06184",
+      "sha256": "b73473488c65bfcccbea685bc0e2abffb28997d2c20d4087c9305fec31cbe5bf",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "21dac26e7f6ed322ef19eb64ca2cc93e88c97f010f2b71f3b41fdf23d85b1282",
+      "sha256": "bdd73dc79758cedbd49ee60867f0437371b012116fc4750b16099d1e30b14fe2",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "sha256": "80efb3207e4056ab363c6ed249aa2d13b272e0e92b9a186cdde0bb741d0073e9",
+      "sha256": "cb0b3c45b1b47eeb908556c109707950d9b97f73447a582cde381ec03098b23f",
       "shadow_only": true
     },
     {
       "kind": "raw",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "c230d364027dba0c7b968576d0f9c5d5e83942c89f577bded3a70f30a078d8b7",
+      "sha256": "4a04d68a21c9dc4a46227448cdaefeeeaaea88e66016c22cb98e373364930281",
       "shadow_only": true
     },
     {
       "kind": "finalized",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "d33b7cd6071703a24b7df3754511f0328c52c7e04f582c4fd5c45a7094bd58ec",
+      "sha256": "59c1fb51c96a27f06611af1c30600618b70fb3e88ea0c610775f6748d7916dcb",
       "shadow_only": true
     },
     {
       "kind": "evaluator-control-output",
       "run_id": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "0d46be9f000849a2fa7b179ffbd5707a7a0b703ebd88067fac442af78a51456a",
+      "sha256": "800ca316495b31fb9769ba97199c8538f8959c43fdda76a8e73a5f6aac48b43a",
       "shadow_only": true
     }
   ],
@@ -575,7 +589,7 @@
     {
       "index": 5,
       "outcome": "passed",
-      "phase": "local-staging"
+      "phase": "local-package-assembly"
     },
     {
       "index": 6,
@@ -609,198 +623,208 @@
       "phase": "provider-entry"
     },
     {
-      "detail": "retained host preflight failed",
       "index": 12,
+      "outcome": "passed",
+      "phase": "host-package-transfer"
+    },
+    {
+      "detail": "retained host preflight failed",
+      "index": 13,
       "outcome": "failed",
       "phase": "host-preflight"
     },
     {
       "detail": "ordinal-2",
-      "index": 13,
+      "index": 14,
       "outcome": "passed",
       "phase": "launch"
     },
     {
-      "index": 14,
+      "index": 15,
       "outcome": "passed",
       "phase": "provider-entry"
     },
     {
-      "index": 15,
+      "index": 16,
+      "outcome": "passed",
+      "phase": "host-package-transfer"
+    },
+    {
+      "index": 17,
       "outcome": "passed",
       "phase": "host-preflight"
     },
     {
-      "index": 16,
+      "index": 18,
       "outcome": "passed",
       "phase": "image-finalizer-qualification"
     },
     {
-      "index": 17,
+      "index": 19,
       "outcome": "passed",
       "phase": "scientific-freeze"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 18,
-      "outcome": "passed",
-      "phase": "condition-reservation"
-    },
-    {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "index": 19,
-      "outcome": "passed",
-      "phase": "empirical-entry"
-    },
-    {
-      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "index": 20,
       "outcome": "passed",
-      "phase": "condition-execution"
+      "phase": "condition-reservation"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "index": 21,
       "outcome": "passed",
-      "phase": "raw-export"
+      "phase": "empirical-entry"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "index": 22,
       "outcome": "passed",
-      "phase": "finalization"
+      "phase": "condition-execution"
     },
     {
       "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "index": 23,
       "outcome": "passed",
-      "phase": "evaluation"
+      "phase": "raw-export"
     },
     {
-      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "index": 24,
       "outcome": "passed",
-      "phase": "condition-reservation"
+      "phase": "finalization"
     },
     {
-      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "detail": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
       "index": 25,
       "outcome": "passed",
-      "phase": "empirical-entry"
+      "phase": "evaluation"
     },
     {
       "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
       "index": 26,
       "outcome": "passed",
-      "phase": "condition-execution"
+      "phase": "condition-reservation"
     },
     {
       "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
       "index": 27,
       "outcome": "passed",
-      "phase": "raw-export"
+      "phase": "empirical-entry"
     },
     {
       "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
       "index": 28,
       "outcome": "passed",
-      "phase": "finalization"
+      "phase": "condition-execution"
     },
     {
       "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
       "index": 29,
       "outcome": "passed",
+      "phase": "raw-export"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 30,
+      "outcome": "passed",
+      "phase": "finalization"
+    },
+    {
+      "detail": "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
+      "index": 31,
+      "outcome": "passed",
       "phase": "evaluation"
     },
     {
-      "index": 30,
+      "index": 32,
       "outcome": "continue-to-task-b",
       "phase": "first-pair-checkpoint"
     },
     {
-      "index": 31,
+      "index": 33,
       "outcome": "entered",
       "phase": "remaining-conditions"
     },
     {
       "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "index": 32,
-      "outcome": "passed",
-      "phase": "condition-reservation"
-    },
-    {
-      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
-      "index": 33,
-      "outcome": "passed",
-      "phase": "empirical-entry"
-    },
-    {
-      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "index": 34,
       "outcome": "passed",
-      "phase": "condition-execution"
+      "phase": "condition-reservation"
     },
     {
       "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "index": 35,
       "outcome": "passed",
-      "phase": "raw-export"
+      "phase": "empirical-entry"
     },
     {
       "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "index": 36,
       "outcome": "passed",
-      "phase": "finalization"
+      "phase": "condition-execution"
     },
     {
       "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "index": 37,
       "outcome": "passed",
-      "phase": "evaluation"
+      "phase": "raw-export"
     },
     {
-      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "index": 38,
       "outcome": "passed",
-      "phase": "condition-reservation"
+      "phase": "finalization"
     },
     {
-      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "detail": "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
       "index": 39,
       "outcome": "passed",
-      "phase": "empirical-entry"
+      "phase": "evaluation"
     },
     {
       "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
       "index": 40,
       "outcome": "passed",
-      "phase": "condition-execution"
+      "phase": "condition-reservation"
     },
     {
       "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
       "index": 41,
       "outcome": "passed",
-      "phase": "raw-export"
+      "phase": "empirical-entry"
     },
     {
       "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
       "index": 42,
       "outcome": "passed",
-      "phase": "finalization"
+      "phase": "condition-execution"
     },
     {
       "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
       "index": 43,
       "outcome": "passed",
+      "phase": "raw-export"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 44,
+      "outcome": "passed",
+      "phase": "finalization"
+    },
+    {
+      "detail": "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009",
+      "index": 45,
+      "outcome": "passed",
       "phase": "evaluation"
     },
     {
-      "index": 44,
+      "index": 46,
       "outcome": "passed",
       "phase": "cleanup"
     },
     {
-      "index": 45,
+      "index": 47,
       "outcome": "passed",
       "phase": "terminal-provider-security-verification"
     }
@@ -922,6 +946,11 @@
               "terminal_state": "sent_response_reconciled"
             }
           ],
+          "campaign_output": {
+            "condition_identity": null,
+            "granted_bytes": 67202235,
+            "observed_bytes": 120605
+          },
           "observed_lower_bound": {
             "aggregate": {
               "browser_actions": 2,
@@ -930,7 +959,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 136962,
               "output_tokens": 36,
               "total_tokens": 177
             },
@@ -941,7 +970,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 16357,
               "output_tokens": 36,
               "total_tokens": 177
             }
@@ -954,7 +983,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -965,7 +994,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -979,7 +1008,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 201436320,
               "output_tokens": 36,
               "total_tokens": 177
             },
@@ -990,7 +1019,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 90,
+              "output_bytes": 134234085,
               "output_tokens": 36,
               "total_tokens": 177
             }
@@ -1189,6 +1218,11 @@
               "terminal_state": "sent_response_reconciled"
             }
           ],
+          "campaign_output": {
+            "condition_identity": null,
+            "granted_bytes": 67202235,
+            "observed_bytes": 120605
+          },
           "observed_lower_bound": {
             "aggregate": {
               "browser_actions": 4,
@@ -1197,7 +1231,7 @@
               "default_service_tier_responses": 8,
               "input_tokens": 381,
               "model_call_attempts": 8,
-              "output_bytes": 180,
+              "output_bytes": 168470,
               "output_tokens": 96,
               "total_tokens": 477
             },
@@ -1208,7 +1242,7 @@
               "default_service_tier_responses": 5,
               "input_tokens": 240,
               "model_call_attempts": 5,
-              "output_bytes": 90,
+              "output_bytes": 31508,
               "output_tokens": 60,
               "total_tokens": 300
             }
@@ -1221,7 +1255,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -1232,7 +1266,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -1246,7 +1280,7 @@
               "default_service_tier_responses": 8,
               "input_tokens": 381,
               "model_call_attempts": 8,
-              "output_bytes": 180,
+              "output_bytes": 335685556,
               "output_tokens": 96,
               "total_tokens": 477
             },
@@ -1257,7 +1291,7 @@
               "default_service_tier_responses": 5,
               "input_tokens": 240,
               "model_call_attempts": 5,
-              "output_bytes": 90,
+              "output_bytes": 134249236,
               "output_tokens": 60,
               "total_tokens": 300
             }
@@ -1384,6 +1418,11 @@
               "terminal_state": "sent_response_reconciled"
             }
           ],
+          "campaign_output": {
+            "condition_identity": null,
+            "granted_bytes": 67202235,
+            "observed_bytes": 120605
+          },
           "observed_lower_bound": {
             "aggregate": {
               "browser_actions": 8,
@@ -1392,7 +1431,7 @@
               "default_service_tier_responses": 16,
               "input_tokens": 762,
               "model_call_attempts": 16,
-              "output_bytes": 620,
+              "output_bytes": 248160,
               "output_tokens": 192,
               "total_tokens": 954
             },
@@ -1403,7 +1442,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 220,
+              "output_bytes": 43219,
               "output_tokens": 36,
               "total_tokens": 177
             }
@@ -1416,7 +1455,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -1427,7 +1466,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -1441,7 +1480,7 @@
               "default_service_tier_responses": 16,
               "input_tokens": 762,
               "model_call_attempts": 16,
-              "output_bytes": 620,
+              "output_bytes": 604200702,
               "output_tokens": 192,
               "total_tokens": 954
             },
@@ -1452,7 +1491,7 @@
               "default_service_tier_responses": 3,
               "input_tokens": 141,
               "model_call_attempts": 3,
-              "output_bytes": 220,
+              "output_bytes": 134260947,
               "output_tokens": 36,
               "total_tokens": 177
             }
@@ -1651,6 +1690,11 @@
               "terminal_state": "sent_response_reconciled"
             }
           ],
+          "campaign_output": {
+            "condition_identity": null,
+            "granted_bytes": 67202235,
+            "observed_bytes": 120605
+          },
           "observed_lower_bound": {
             "aggregate": {
               "browser_actions": 6,
@@ -1659,7 +1703,7 @@
               "default_service_tier_responses": 13,
               "input_tokens": 621,
               "model_call_attempts": 13,
-              "output_bytes": 400,
+              "output_bytes": 204941,
               "output_tokens": 156,
               "total_tokens": 777
             },
@@ -1670,7 +1714,7 @@
               "default_service_tier_responses": 5,
               "input_tokens": 240,
               "model_call_attempts": 5,
-              "output_bytes": 220,
+              "output_bytes": 36471,
               "output_tokens": 60,
               "total_tokens": 300
             }
@@ -1683,7 +1727,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             },
@@ -1694,7 +1738,7 @@
               "default_service_tier_responses": 0,
               "input_tokens": 0,
               "model_call_attempts": 0,
-              "output_bytes": 0,
+              "output_bytes": 134217728,
               "output_tokens": 0,
               "total_tokens": 0
             }
@@ -1708,7 +1752,7 @@
               "default_service_tier_responses": 13,
               "input_tokens": 621,
               "model_call_attempts": 13,
-              "output_bytes": 400,
+              "output_bytes": 469939755,
               "output_tokens": 156,
               "total_tokens": 777
             },
@@ -1719,7 +1763,7 @@
               "default_service_tier_responses": 5,
               "input_tokens": 240,
               "model_call_attempts": 5,
-              "output_bytes": 220,
+              "output_bytes": 134254199,
               "output_tokens": 60,
               "total_tokens": 300
             }
@@ -1747,20 +1791,20 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+    "authorization_context_semantic_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
     "cleanup_handoff_sha256": "97f54da7ce5f8445cedd74feee65b34170cf530d8977bf00888027f1c5fbdfa3",
     "cleanup_receipt_sha256": "7f12fd917661a3545045e948b76753322e711a8f6c5d6e7baf9b529eeea43f82",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 100560,
+      "bytes": 111256,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
-      "protocol_version": "1.0.0",
-      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+      "protocol_version": "2.0.0",
+      "sha256": "7aa76fca39098dfc6d1bbc8fdc87cc211067765f32e3cbe9d4d7c5de2e479586"
     },
-    "effect_protocol_version": "1.0.0",
+    "effect_protocol_version": "2.0.0",
     "essential_failures": {},
     "evaluations": {
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
@@ -1768,7 +1812,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "540dd20f0baa9d25790faf23f6ee9e743be31fa3173035702439bdcc19f542be",
+        "receipt_sha256": "dc9715626d8a533f7770f60389eba6f88eb8fab9a4a5a6a51dfb6a919898170c",
         "score": 0.9,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1778,7 +1822,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-A-SIMULATIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "470e0b308a0fde3a1e4cfbb8d6ac95fe7ad55aabfa0efd71c2128eb1bd7b902f",
+        "receipt_sha256": "da27c643f00887b8ff36cfb90acf9763777881cef0775314452c93a75f487921",
         "score": 0.9,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1788,7 +1832,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-B-REACTIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "0d46be9f000849a2fa7b179ffbd5707a7a0b703ebd88067fac442af78a51456a",
+        "receipt_sha256": "800ca316495b31fb9769ba97199c8538f8959c43fdda76a8e73a5f6aac48b43a",
         "score": 1.0,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1798,7 +1842,7 @@
         "classification": "control-conformance-output-not-science",
         "evaluator_run_id": "RUN-T09-EVAL-TASK-B-SIMULATIVE-AUTONOMOUS-0009",
         "evaluator_valid": true,
-        "receipt_sha256": "80efb3207e4056ab363c6ed249aa2d13b272e0e92b9a186cdde0bb741d0073e9",
+        "receipt_sha256": "cb0b3c45b1b47eeb908556c109707950d9b97f73447a582cde381ec03098b23f",
         "score": 1.0,
         "task_completed": true,
         "valid_scored_attempt": true
@@ -1816,7 +1860,7 @@
           "default_service_tier_responses": 8,
           "input_tokens": 381,
           "model_call_attempts": 8,
-          "output_bytes": 180,
+          "output_bytes": 335677093,
           "output_tokens": 96,
           "total_tokens": 477
         },
@@ -1846,14 +1890,14 @@
       "cumulative_t09_cost_cap_usd": 90.0,
       "decided_at_epoch": 1800001028.0,
       "decision": "continue-to-task-b",
-      "evidence_binding_sha256": "185afbf1eb7bff0cf5a7f1a2bac2a6cdf0cacd84fbb97f72926e95cffb6c2258",
+      "evidence_binding_sha256": "816dc867a0c24f726623f2da4085927e87f0877528e24e3cb2ba5793abc3f220",
       "first_pair_started_at_epoch": 1800001028.0,
       "plan_id": "PLAN-EXP0001-PILOT-V16",
       "prior_t09_cost_usd": 36.36170860803283,
       "projected_aggregate_cost_usd": 2.48397,
       "projected_cumulative_t09_cost_usd": 38.84567860803283,
-      "provider_cost_receipt_sha256": "af32df62f1efda911410d35da25497ec1e68251405f64e9b226f2eb35bdd471d",
-      "provider_lifecycle_cost_proof_sha256": "af32df62f1efda911410d35da25497ec1e68251405f64e9b226f2eb35bdd471d",
+      "provider_cost_receipt_sha256": "00e48ee3ac6abaf587142859804c0c46c5da3904fb9ae8e8ac013fb88fdcb5e5",
+      "provider_lifecycle_cost_proof_sha256": "00e48ee3ac6abaf587142859804c0c46c5da3904fb9ae8e8ac013fb88fdcb5e5",
       "reasons": [],
       "remaining_campaign_seconds": 14400.0,
       "required_campaign_seconds_for_next_attempt": 5160,
@@ -1871,18 +1915,19 @@
       }
     },
     "held_evidence": {
+      "condition_bridge": {},
       "essential_failure": {},
       "finalized": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "9bec064d9fb4f342d693384cf140689f433996c108bd3a2ecd31306cfe320d33",
-        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "fe13e0a65a50b2359983f141099950342a3baee0be1911f32a3919c89cdf79a2",
-        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "f8e88f7f939792624c36054d1000688c8c67f7ce2a9c870dd6db572d4761fa1c",
-        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "ccccb1d467c142cc14697b8ed11febedbf7d3a6805d0e9fb583aa7c07939c099"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "66a8a8cb32221a2f810b28ded44b8915eb70fc7762fb9dacaf5a4feb7b879d8e",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "137287d310a886f6cd8f96f02d92723508b808196a3156160f922879a3e6de3a",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "ce1cd75257920cbb357c0600a4c36577ba9d9449e3db3ded6f2843e0158a52d4",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "7aa345a539eb72d847fade4d50eab81b4ddf1148615f33e36f2405c9923644c9"
       },
       "raw": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "eb62c4ca8ac7d2d2f9e2380e002a7e8f51b63e2330c491c9fb4fe892e7c7ca98",
-        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "7d7169eab2e28ae9cde7c1de077a9dcf57b0eb83279fe2d4f1f5d946338626ef",
-        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "ff5644cf2146cf35d57e31aaba428fc4796c9ef010c8a638fff2588b6bf59c29",
-        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "19256c0be7e6f3a1ee7e5ad604250005f6e51625be04274efeb087b7acab544e"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "fc97a1df8e3cde7d0e693575865492d708d5624db3054ff2ad2997d07f4fb2ab",
+        "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "bb6e7a5b11204e5bc5168d10e5c5368737318c4350b0de2fdf4f4616a92d006c",
+        "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "d807c574197a2da93ab6569fa55ed3d6abcc904b6c09d8b8c86a8e4d3b71365e",
+        "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "3bca1ece7289c1b2d4935f1da9b919ad0d71893d793db81b6badfe161f12b7e1"
       },
       "revalidated_across_consumers": true
     },
@@ -1897,11 +1942,41 @@
       "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "6acbbf6e63221af1ed47f31a89b4f790ef36ad10187c3ace64de9858d52c1f81",
-      "postfreeze_validation": "04625fc6e46a6189d61ef5a1e93b5005cfb0da8190fe69a424e69912bf0bcfaa",
-      "qualification": "888b76f125ab3159185ed8197f3e460ad290e64b43f18b8de383a145d380ce31"
+      "frozen_manifest": "dff63e3c0b9a52b27e2c9c7fea637f61d3972ef4c275d1689c876e854c8af985",
+      "postfreeze_validation": "6a98bc0c8a0b78b49faf9f2d5e335e8cdf3fb0071623c2024b71118726c1725a",
+      "qualification": "e053c63ae043ef5cf484e174f0702b42b2f7d715e1770ed761bd7381b757398e"
+    },
+    "host_transfers": {
+      "1": {
+        "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+        "host_acknowledgement_sha256": "3c69eddce04a5d0a04d975496a7e1e7cb6e1b238fa5802bf5df2dfc4cb0f5532",
+        "member_manifest_sha256": "8fe2559a455ab4e87ebbd68b89b951fd878c2c82ac9da6acf7e8597ddba07fc6",
+        "receipt_sha256": "bc809ef634a1d414ddf1e7349eb0d317d2399bd8ad846d5a83e9547ade33efd8"
+      },
+      "2": {
+        "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+        "host_acknowledgement_sha256": "83261d26927218b91a1dacb27cdccaaec0a03986d864560c348ef91950d4576e",
+        "member_manifest_sha256": "8fe2559a455ab4e87ebbd68b89b951fd878c2c82ac9da6acf7e8597ddba07fc6",
+        "receipt_sha256": "699dfe9e9961d2cf579154e904e5b8b1902041326653cc6ff43e528bff51cd09"
+      }
     },
     "implementation_flavor": "production-wrapper",
+    "package_assembly": {
+      "archive_bytes": 204800,
+      "archive_member_count": 11,
+      "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "contains_provider_handle": false,
+      "contains_remote_path": false,
+      "deterministic_render_count": 2,
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "package_source": "working-tree",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "source_manifest_sha256": "b100bf13dc91157e14513af28ca3015cc428b66df7ce92c30b778ccafbb32c4d",
+      "tracked_only": true,
+      "uploaded": false,
+      "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
+    },
     "package_budget": {
       "aggregate_caps": {
         "max_browser_actions": 120,
@@ -1979,18 +2054,6 @@
       "service_tier": "default",
       "zero_retry": true
     },
-    "package_staging": {
-      "archive_bytes": 194560,
-      "archive_member_count": 11,
-      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
-      "host_acknowledgement_sha256": "331e343f966ccac051d127ab7031b02d08cca4f55a353ed983a2588a4ef5d0f0",
-      "host_rehash_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "package_source": "working-tree",
-      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "tracked_only": true
-    },
     "production_primitives": [
       "EvaluatorIdentity.verify",
       "ProviderBudgetBoundary.invoke",
@@ -2001,6 +2064,7 @@
       "_publish_replacement_launch_eligibility",
       "_retain_replacement_launch_authority",
       "admit_model_metadata_receipt_at_prelaunch_boundary",
+      "assemble_local_package:two-byte-identical-renders",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "closeout_campaign",
       "create_model_metadata_receipt",
@@ -2009,6 +2073,7 @@
       "execute_offline_finalizer",
       "execute_typed_condition_session",
       "first_pair_decision",
+      "host-transfer-verify",
       "immutable_cleanup_export_handoff",
       "initialize_pilot_state",
       "launch_campaign",
@@ -2024,7 +2089,6 @@
       "record_first_pair_checkpoint",
       "reserve_condition_start",
       "resolve_registered_command_package",
-      "stage_verified_archive",
       "validate_campaign_launch_projection",
       "validate_cleanup_execution_receipt",
       "validate_entry_receipt_source_bound",
@@ -2042,10 +2106,10 @@
     ],
     "provider_cost_receipt": {
       "active_ended_wall_time": null,
-      "active_entry_receipt_sha256": "f603e748245fedd7179e26cb4fbfe5b24b9a3a7487b2c4048655b7727376ebeb",
+      "active_entry_receipt_sha256": "bc7a909aaf9d2960ec3c23f667ce86dd19453315c59b06db6dc607c3bad7c441",
       "active_started_wall_time": 1800001023.0,
       "closed_slot_receipt_sha256s": [
-        "84dd69ef46b822509b7f6ec9999d19138476cd40c47705b6ee2c41c51bcd6faa"
+        "a58bc42417a1551c5c13ae4445eaad44d136d546b5f773d1b2dec967bed49e0d"
       ],
       "cumulative_provider_cost_usd": 0.0,
       "current_empirical_cost_usd": 0.0,
@@ -2060,12 +2124,12 @@
       "provider_price_source_sha256": "6749f2986aa4319e46c1a487cce24a8fbb0328a2be519fd36f561d65206b264d",
       "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
       "real_provider_effects": false,
-      "receipt_sha256": "90ab4460c19e9f0f0889ac6a78e96f26d0106f705399d41ab1789201c8828ad1"
+      "receipt_sha256": "907f152208d7341cbc6a51568ded4d3b8bf4a1faa61e36dd2528122dc332e591"
     },
     "provider_lifecycle_cost_proof": {
-      "active_entry_receipt_sha256": "f603e748245fedd7179e26cb4fbfe5b24b9a3a7487b2c4048655b7727376ebeb",
+      "active_entry_receipt_sha256": "bc7a909aaf9d2960ec3c23f667ce86dd19453315c59b06db6dc607c3bad7c441",
       "closed_slot_source_binding_sha256s": [
-        "84dd69ef46b822509b7f6ec9999d19138476cd40c47705b6ee2c41c51bcd6faa"
+        "a58bc42417a1551c5c13ae4445eaad44d136d546b5f773d1b2dec967bed49e0d"
       ],
       "cumulative_provider_cost_usd": "0",
       "current_empirical_cost_usd": "0",
@@ -2075,8 +2139,8 @@
           "active_started_wall_time": 1800001006.0,
           "billable_real_effect": false,
           "billed_cost_usd": "0",
-          "closeout_receipt_sha256": "2bd5beb09e58e87afe908ff80b9c427eadc78c6856a143ed8ca6377dfe20c86b",
-          "entry_or_owner_receipt_sha256": "7112ae94d18b6bb901d65869fb955d8e762ca0513fc69b6f7440624278d06f5d",
+          "closeout_receipt_sha256": "66f498968dc7d4413a0233dc6e9fbf09807e740104f3b8c1ab3803aaf80044db",
+          "entry_or_owner_receipt_sha256": "05841d2d66facd329cca31f19eb9cefbf1dc55123d0b95d3a8811e96a2851928",
           "hourly_price_usd": "1.29",
           "launch_ordinal": 1,
           "owned_instance_identity": "5236e1ef67368e7b474567f09d6d2faeab6e4b923b973b781441630dc9539176"
@@ -2087,7 +2151,7 @@
           "billable_real_effect": false,
           "billed_cost_usd": "0",
           "closeout_receipt_sha256": null,
-          "entry_or_owner_receipt_sha256": "f603e748245fedd7179e26cb4fbfe5b24b9a3a7487b2c4048655b7727376ebeb",
+          "entry_or_owner_receipt_sha256": "bc7a909aaf9d2960ec3c23f667ce86dd19453315c59b06db6dc607c3bad7c441",
           "hourly_price_usd": "1.29",
           "launch_ordinal": 2,
           "owned_instance_identity": "eb224ff5739df3025b7fd8d08d4e2fb24db8cb863f2acbdcd1b4cefb4c65c61e"
@@ -2101,13 +2165,13 @@
       "provider_price_source_sha256": "6749f2986aa4319e46c1a487cce24a8fbb0328a2be519fd36f561d65206b264d",
       "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
       "real_provider_effects": false,
-      "receipt_sha256": "af32df62f1efda911410d35da25497ec1e68251405f64e9b226f2eb35bdd471d"
+      "receipt_sha256": "00e48ee3ac6abaf587142859804c0c46c5da3904fb9ae8e8ac013fb88fdcb5e5"
     },
     "raw_export_acknowledgements": {
-      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "d2f9fab8312a104eed4cda955c337ed53a9d4521c55a920c21d9c77afe810e0d",
-      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "1ab4b777da5a00e48720ed4717b331b9d0371bcaa88aebca03324ac9a20dffa7",
-      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "bbfb6c330e59d3933d625be280e8bf9d49560174781f3b7b7a6cfa6f4561a033",
-      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "3fd9cb605f84feeb461b025fdcbabdf35a5c2f2b3ba4fdffa2f95312370eb5c1"
+      "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "f8a126ba14a9104947b9128ff38dd2818c52fd15f3cecfaaf8cbc7edc408ec2a",
+      "RUN-T09-TASK-A-SIMULATIVE-AUTONOMOUS-0009": "83cf0bf80155d591536472b42bb5cbbafed90445df23f333c21ce23f81c9cd09",
+      "RUN-T09-TASK-B-REACTIVE-AUTONOMOUS-0009": "414cf5c085b5576bae57099014b1ed541f6018fe6f7f0218ee029d3cfa5c4ae0",
+      "RUN-T09-TASK-B-SIMULATIVE-AUTONOMOUS-0009": "ebd0fd11b616f0286c2f4b39b48fe543a127ac110c07092bf26df7e3ca703577"
     },
     "replacement_history": {
       "closed_launch_slots": [
@@ -2151,6 +2215,8 @@
         1011.0,
         1011.0,
         1011.0,
+        1011.0,
+        1011.0,
         1016.0,
         1016.0,
         1017.0,
@@ -2167,6 +2233,187 @@
         1022.0,
         1023.0,
         1023.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
+        1028.0,
         1028.0,
         1028.0,
         1028.0,
@@ -2395,6 +2642,8 @@
         1800001011.0,
         1800001011.0,
         1800001011.0,
+        1800001011.0,
+        1800001011.0,
         1800001016.0,
         1800001016.0,
         1800001016.0,
@@ -2448,6 +2697,10 @@
         1800001023.0,
         1800001023.0,
         1800001023.0,
+        1800001028.0,
+        1800001028.0,
+        1800001028.0,
+        1800001028.0,
         1800001028.0,
         1800001028.0,
         1800001028.0,
@@ -2468,8 +2721,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
   "scenario": "host-preflight-replacement",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -2483,7 +2736,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "645a1a292d3f5106f119b89b3314ef693f79b38707133a95dcd62bb76f923102",
+  "semantic_sha256": "7a96277571961908a633dcc28d590592c67ed6b695381e50f66d73d010d589e0",
   "shadow_only": true,
   "stop_reason": null,
   "terminal_state": "category3-shadow-complete-clean",

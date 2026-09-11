@@ -22,11 +22,10 @@ from giclab.control.proofs import (
     BASE_COMMIT as T09_CONTROL_RECEIPT_BASE_COMMIT,
 )
 from giclab.control.proofs import (
-    LEGACY_REQUIRED_SHARED_SOURCES,
-    REQUIRED_SHARED_SOURCES,
     ControlProofError,
     ControlProofReference,
     discover_sealed_control_receipt_roots,
+    required_shared_sources_for_schema,
     validate_control_receipt_set,
     validate_current_control_receipt_set,
 )
@@ -48,6 +47,7 @@ from giclab.registry import (
     discover_repo_root,
     load_json,
     load_yaml,
+    local_schema_registry,
     resolve_repo_path,
 )
 from giclab.sitegen import build_site_data
@@ -113,6 +113,18 @@ SCHEMA_FILES = (
     "schemas/t09-anti-shadow-lint-receipt.schema.json",
     "schemas/t09-effect-authorization-context.schema.json",
     "schemas/t09-live-effect-conformance-receipt.schema.json",
+    "schemas/t09-condition-duplex-frame.schema.json",
+    "schemas/t09-condition-duplex-transcript.schema.json",
+    "schemas/t09-condition-runtime-detachment.schema.json",
+    "schemas/t09-condition-host-terminal-receipt.schema.json",
+    "schemas/t09-condition-session-terminal-receipt.schema.json",
+    "schemas/t09-private-condition-socket-binding.schema.json",
+    "schemas/t09-full-dynamic-frozen-manifest.schema.json",
+    "schemas/t09-host-phase-request.schema.json",
+    "schemas/t09-host-phase-receipt.schema.json",
+    "schemas/t09-live-method-map.schema.json",
+    "schemas/t09-live-method-viability.schema.json",
+    "schemas/t09-remote-execution-bridge-conformance.schema.json",
     "schemas/t09-essential-failure-manifest.schema.json",
     "schemas/t09-essential-failure-complete.schema.json",
     "schemas/t09-essential-failure-export-acknowledgement.schema.json",
@@ -274,7 +286,11 @@ def validate_instance(
     """Validate a mapping with a repository JSON Schema."""
 
     schema = load_json(schema_path)
-    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    validator = Draft202012Validator(
+        schema,
+        format_checker=FormatChecker(),
+        registry=local_schema_registry(schema_path.parent),
+    )
     errors = _format_validation_errors(validator, instance)
     if schema_path.name == "container-attempt.schema.json":
         errors.extend(_validate_container_attempt_semantics(instance))
@@ -445,13 +461,11 @@ def _t09_control_source_binding_map(root: Path) -> tuple[dict[str, str], list[st
         )
         if ancestor.returncode != 0:
             errors.append("T09 shared control-plane source commit is not based on the exact base")
-    required_paths = set(
-        LEGACY_REQUIRED_SHARED_SOURCES
-        if document.get("schema_version") == "1.0.0"
-        else REQUIRED_SHARED_SOURCES
-        if document.get("schema_version") == "2.0.0"
-        else ()
-    )
+    try:
+        required_paths = set(required_shared_sources_for_schema(document.get("schema_version")))
+    except ControlProofError as exc:
+        required_paths = set()
+        errors.append(f"T09 shared control-plane source binding: {exc}")
     files = document.get("files")
     bindings: dict[str, str] = {}
     if not isinstance(files, list):
@@ -3035,7 +3049,12 @@ def _validate_t09_successor_plan(
             continue
         if hashlib.sha256(target.read_bytes()).hexdigest() == expected:
             continue
-        historical_match = path.suffix == ".py" and any(
+        # Shared implementation schemas evolve alongside Python. Frozen plans
+        # retain their original bytes at their own reviewed source ancestor.
+        historical_source = path.suffix == ".py" or (
+            path.parts[0] == "schemas" and path.suffix == ".json"
+        )
+        historical_match = historical_source and any(
             _t09_git_blob_sha256(root, source_ancestor, relative) == expected
             for source_ancestor in source_ancestors
         )

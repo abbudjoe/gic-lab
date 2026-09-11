@@ -21,7 +21,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["2.0.0", "3.0.0"]},
+    "schema_version": {"enum": ["2.0.0", "3.0.0", "4.0.0"]},
     "repository_commit": {"$ref": "#/$defs/git"},
     "repository_tree": {"$ref": "#/$defs/git"},
     "audited_base": {
@@ -42,6 +42,13 @@
     "shared_effect_neutral_sources": {
       "type": "array",
       "minItems": 1,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/path"}
+    },
+    "bridge_live_sources": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
       "uniqueItems": true,
       "items": {"$ref": "#/$defs/path"}
     },
@@ -149,6 +156,25 @@
         "required": ["schema_version"]
       },
       "then": {
+        "properties": {
+          "public_receipt_topology_scan": {
+            "required": [
+              "selected_provider_contract_version",
+              "selected_receipt_root",
+              "sealed_roots_scanned",
+              "member_count_by_root"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "4.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "required": ["bridge_live_sources"],
         "properties": {
           "public_receipt_topology_scan": {
             "required": [

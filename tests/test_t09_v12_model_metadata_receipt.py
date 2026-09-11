@@ -7,7 +7,7 @@ import os
 import stat
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import cast
 
 import pytest
@@ -742,7 +742,7 @@ def test_dotenv_rejects_path_replacement_while_descriptor_is_held(
         metadata.load_openai_dotenv_assignment(path)
 
 
-@pytest.mark.parametrize("drift", ("truncate", "same-size-mutation"))
+@pytest.mark.parametrize("drift", ("truncate", "same-size-mutation", "same-size-stable-timestamps"))
 def test_dotenv_rejects_mutation_or_truncation_while_descriptor_is_held(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -750,6 +750,40 @@ def test_dotenv_rejects_mutation_or_truncation_while_descriptor_is_held(
 ) -> None:
     path = tmp_path / "openai.env"
     _private_bytes(path, APPROVED_DOTENV_BYTES)
+    initial = path.stat()
+    actual_fstat = os.fstat
+    actual_stat = Path.stat
+
+    def stable_timestamps(value: os.stat_result) -> os.stat_result:
+        if (value.st_dev, value.st_ino) != (initial.st_dev, initial.st_ino):
+            return value
+        fields = {
+            name: getattr(value, name)
+            for name in (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_uid",
+                "st_nlink",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+        }
+        fields.update(st_mtime_ns=initial.st_mtime_ns, st_ctime_ns=initial.st_ctime_ns)
+        return cast(os.stat_result, SimpleNamespace(**fields))
+
+    if drift == "same-size-stable-timestamps":
+        # Filesystem timestamp observations need not distinguish adjacent writes.
+        # Only those observations are doubled; mutation and reads remain real.
+        monkeypatch.setattr(metadata.os, "fstat", lambda fd: stable_timestamps(actual_fstat(fd)))
+        monkeypatch.setattr(
+            Path,
+            "stat",
+            lambda self, *, follow_symlinks=True: stable_timestamps(
+                actual_stat(self, follow_symlinks=follow_symlinks)
+            ),
+        )
     actual_readv = os.readv
     changed = False
 
@@ -767,6 +801,7 @@ def test_dotenv_rejects_mutation_or_truncation_while_descriptor_is_held(
     monkeypatch.setattr(metadata.os, "readv", mutating_readv)
     with pytest.raises(metadata.ModelMetadataReceiptError, match="changed while held"):
         metadata.load_openai_dotenv_assignment(path)
+    assert changed
 
 
 def test_dotenv_mode_policy_does_not_relax_private_json_controls(tmp_path: Path) -> None:
@@ -776,6 +811,68 @@ def test_dotenv_mode_policy_does_not_relax_private_json_controls(tmp_path: Path)
         path.chmod(0o644)
         with pytest.raises(metadata.ModelMetadataReceiptError, match="metadata is unsafe"):
             metadata._load_private_object(path, label=name)
+
+
+@pytest.mark.parametrize("confirmation_error", (False, True))
+def test_dotenv_confirmation_uses_bounded_short_reads_and_erases_buffers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    confirmation_error: bool,
+) -> None:
+    path = tmp_path / "short-read.env"
+    _private_bytes(path, APPROVED_DOTENV_BYTES)
+    actual_readv = os.readv
+    actual_destroy = metadata._destroy_bytearray
+    actual_close = os.close
+    eof_count = 0
+    observed_bytes = 0
+    descriptor_seen: int | None = None
+    closed: list[int] = []
+    erased: list[tuple[int, bytearray]] = []
+
+    def short_readv(descriptor: int, buffers: list[memoryview]) -> int:
+        nonlocal eof_count, observed_bytes, descriptor_seen
+        descriptor_seen = descriptor
+        assert len(buffers) == 1
+        assert len(buffers[0]) <= len(APPROVED_DOTENV_BYTES) + 1
+        if confirmation_error and eof_count:
+            raise OSError("fixture confirmation read failure")
+        window = buffers[0][:7]
+        try:
+            count = actual_readv(descriptor, [window])
+        finally:
+            window.release()
+        observed_bytes += count
+        eof_count += count == 0
+        return count
+
+    def erase(value: bytearray) -> None:
+        size = len(value)
+        actual_destroy(value)
+        erased.append((size, value))
+
+    def close(descriptor: int) -> None:
+        if descriptor == descriptor_seen:
+            closed.append(descriptor)
+        actual_close(descriptor)
+
+    monkeypatch.setattr(metadata.os, "readv", short_readv)
+    monkeypatch.setattr(metadata.os, "close", close)
+    monkeypatch.setattr(metadata, "_destroy_bytearray", erase)
+    if confirmation_error:
+        with pytest.raises(metadata.ModelMetadataReceiptError, match="changed while held"):
+            metadata.load_openai_dotenv_assignment(path)
+        assert observed_bytes == len(APPROVED_DOTENV_BYTES)
+        assert sum(size == len(APPROVED_DOTENV_BYTES) + 1 for size, _ in erased) == 2
+    else:
+        selected = metadata.load_openai_dotenv_assignment(path)
+        assert selected == OPENAI_FIXTURE_VALUE
+        metadata._destroy_bytearray(selected)
+        assert observed_bytes == 2 * len(APPROVED_DOTENV_BYTES)
+        assert eof_count == 2
+        assert sum(size == len(APPROVED_DOTENV_BYTES) + 1 for size, _ in erased) == 1
+    assert descriptor_seen is not None and closed == [descriptor_seen]
+    assert erased and all(len(value) == 0 for _, value in erased)
 
 
 @pytest.mark.parametrize(

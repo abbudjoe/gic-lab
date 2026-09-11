@@ -3,7 +3,7 @@
     {
       "adapter": "host",
       "index": 1,
-      "operation": "host.stage",
+      "operation": "host.assemble_local",
       "outcome": "passed",
       "subject": "tracked-package-archive"
     },
@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "expired",
-      "subject": "2d47cfa7e381e0f16584fea384ea5d639bc7c8df06137a03858d36683d5b653a"
+      "subject": "bed3df43d9a3b1ae408f85b3c0fdd3f0c07431a74125b7cc7502be66b1c510f4"
     },
     {
       "adapter": "host",
@@ -84,12 +84,12 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "cc918b9c4b4e671af1807ff6918b0643bfaeb081ef649839f8252ecc4f7105f0",
+  "composition_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "final-metadata-freshness",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+  "effect_authorization_context_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -127,7 +127,7 @@
     {
       "index": 5,
       "outcome": "passed",
-      "phase": "local-staging"
+      "phase": "local-package-assembly"
     },
     {
       "index": 6,
@@ -177,24 +177,25 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "4954d62a6f338ed8e813fafbe07928e69688e5929bddf82888973e0891eea5cf",
+    "authorization_context_semantic_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
     "cleanup_handoff_sha256": "4240baa87d838671f53209c0715e1193793fa443458c7a4a2d1daa3fdb6ad132",
     "cleanup_receipt_sha256": "a8c2b3d96286244b8855076fe2ed578764b0888fedb517a479fc8ef0e5677866",
     "cleanup_resume_byte_identical": true,
     "cleanup_used_held_root_after_path_mismatch": false,
     "effect_authority": "shadow-only",
     "effect_implementation": {
-      "bytes": 100560,
+      "bytes": 111256,
       "factory_entry_point": "build_deterministic_effects",
       "path": "src/giclab/control/shadow_effects.py",
-      "protocol_version": "1.0.0",
-      "sha256": "e57d622662fa8b35266e2fa29ad0708f4ed41845b175ef238d1027c2a67c236c"
+      "protocol_version": "2.0.0",
+      "sha256": "7aa76fca39098dfc6d1bbc8fdc87cc211067765f32e3cbe9d4d7c5de2e479586"
     },
-    "effect_protocol_version": "1.0.0",
+    "effect_protocol_version": "2.0.0",
     "essential_failures": {},
     "evaluations": {},
     "first_pair_checkpoint": null,
     "held_evidence": {
+      "condition_bridge": {},
       "essential_failure": {},
       "finalized": {},
       "raw": {},
@@ -215,7 +216,24 @@
       "postfreeze_validation": null,
       "qualification": null
     },
+    "host_transfers": {},
     "implementation_flavor": "production-wrapper",
+    "package_assembly": {
+      "archive_bytes": 204800,
+      "archive_member_count": 11,
+      "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
+      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
+      "contains_provider_handle": false,
+      "contains_remote_path": false,
+      "deterministic_render_count": 2,
+      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
+      "package_source": "working-tree",
+      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
+      "source_manifest_sha256": "b100bf13dc91157e14513af28ca3015cc428b66df7ce92c30b778ccafbb32c4d",
+      "tracked_only": true,
+      "uploaded": false,
+      "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
+    },
     "package_budget": {
       "aggregate_caps": {
         "max_browser_actions": 120,
@@ -293,19 +311,8 @@
       "service_tier": "default",
       "zero_retry": true
     },
-    "package_staging": {
-      "archive_bytes": 194560,
-      "archive_member_count": 11,
-      "archive_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-      "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
-      "host_acknowledgement_sha256": "331e343f966ccac051d127ab7031b02d08cca4f55a353ed983a2588a4ef5d0f0",
-      "host_rehash_sha256": "b7a26b2ea5853dfaf75de2cf7b982367f7ad5c0ef9a5808e45779b97b6b32305",
-      "package_source": "working-tree",
-      "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "tracked_only": true
-    },
     "production_primitives": [
+      "assemble_local_package:two-byte-identical-renders",
       "bind_model_metadata_receipt_to_authorization_overlay",
       "create_model_metadata_receipt",
       "immutable_cleanup_export_handoff",
@@ -313,7 +320,6 @@
       "load_openai_dotenv_assignment",
       "privacy_violations:held-descriptor",
       "resolve_registered_command_package",
-      "stage_verified_archive",
       "validate_cleanup_execution_receipt",
       "validate_model_metadata_receipt:durable-offline",
       "validate_tracked_package_archive"
@@ -360,8 +366,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
   "scenario": "metadata-expired",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -370,7 +376,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "efa1ca06e6a8fd19354f082f4ef28783e545fbe79c00fcda125af97d573cc0be",
+  "semantic_sha256": "34cdd299abda87e6ac334bc07ce5ea5f9bb2d379dcc35190aca4488d39a46adc",
   "shadow_only": true,
   "stop_reason": "metadata receipt expired",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

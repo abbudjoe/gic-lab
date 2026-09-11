@@ -14,8 +14,12 @@ from giclab.control.category3 import repository_identity
 from giclab.control.composition import compose_control_plane
 from giclab.control.incidents import validate_incidents
 from giclab.control.live_conformance import run_live_effect_conformance
+from giclab.control.live_method_viability import validate_live_method_viability
 from giclab.control.proofs import generate_source_binding_receipt
 from giclab.control.registry_validation import validate_registry_completeness
+from giclab.control.remote_execution_conformance import (
+    run_remote_execution_bridge_conformance,
+)
 from giclab.control.scenarios import HAPPY_PATH
 from giclab.control.shadow import run_required_shadow_matrix
 from giclab.control.state_capsule import generate_state_capsule
@@ -26,9 +30,9 @@ from giclab.control.target import (
 )
 from giclab.control.version_lint import validate_active_version_dispatch
 from giclab.harness import t09_provider_contracts as provider_contracts
-from giclab.registry import load_json
+from giclab.registry import load_json, local_schema_registry
 
-AGENT_CHECK_SCHEMA_VERSION: Final = "3.0.0"
+AGENT_CHECK_SCHEMA_VERSION: Final = "4.0.0"
 
 
 def _canonical_sha256(value: object) -> str:
@@ -38,7 +42,12 @@ def _canonical_sha256(value: object) -> str:
 
 def _schema_valid(repository: Path, schema_path: str, document: object) -> bool:
     schema = load_json(repository / schema_path)
-    return not list(Draft202012Validator(schema).iter_errors(document))
+    return not list(
+        Draft202012Validator(
+            schema,
+            registry=local_schema_registry(repository / "schemas"),
+        ).iter_errors(document)
+    )
 
 
 def _semantic_valid(document: dict[str, object]) -> bool:
@@ -54,6 +63,8 @@ def run_agent_check(
     execute_incident_regressions: bool = True,
     anti_shadow_lint_receipt: dict[str, object] | None = None,
     live_effect_conformance_receipt: dict[str, object] | None = None,
+    live_method_viability_receipt: dict[str, object] | None = None,
+    remote_execution_bridge_conformance_receipt: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """Run all pre-authority checks without reading secrets or using a network."""
 
@@ -128,6 +139,61 @@ def run_agent_check(
         and live_conformance.get("scientific_interpretation_allowed") is False
         and _semantic_valid(live_conformance)
     )
+    viability = (
+        validate_live_method_viability(root)
+        if live_method_viability_receipt is None
+        else dict(live_method_viability_receipt)
+    )
+    viability_valid = (
+        _schema_valid(root, "schemas/t09-live-method-viability.schema.json", viability)
+        and viability.get("repository_commit") == commit
+        and viability.get("repository_tree") == tree
+        and viability.get("complete") is True
+        and viability.get("unresolved_methods") == []
+        and viability.get("findings") == []
+        and viability.get("real_effects_performed") == 0
+        and _semantic_valid(viability)
+    )
+    bridge_conformance = (
+        run_remote_execution_bridge_conformance(
+            root,
+            live_effect_conformance_receipt=live_conformance,
+        )
+        if remote_execution_bridge_conformance_receipt is None
+        else dict(remote_execution_bridge_conformance_receipt)
+    )
+    bridge_zero_effects = bridge_conformance.get("zero_real_effects")
+    bridge_conformance_valid = (
+        _schema_valid(
+            root,
+            "schemas/t09-remote-execution-bridge-conformance.schema.json",
+            bridge_conformance,
+        )
+        and bridge_conformance.get("control_implementation_commit") == commit
+        and bridge_conformance.get("control_implementation_tree") == tree
+        and bridge_conformance.get("complete") is True
+        and isinstance(bridge_zero_effects, dict)
+        and all(
+            bridge_zero_effects.get(name) == 0
+            for name in (
+                "secret_reads",
+                "authenticated_metadata_requests",
+                "provider_requests",
+                "cloud_mutations",
+                "live_ssh",
+                "docker",
+                "browser",
+                "scientific_actions",
+                "condition_reservations",
+            )
+        )
+        and bridge_zero_effects.get("new_cost_usd") == "0.00"
+        and bridge_conformance.get("live_authority_created") is False
+        and bridge_conformance.get("scientific_interpretation_allowed") is False
+        and _semantic_valid(bridge_conformance)
+    )
+    viability_methods = viability.get("methods")
+    viability_unresolved = viability.get("unresolved_methods")
     anti_shadow_findings = anti_shadow.get("findings")
     compositions: list[dict[str, object]] = []
     all_compositions_valid = True
@@ -203,6 +269,8 @@ def run_agent_check(
         failure_matrix_valid=failure_matrix_valid,
         anti_shadow_lint_valid=anti_shadow_valid,
         live_effect_conformance_valid=live_conformance_valid,
+        live_method_viability_valid=viability_valid,
+        remote_execution_bridge_conformance_valid=bridge_conformance_valid,
         target=selected_target,
         deterministic=True,
     )
@@ -220,6 +288,8 @@ def run_agent_check(
             source_binding.get("live_execution_performed") is False,
             anti_shadow_valid,
             live_conformance_valid,
+            viability_valid,
+            bridge_conformance_valid,
         )
     )
     aggregate: dict[str, object] = {
@@ -293,6 +363,32 @@ def run_agent_check(
                     live_conformance.get("network_provider_cloud_browser_science_effects") == 0
                 ),
                 "semantic_sha256": live_conformance.get("semantic_sha256"),
+            },
+            "live_method_viability": {
+                "complete": viability_valid,
+                "method_count": (
+                    len(viability_methods) if isinstance(viability_methods, list) else -1
+                ),
+                "unresolved_method_count": (
+                    len(viability_unresolved) if isinstance(viability_unresolved, list) else -1
+                ),
+                "zero_real_effects": viability.get("real_effects_performed") == 0,
+                "semantic_sha256": viability.get("semantic_sha256"),
+            },
+            "remote_execution_bridge_conformance": {
+                "complete": bridge_conformance_valid,
+                "shared_controller_entry_point": bridge_conformance.get(
+                    "shared_controller_entry_point"
+                ),
+                "production_assembly_entry_point": bridge_conformance.get(
+                    "production_assembly_entry_point"
+                ),
+                "zero_real_effects": (
+                    isinstance(bridge_zero_effects, dict)
+                    and bridge_zero_effects.get("provider_requests") == 0
+                    and bridge_zero_effects.get("scientific_actions") == 0
+                ),
+                "semantic_sha256": bridge_conformance.get("semantic_sha256"),
             },
         },
         "complete": complete,

@@ -21,6 +21,42 @@ from giclab.registry import load_json
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_state_capsule_rejects_goal_changed_since_target_selection() -> None:
+    from giclab.control.state_capsule import repository_identity
+    from giclab.control.target import (
+        TargetSelectionError,
+        resolve_selected_runtime_target_from_goal_bytes,
+    )
+    from giclab.harness.t09_provider_contracts import PROVIDER_CONTRACTS
+
+    goal = (ROOT / "control/goals/EXP-0001.yaml").read_bytes()
+    commit, _ = repository_identity(ROOT)
+    # Even a semantically neutral edit after selection changes the bound input.
+    selected_before_edit = resolve_selected_runtime_target_from_goal_bytes(
+        ROOT,
+        goal + b"\n# previously selected goal snapshot\n",
+        bound_package_commit=commit,
+        bound_registered_contract_versions=frozenset(PROVIDER_CONTRACTS),
+    )
+    current = resolve_selected_runtime_target(ROOT)
+    assert selected_before_edit.selected_contract == current.selected_contract
+    assert (
+        selected_before_edit.selected_command_package_sha256
+        == current.selected_command_package_sha256
+    )
+    assert selected_before_edit.goal_record_sha256 != current.goal_record_sha256
+    with pytest.raises(TargetSelectionError, match=r"state: goal_record_sha256$"):
+        generate_state_capsule(
+            ROOT,
+            registry_complete=False,
+            composition_valid=False,
+            version_lint_valid=False,
+            shadow_happy_path=False,
+            failure_matrix_valid=False,
+            target=selected_before_edit,
+        )
+
+
 def _capsule() -> dict[str, object]:
     return generate_state_capsule(
         ROOT,
@@ -31,6 +67,8 @@ def _capsule() -> dict[str, object]:
         failure_matrix_valid=True,
         anti_shadow_lint_valid=True,
         live_effect_conformance_valid=True,
+        live_method_viability_valid=True,
+        remote_execution_bridge_conformance_valid=True,
         deterministic=True,
     )
 
@@ -88,18 +126,21 @@ def test_state_capsule_represents_v16_incident_and_v17_absence() -> None:
     runtime = capsule["runtime_package"]
     control = capsule["control_plane"]
     assert isinstance(runtime, dict) and isinstance(control, dict)
-    assert capsule["blocking_incident"] is None
+    assert capsule["blocking_incident"] == "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW"
     assert capsule["external_governance_gate"] == {
         "kind": "independent-exact-head-review-and-explicit-merge-authorization",
         "state": "consult-external-state",
         "repository_state_grants_authority": False,
     }
-    assert capsule["next_technical_subgoal"] == "generate-package-only-v17-after-governance"
+    assert (
+        capsule["next_technical_subgoal"] == "validate-exact-commit-v16-before-independent-review"
+    )
     assert capsule["current_subgoal"].startswith(
-        "complete independent exact-head review and explicit merge authorization"
+        "finalize the independently accepted R1-R6 development matrix"
     )
     assert "remove fixed target selection" not in str(capsule["recommended_action"])
-    assert "only after merge" in str(capsule["recommended_action"])
+    assert "before any product push" in str(capsule["recommended_action"])
+    assert control["status"] == "remote-execution-bridge-final-validation-pending"
     assert runtime == {
         "historical_package": "V16",
         "historical_status": "consumed-prelaunch-failure",
@@ -112,6 +153,8 @@ def test_state_capsule_represents_v16_incident_and_v17_absence() -> None:
     assert control["failure_matrix_valid"] is True
     assert control["anti_shadow_lint_valid"] is True
     assert control["live_effect_conformance_valid"] is True
+    assert control["live_method_viability_valid"] is True
+    assert control["remote_execution_bridge_conformance_valid"] is True
 
 
 def _goal() -> dict[str, object]:
@@ -164,7 +207,8 @@ def test_capsule_remains_truthful_after_merge_pending_goal_transition() -> None:
     assert capsule["external_governance_gate"]["state"] == "consult-external-state"
     assert capsule["external_governance_gate"]["repository_state_grants_authority"] is False
     assert "independent exact-head review" in capsule["recommended_action"]
-    assert "only after merge" in capsule["recommended_action"]
+    assert "before any product push" in capsule["recommended_action"]
+    assert capsule["control_plane"]["status"] == "remote-execution-bridge-final-validation-pending"
     assert "control/incidents/INC-T09-CONTROL-FIXED-TARGET-SELECTION.json" in capsule["provenance"]
     assert (
         "control/incidents/INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY.json"
@@ -172,6 +216,10 @@ def test_capsule_remains_truthful_after_merge_pending_goal_transition() -> None:
     )
     assert (
         "control/incidents/INC-T09-CONTROL-LIVE-BOUNDARY-EXACT-HEAD-REVIEW.json"
+        in capsule["provenance"]
+    )
+    assert (
+        "control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json"
         in capsule["provenance"]
     )
 
@@ -203,11 +251,12 @@ def test_future_live_package_binding_requires_every_control_receipt() -> None:
         }
 
     binding = {
-        "schema_version": "4.0.0",
+        "schema_version": "6.0.0",
         "repository_slug": "abbudjoe/gic-lab",
         "base_commit": "4" * 40,
         "control_plane_revision": {"commit": "5" * 40, "tree": "6" * 40},
         "selected_runtime_target": resolve_selected_runtime_target(ROOT).to_document(),
+        "package_effect_registration": None,
         "artifacts": {
             "goal_record": {
                 "path": "bound-goal-record.yaml",
@@ -226,6 +275,10 @@ def test_future_live_package_binding_requires_every_control_receipt() -> None:
             "agent_check_receipt": artifact("agent.json"),
             "source_binding_receipt": artifact("source.json"),
             "incident_receipt": artifact("incidents.json"),
+            "anti_shadow_lint_receipt": artifact("anti-shadow.json"),
+            "live_effect_conformance_receipt": artifact("live-conformance.json"),
+            "live_method_viability_receipt": artifact("viability.json"),
+            "remote_execution_bridge_conformance_receipt": artifact("remote-bridge.json"),
         },
         "authority": {
             "live_authorization": False,
@@ -239,3 +292,15 @@ def test_future_live_package_binding_requires_every_control_receipt() -> None:
     del binding["artifacts"]["composition_receipt"]  # type: ignore[index]
     with pytest.raises(ValidationError):
         validator.validate(binding)
+
+
+@pytest.mark.parametrize(
+    "receipt_name",
+    ("live_method_viability_receipt", "remote_execution_bridge_conformance_receipt"),
+)
+def test_generation_six_binding_requires_remote_bridge_receipts(receipt_name: str) -> None:
+    schema = load_json(ROOT / "schemas/t09-control-receipt-bindings.schema.json")
+    required = Draft202012Validator(schema).schema["allOf"][1]["then"]["properties"]["artifacts"][
+        "required"
+    ]
+    assert receipt_name in required

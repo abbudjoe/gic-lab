@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-condition-duplex-transcript.schema.json",
+  "title": "T09 bounded condition duplex transcript",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "side",
+    "binding",
+    "frame_count",
+    "terminal_sequence",
+    "terminal_frame_sha256",
+    "frame_chain_sha256",
+    "frames",
+    "transcript_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "side": {
+      "enum": ["shared-authoritative", "remote-mirror", "host-transparent-relay"]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "session_id",
+        "provider_contract_version",
+        "plan_id",
+        "host_run_id",
+        "condition_run_id",
+        "evaluator_run_id",
+        "frozen_manifest_sha256"
+      ],
+      "properties": {
+        "session_id": {"$ref": "#/$defs/identity"},
+        "provider_contract_version": {"$ref": "#/$defs/identity"},
+        "plan_id": {"$ref": "#/$defs/identity"},
+        "host_run_id": {"$ref": "#/$defs/identity"},
+        "condition_run_id": {"$ref": "#/$defs/identity"},
+        "evaluator_run_id": {"$ref": "#/$defs/identity"},
+        "frozen_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "frame_count": {"type": "integer", "minimum": 1, "maximum": 20000},
+    "terminal_sequence": {"type": "integer", "minimum": 1, "maximum": 20000},
+    "terminal_frame_sha256": {"$ref": "#/$defs/sha256"},
+    "frame_chain_sha256": {"$ref": "#/$defs/sha256"},
+    "authoritative_accounting": {"type": "boolean"},
+    "admission_decisions_synthesized": {"type": "integer", "minimum": 0},
+    "runtime_detached": {"type": "boolean"},
+    "terminal_acknowledged": {"type": "boolean"},
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["direction", "frame"],
+        "properties": {
+          "direction": {
+            "enum": ["sent", "received", "remote-to-shared", "shared-to-remote"]
+          },
+          "frame": {"$ref": "t09-condition-duplex-frame.schema.json"}
+        }
+      }
+    },
+    "transcript_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "identity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

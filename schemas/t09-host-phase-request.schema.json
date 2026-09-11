@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-host-phase-request.schema.json",
+  "title": "Private T09 host phase request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "phase",
+    "execution_mode",
+    "binding",
+    "previous_phase_receipt_path",
+    "previous_phase_receipt_sha256",
+    "requested_wall_time",
+    "requested_monotonic",
+    "deadline_monotonic",
+    "inputs",
+    "output_paths",
+    "expected_projection",
+    "deterministic_fixture"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "phase": {
+      "enum": [
+        "host-transfer-verify",
+        "host-preflight",
+        "host-qualify",
+        "host-freeze",
+        "condition-session",
+        "host-cleanup"
+      ]
+    },
+    "execution_mode": {"enum": ["deterministic-no-network", "external-live", "external-offline-candidate"]},
+    "binding": {"$ref": "#/$defs/binding"},
+    "previous_phase_receipt_path": {"type": ["string", "null"], "minLength": 1},
+    "previous_phase_receipt_sha256": {
+      "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+    },
+    "requested_wall_time": {"type": "number", "minimum": 0},
+    "requested_monotonic": {"type": "number", "minimum": 0},
+    "deadline_monotonic": {"type": "number", "exclusiveMinimum": 0},
+    "inputs": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/file"}
+    },
+    "output_paths": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^/[A-Za-z0-9._/-]+$"
+      }
+    },
+    "expected_projection": {"type": "object"},
+    "deterministic_fixture": {"type": "boolean"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "git": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "safeId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"},
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_contract_version",
+        "plan_id",
+        "host_run_id",
+        "provider_handle_identity",
+        "provider_launch_ordinal",
+        "provider_entry_receipt_sha256",
+        "local_assembly_receipt_sha256",
+        "source_commit",
+        "source_tree",
+        "remote_root",
+        "host_transfer_receipt_sha256"
+      ],
+      "properties": {
+        "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+        "plan_id": {"type": "string", "pattern": "^PLAN-EXP0001-PILOT-V[1-9][0-9]*$"},
+        "host_run_id": {"$ref": "#/$defs/safeId"},
+        "provider_handle_identity": {"$ref": "#/$defs/safeId"},
+        "provider_launch_ordinal": {"type": "integer", "minimum": 1, "maximum": 8},
+        "provider_entry_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "local_assembly_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "source_commit": {"$ref": "#/$defs/git"},
+        "source_tree": {"$ref": "#/$defs/git"},
+        "remote_root": {"type": "string", "pattern": "^/[A-Za-z0-9._/-]+$"},
+        "candidate_source_binding_sha256": {"$ref": "#/$defs/sha256"},
+        "offline_environment_sha256": {"$ref": "#/$defs/sha256"},
+        "host_transfer_receipt_sha256": {
+          "anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]
+        }
+      }
+    }
+  }
+}

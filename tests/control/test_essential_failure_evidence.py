@@ -377,6 +377,12 @@ def test_complete_envelope_totals_cross_bind_every_retained_projection(
                 artifact for artifact in held if artifact.path.name == "export-acknowledgement.json"
             )
             observed["acknowledgement"] = json.loads(acknowledgement.read_bytes())
+            call_ledger = next(
+                artifact
+                for artifact in held
+                if artifact.path.name == "provider-call-accounting.json"
+            )
+            observed["sealed_accounting"] = json.loads(call_ledger.read_bytes())["accounting"]
         return held
 
     def capture_retained_outcome(
@@ -428,7 +434,14 @@ def test_complete_envelope_totals_cross_bind_every_retained_projection(
     assert isinstance(accounting, dict)
     conditions = accounting["conditions"]
     assert isinstance(conditions, dict)
+    held_evidence = production_evidence["held_evidence"]
+    assert isinstance(held_evidence, dict)
+    bridge_evidence = held_evidence["condition_bridge"]
+    assert isinstance(bridge_evidence, dict)
+    assert bridge_evidence == {}
     run_id = V16_PROVIDER_CONTRACT.run_ids[0]
+    sealed_accounting = observed["sealed_accounting"]
+    assert isinstance(sealed_accounting, dict)
     assert record["evidence_binding_sha256"] == _canonical_sha256(
         {
             "manifest_sha256": essential["manifest_sha256"],
@@ -437,9 +450,33 @@ def test_complete_envelope_totals_cross_bind_every_retained_projection(
             "essential_file_count": count,
             "essential_total_bytes": total,
             "held_artifact_binding_sha256": essential["held_artifact_binding_sha256"],
-            "accounting": conditions[run_id],
+            "accounting": sealed_accounting,
+            "condition_bridge_evidence_binding_sha256": None,
         }
     )
+    # Later failure/export/control writes consume already admitted capacity.
+    # The immutable record binds the bytes actually sealed in its held ledger,
+    # while the final projection includes that subsequent output consumption.
+    final_accounting = conditions[run_id]
+    assert isinstance(final_accounting, dict)
+    assert {
+        key for key in sealed_accounting if sealed_accounting[key] != final_accounting[key]
+    } == {"observed_lower_bound", "outstanding_reservation_projection"}
+    for scope in ("condition", "aggregate"):
+        sealed_lower = sealed_accounting["observed_lower_bound"][scope]
+        final_lower = final_accounting["observed_lower_bound"][scope]
+        sealed_reserve = sealed_accounting["outstanding_reservation_projection"][scope]
+        final_reserve = final_accounting["outstanding_reservation_projection"][scope]
+        assert {key for key in sealed_lower if sealed_lower[key] != final_lower[key]} == {
+            "output_bytes"
+        }
+        assert {key for key in sealed_reserve if sealed_reserve[key] != final_reserve[key]} == {
+            "output_bytes"
+        }
+        consumed = final_lower["output_bytes"] - sealed_lower["output_bytes"]
+        assert consumed > 0
+        assert sealed_reserve["output_bytes"] - final_reserve["output_bytes"] == consumed
+        assert final_reserve["output_bytes"] >= 0
 
 
 @pytest.mark.parametrize(

@@ -191,6 +191,7 @@
         "cleanup_resume_byte_identical"
       ],
       "anyOf": [
+        {"required": ["package_assembly", "host_transfers"]},
         {"required": ["package_staging"]},
         {"required": ["deterministic_staging"]}
       ],
@@ -202,6 +203,8 @@
         "accounting": {"type": "object"},
         "evaluations": {"type": "object"},
         "package_staging": {"type": ["object", "null"]},
+        "package_assembly": {"type": ["object", "null"]},
+        "host_transfers": {"type": "object"},
         "deterministic_staging": {"type": ["object", "null"]},
         "replacement_history": {"type": "object"},
         "raw_export_acknowledgements": {"type": "object"},

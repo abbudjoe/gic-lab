@@ -1,0 +1,83 @@
+{
+  "affected_abstraction": [
+    "shared-control/local-package-to-host-transfer",
+    "shared-control/phase-specific-host-runtime",
+    "shared-control/duplex-condition-admission",
+    "shared-control/provider-launch-mutation-seam"
+  ],
+  "authority_consumed": "none",
+  "cost_usd": "0.00",
+  "coverage": [
+    "offline-composition",
+    "shadow-execution",
+    "target-resolution"
+  ],
+  "earliest_detectable_stage": "pre-mutation V17 source-to-effect viability audit",
+  "failed_invariant": "every package-owned live effect and shared transaction phase must map to one retained live primitive without a second controller, mutation authority, or accountant",
+  "immutable_facts": {
+    "authority_consumed": "none",
+    "gaps": [
+      {
+        "detail": "local package staging occurred before a provider host existed and exposed no post-entry host-transfer acknowledgement seam",
+        "id": "G1"
+      },
+      {
+        "detail": "the retained remote runner exposed one compound preflight that also qualified and froze while the shared controller required phase-specific typed operations and the full retained manifest",
+        "id": "G2"
+      },
+      {
+        "detail": "the retained remote SiRA runtime owned an in-process ProviderBudgetBoundary and exposed no duplex event/admission channel to the shared authoritative observer",
+        "id": "G3"
+      },
+      {
+        "detail": "LowLevelEffects exposed provider_launch while the real shared launch path mutated only through launch_campaign plus campaign_transport",
+        "id": "G4"
+      }
+    ],
+    "live_environment_required": false,
+    "new_cost_usd": "0.00",
+    "scientific_result": "none",
+    "terminal_state": "t09_v17_package_generation_blocked_shared_control_gap"
+  },
+  "immutable_facts_sha256": "ad6c4f919ee844e9e6cf3245d0ccc976419f150770e9ffed9d92ece0daf0f616",
+  "incident_id": "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE",
+  "live_environment_required": false,
+  "observed_package": {
+    "merged_package": "f56dfc2c9346c9b8d8eea4380a3b2388b9668bd2",
+    "plan_id": "PLAN-EXP0001-PILOT-V16",
+    "version": "V16"
+  },
+  "regressions": [
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_category3_shadow.py::test_local_assembly_and_host_transfer_are_ordered_around_provider_entry"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_remote_host_phases.py::test_preflight_is_phase_specific_and_cannot_qualify_or_freeze"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_remote_bridge.py::test_missing_shared_observer_cannot_admit_a_remote_provider_send"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_live_method_viability.py::test_live_method_viability_has_one_launch_seam_and_zero_gaps"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_remote_execution_conformance.py::test_remote_execution_bridge_conformance_uses_full_shared_controller"
+    },
+    {
+      "kind": "test-node",
+      "reference": "tests/control/test_historical_receipts.py::test_synthetic_successor_remote_bridge_uses_exact_inherited_contract_child"
+    }
+  ],
+  "repair": "phase-conformant-remote-execution-bridge",
+  "root_cause": "G1: local package staging had no post-entry host-transfer acknowledgement seam; G2: retained host preflight combined preflight, qualification, and freeze behind a mismatched manifest contract; G3: the remote runtime had a second in-process accountant and no duplex admission channel; G4: provider launch had two nominal mutation seams",
+  "schema_version": "1.0.0",
+  "scientific_interpretation_allowed": false,
+  "scientific_result": "none",
+  "stage": "pre-mutation V17 source-to-effect viability audit",
+  "status": "resolved"
+}

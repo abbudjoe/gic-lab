@@ -8,6 +8,14 @@ from typing import Any
 import pytest
 
 import giclab.validation as validation
+from giclab.control.proofs import (
+    LEGACY_REQUIRED_SHARED_SOURCES,
+    REQUIRED_SHARED_SOURCES,
+    V2_REQUIRED_SHARED_SOURCES,
+    V3_REQUIRED_SHARED_SOURCES,
+    ControlProofError,
+    required_shared_sources_for_schema,
+)
 from giclab.registry import load_json, load_yaml
 from giclab.validation import (
     ROOT,
@@ -558,6 +566,27 @@ def test_repository_contract_passes() -> None:
 
 def test_tracked_control_receipts_are_complete_and_cross_bound() -> None:
     assert validate_tracked_control_receipts(ROOT) == []
+
+
+@pytest.mark.parametrize(
+    ("schema_version", "expected"),
+    [
+        ("1.0.0", LEGACY_REQUIRED_SHARED_SOURCES),
+        ("2.0.0", V2_REQUIRED_SHARED_SOURCES),
+        ("3.0.0", V3_REQUIRED_SHARED_SOURCES),
+        ("4.0.0", REQUIRED_SHARED_SOURCES),
+    ],
+)
+def test_source_binding_schema_dispatch_has_one_exact_source_matrix(
+    schema_version: str,
+    expected: frozenset[str],
+) -> None:
+    assert required_shared_sources_for_schema(schema_version) == expected
+
+
+def test_source_binding_schema_dispatch_has_no_latest_fallback() -> None:
+    with pytest.raises(ControlProofError, match="version is unsupported"):
+        required_shared_sources_for_schema("99.0.0")
 
 
 def test_tracked_control_receipt_mutation_fails_closed(

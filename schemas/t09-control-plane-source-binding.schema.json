@@ -17,7 +17,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["1.0.0", "2.0.0"]},
+    "schema_version": {"enum": ["1.0.0", "2.0.0", "3.0.0", "4.0.0"]},
     "base_commit": {"const": "d0aff8a47e92013773d9d05b2cd90fb741658b03"},
     "source_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "source_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},

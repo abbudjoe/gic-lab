@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.invalid/schemas/t09-remote-execution-bridge-conformance.schema.json",
+  "title": "T09 remote execution bridge conformance receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "control_implementation_commit",
+    "control_implementation_tree",
+    "provider_contract_version",
+    "effect_protocol_version",
+    "bridge_protocol_version",
+    "shared_controller_entry_point",
+    "production_assembly_entry_point",
+    "remote_runner_entry_point",
+    "runtime_admission_entry_point",
+    "controller_conformance",
+    "host_phase_entrypoints",
+    "duplex_condition_sessions",
+    "sole_accountant",
+    "evidence",
+    "failure_probes",
+    "zero_real_effects",
+    "actual_v17_artifacts_created",
+    "live_authority_created",
+    "scientific_interpretation_allowed",
+    "projected_real_cost_usd",
+    "complete",
+    "semantic_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "control_implementation_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "control_implementation_tree": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "provider_contract_version": {"type": "string", "pattern": "^V[1-9][0-9]*$"},
+    "effect_protocol_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "bridge_protocol_version": {"const": "1.0.0"},
+    "shared_controller_entry_point": {"const": "giclab.control.category3.execute_category3_transaction"},
+    "production_assembly_entry_point": {"const": "giclab.control.production.build_production_adapter_assembly"},
+    "remote_runner_entry_point": {"const": "containers/sira-smoke/pragmatic/t09_remote_runner.py"},
+    "runtime_admission_entry_point": {"const": "giclab.harness.sira_gate_a_runtime._install_locked_llm_factory"},
+    "controller_conformance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_semantic_sha256",
+        "terminal_state",
+        "condition_session_count",
+        "first_pair_checkpoint_retained",
+        "raw_finalizer_evaluator_chain",
+        "cleanup_to_zero",
+        "shared_controller_used",
+        "shared_production_assembly_used"
+      ],
+      "properties": {
+        "receipt_semantic_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "terminal_state": {"const": "category3-live-complete-clean"},
+        "condition_session_count": {"const": 4},
+        "first_pair_checkpoint_retained": {"const": true},
+        "raw_finalizer_evaluator_chain": {"const": true},
+        "cleanup_to_zero": {"const": true},
+        "shared_controller_used": {"const": true},
+        "shared_production_assembly_used": {"const": true}
+      }
+    },
+    "host_phase_entrypoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operations",
+        "receipt_validation_projection_sha256s",
+        "ordered",
+        "provider_entry_precedes_transfer",
+        "transfer_rehashed",
+        "full_manifest_validated",
+        "condition_entries",
+        "model_requests",
+        "browser_actions",
+        "network_effects",
+        "subprocess_count",
+        "process_model",
+        "tracked_runner_loaded",
+        "serialized_contract_override"
+      ],
+      "properties": {
+        "operations": {
+          "const": ["host-transfer-verify", "host-preflight", "host-qualify", "host-freeze", "host-cleanup"]
+        },
+        "receipt_validation_projection_sha256s": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        },
+        "ordered": {"const": true},
+        "provider_entry_precedes_transfer": {"const": true},
+        "transfer_rehashed": {"const": true},
+        "full_manifest_validated": {"const": true},
+        "condition_entries": {"const": 0},
+        "model_requests": {"const": 0},
+        "browser_actions": {"const": 0},
+        "network_effects": {"const": 0},
+        "subprocess_count": {"const": 5},
+        "process_model": {"const": "forked-selected-contract-child"},
+        "tracked_runner_loaded": {"const": true},
+        "serialized_contract_override": {"const": false}
+      }
+    },
+    "duplex_condition_sessions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_ids",
+        "session_count",
+        "model_call_count",
+        "model_roles",
+        "browser_action_count",
+        "local_subprocess_count",
+        "private_ipc_count",
+        "shared_transcript_sha256s",
+        "evidence_binding_sha256s",
+        "all_terminal_acknowledged",
+        "all_remote_boundaries_nonauthoritative",
+        "all_effects_admitted_before_execution",
+        "all_processes_reaped",
+        "all_private_endpoints_removed"
+      ],
+      "properties": {
+        "run_ids": {"type": "array", "minItems": 4, "maxItems": 4, "uniqueItems": true, "items": {"type": "string"}},
+        "session_count": {"const": 4},
+        "model_call_count": {"type": "integer", "minimum": 8},
+        "model_roles": {"type": "array", "minItems": 4, "uniqueItems": true, "items": {"type": "string"}},
+        "browser_action_count": {"type": "integer", "minimum": 8},
+        "local_subprocess_count": {"const": 4},
+        "private_ipc_count": {"const": 4},
+        "shared_transcript_sha256s": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+        "evidence_binding_sha256s": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+        "all_terminal_acknowledged": {"const": true},
+        "all_remote_boundaries_nonauthoritative": {"const": true},
+        "all_effects_admitted_before_execution": {"const": true},
+        "all_processes_reaped": {"const": true},
+        "all_private_endpoints_removed": {"const": true}
+      }
+    },
+    "sole_accountant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "remote_boundary_authoritative", "independent_remote_budget_boundary", "coupling_probe_passed"],
+      "properties": {
+        "owner": {"const": "ConditionEventObserver"},
+        "remote_boundary_authoritative": {"const": false},
+        "independent_remote_budget_boundary": {"const": false},
+        "coupling_probe_passed": {"const": true}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shared_authoritative_transcript", "remote_mirrored_journal", "host_relay_transcript", "terminal_hash_chain", "raw_and_essential_binding"],
+      "properties": {
+        "shared_authoritative_transcript": {"const": true},
+        "remote_mirrored_journal": {"const": true},
+        "host_relay_transcript": {"const": true},
+        "terminal_hash_chain": {"const": true},
+        "raw_and_essential_binding": {"const": true}
+      }
+    },
+    "failure_probes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["disconnect_before_send", "disconnect_after_send", "replay_rejected", "response_accounting_incomplete", "transcript_mutation_rejected", "cleanup_after_bridge_failure"],
+      "properties": {
+        "disconnect_before_send": {"const": true},
+        "disconnect_after_send": {"const": true},
+        "replay_rejected": {"const": true},
+        "response_accounting_incomplete": {"const": true},
+        "transcript_mutation_rejected": {"const": true},
+        "cleanup_after_bridge_failure": {"const": true}
+      }
+    },
+    "zero_real_effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["secret_reads", "authenticated_metadata_requests", "provider_requests", "cloud_mutations", "live_ssh", "docker", "browser", "scientific_actions", "condition_reservations", "new_cost_usd"],
+      "properties": {
+        "secret_reads": {"const": 0},
+        "authenticated_metadata_requests": {"const": 0},
+        "provider_requests": {"const": 0},
+        "cloud_mutations": {"const": 0},
+        "live_ssh": {"const": 0},
+        "docker": {"const": 0},
+        "browser": {"const": 0},
+        "scientific_actions": {"const": 0},
+        "condition_reservations": {"const": 0},
+        "new_cost_usd": {"const": "0.00"}
+      }
+    },
+    "actual_v17_artifacts_created": {"const": false},
+    "live_authority_created": {"const": false},
+    "scientific_interpretation_allowed": {"const": false},
+    "projected_real_cost_usd": {"const": "0.00"},
+    "complete": {"const": true},
+    "semantic_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

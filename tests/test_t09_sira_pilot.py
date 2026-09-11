@@ -2080,6 +2080,7 @@ def test_v8_sealing_primitives_preflight_exercises_exact_production_sealers(
         "T09_PILOT_COMMAND_MANIFESTS.json"
     )
     receipt = host.sealing_primitives_preflight(
+        probe_root=host.allocate_sealing_probe_root(artifact_root),
         repository=ROOT,
         artifact_root=artifact_root,
         command_document=command_document,
@@ -3597,6 +3598,9 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         ),
         encoding="utf-8",
     )
+    metadata_ack = pilot_root / "model-metadata-receipt-acknowledgement.json"
+    metadata_ack.write_text(json.dumps({"fixture": "retained metadata acknowledgement"}))
+    metadata_ack.chmod(0o600)
     frozen_document = {
         "manifest_id": V11_PROVIDER_CONTRACT.frozen_run_manifest_id,
         "plan_id": V11_PROVIDER_CONTRACT.plan_id,
@@ -3604,6 +3608,9 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         "clean_package_commit": "a" * 40,
         "replacement_image_id": replacement_image_id,
         "local_finalizer_qualification_sha256": host.file_sha256(local_qualification),
+        "source_receipts": {
+            "model_metadata_receipt_acknowledgement": host.file_sha256(metadata_ack),
+        },
     }
     frozen_path = pilot_root / "frozen-run-manifest.json"
     frozen_path.write_text(json.dumps(frozen_document), encoding="utf-8")
@@ -3792,6 +3799,7 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
     quarantined = list(exports.glob("*.tar.gz.partial"))
     assert len(quarantined) == 1
     assert quarantined[0].read_bytes() == b"interrupted-archive-prefix"
+    assert stat.S_IMODE(archive.stat().st_mode) == 0o600
     complete_bytes = archive.read_bytes()
     complete_sha256 = host.file_sha256(archive)
 
@@ -3856,6 +3864,9 @@ def test_raw_attempt_streams_before_cutoff_without_aggregate_stage(
         restoration_root=restored_root,
         run_id=ATTEMPT_ORDER[0],
     )
+    assert (
+        restored_root / "pilot-v7/model-metadata-receipt-acknowledgement.json"
+    ).read_bytes() == metadata_ack.read_bytes()
     restored_attempt = restored_root / attempt_binding.output_root
     assert (restored_attempt / "raw-attempt-manifest.json").is_file()
     assert (restored_attempt / "offhost-restore-complete.json").is_file()
@@ -4049,3 +4060,58 @@ def test_remote_runner_uses_python310_compatible_utc_surface() -> None:
     assert "UTC" not in datetime_imports
     assert {"datetime", "timezone"}.issubset(datetime_imports)
     assert "UTC: Final = timezone.utc" in source
+
+
+@pytest.mark.parametrize("operation", ["reserve", "enter", "rollback"])
+@pytest.mark.parametrize("denied", [False, True])
+def test_campaign_entry_control_writers_admit_before_replacement(tmp_path, operation, denied):
+    from giclab.harness.t09_sira_pilot import rollback_never_started_condition_reservation
+
+    path = tmp_path / "pilot-state.json"
+    digest = "a" * 64
+    initialize_pilot_state(
+        path,
+        provider_contract=V11_PROVIDER_CONTRACT,
+        execution_contract_sha256=digest,
+        pilot_started_at_epoch=1.0,
+        lambda_started_at_epoch=1.0,
+    )
+    reservation = dict(
+        execution_contract_sha256=digest, run_id=ATTEMPT_ORDER[0], start_intent_sha256="2" * 64
+    )
+    if operation != "reserve":
+        reserve_condition_start(path, **reservation)
+    original = path.read_bytes()
+    admitted = []
+
+    def admit(target, count):
+        assert target == path and path.read_bytes() == original
+        assert set(tmp_path.iterdir()) == {path}
+        assert type(count) is int and count > 0
+        admitted.append(count)
+        if denied:
+            raise RuntimeError("shared control capacity denied")
+
+    def write():
+        if operation == "reserve":
+            reserve_condition_start(path, **reservation, before_write=admit)
+        elif operation == "rollback":
+            rollback_never_started_condition_reservation(path, **reservation, before_write=admit)
+        else:
+            mark_empirical_entry(
+                path,
+                execution_contract_sha256=digest,
+                run_id=ATTEMPT_ORDER[0],
+                supervised_release_receipt_sha256="3" * 64,
+                before_write=admit,
+            )
+
+    if denied:
+        with pytest.raises(RuntimeError, match="shared control capacity"):
+            write()
+        assert path.read_bytes() == original
+    else:
+        write()
+        assert path.read_bytes() != original
+        assert admitted == [len(path.read_bytes())]
+    assert len(admitted) == 1 and set(tmp_path.iterdir()) == {path}

@@ -19,6 +19,7 @@ from giclab.control.consumers import (
 )
 from giclab.control.contracts import project_contract_capabilities
 from giclab.harness import t09_provider_contracts as provider_contracts
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot, reject_candidate_source
 from giclab.harness.t09_pragmatic_provider import CampaignLifecycle, load_campaign_lifecycle
 from giclab.harness.t09_provider_contracts import (
     CommandPackageFamily,
@@ -108,6 +109,7 @@ def _registered_document_bytes(
     *,
     expected_plan_id: str,
     expected_sha256: str | None = None,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> tuple[bytes, str]:
     current = (repository / relative_path).read_bytes()
     current_document = _json_document(current, context="registered document")
@@ -116,7 +118,11 @@ def _registered_document_bytes(
     )
     if current_matches:
         return current, "working-tree"
-    historical = _git_blob(repository, contract.source_commit, relative_path)
+    git_repository = repository
+    if source_inputs is not None:
+        source_inputs.package_identity(repository)
+        git_repository = source_inputs.parent_repository
+    historical = _git_blob(git_repository, contract.source_commit, relative_path)
     historical_document = _json_document(historical, context="historical registered document")
     if historical_document.get("plan_id") != expected_plan_id or (
         expected_sha256 is not None and hashlib.sha256(historical).hexdigest() != expected_sha256
@@ -136,16 +142,28 @@ def _consumer_na(*, reason: str) -> dict[str, object]:
 def resolve_registered_command_package(
     repository: Path,
     contract: T09ProviderContract,
+    *,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> tuple[dict[str, object], str, str]:
     if contract.command_manifest_path is None:
         raise ValueError("autonomous contract lacks command manifest path")
-    encoded, source = _registered_document_bytes(
-        repository,
-        contract,
-        contract.command_manifest_path,
-        expected_plan_id=contract.plan_id,
-        expected_sha256=contract.expected_command_manifest_sha256,
-    )
+    if source_inputs is None or contract.version != source_inputs.document()["template_contract"]:
+        if source_inputs is None:
+            reject_candidate_source(repository)
+        encoded, source = _registered_document_bytes(
+            repository,
+            contract,
+            contract.command_manifest_path,
+            expected_plan_id=contract.plan_id,
+            expected_sha256=contract.expected_command_manifest_sha256,
+            source_inputs=source_inputs,
+        )
+    else:
+        expected = source_inputs.command_package_sha256(repository)
+        encoded = (repository / contract.command_manifest_path).read_bytes()
+        if hashlib.sha256(encoded).hexdigest() != expected:
+            raise ValueError("explicit candidate command package changed")
+        source = "offline-candidate:" + source_inputs.digest
     document = _json_document(encoded, context="registered command manifest")
     manifests = document.get("manifests")
     if not isinstance(manifests, list) or len(manifests) != len(contract.run_ids):
@@ -184,6 +202,7 @@ def _validate_one_contract(
     lifecycle_loader: LifecycleLoader,
     disabled_consumers: frozenset[str],
     control_consumers: Mapping[str, ContractConsumer],
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> dict[str, object]:
     consumers: dict[str, dict[str, object]] = {}
     errors: list[str] = []
@@ -236,7 +255,9 @@ def _validate_one_contract(
 
     def command_manifest() -> dict[str, object]:
         nonlocal package
-        package, sha256, source = resolve_registered_command_package(repository, contract)
+        package, sha256, source = resolve_registered_command_package(
+            repository, contract, source_inputs=source_inputs
+        )
         return _consumer_pass(
             sha256=sha256,
             attempt_count=len(contract.run_ids),
@@ -253,7 +274,9 @@ def _validate_one_contract(
     def execution_contract() -> dict[str, object]:
         nonlocal package
         if package is None:
-            package, _sha256, _source = resolve_registered_command_package(repository, contract)
+            package, _sha256, _source = resolve_registered_command_package(
+                repository, contract, source_inputs=source_inputs
+            )
         expected = package.get("execution_contract_sha256")
         if not isinstance(expected, str) or _HEX64.fullmatch(expected) is None:
             raise ValueError("command package lacks execution-contract hash")
@@ -265,6 +288,7 @@ def _validate_one_contract(
             contract.execution_contract_path,
             expected_plan_id=contract.plan_id,
             expected_sha256=expected,
+            source_inputs=source_inputs,
         )
         document = _json_document(encoded, context="registered execution contract")
         if document.get("schema_version") == "0.4.0":
@@ -308,7 +332,9 @@ def _validate_one_contract(
         if contract.local_finalizer_qualification_id is None:
             raise ValueError("local finalizer identity is unavailable")
         if package is None and autonomous:
-            package, _sha256, _source = resolve_registered_command_package(repository, contract)
+            package, _sha256, _source = resolve_registered_command_package(
+                repository, contract, source_inputs=source_inputs
+            )
         selector = package.get("local_finalizer_qualification_selector") if package else None
         explicit = contract.capabilities.provider_selector_policy is ProviderSelectorPolicy.EXPLICIT
         if explicit and selector != {
@@ -368,6 +394,7 @@ def _validate_one_contract(
             repository,
             contract,
             consumers=control_consumers,
+            source_inputs=source_inputs,
         )
     except Exception as exc:
         message = f"control_consumer_registry: {type(exc).__name__}: {exc}"
@@ -424,6 +451,7 @@ def validate_registry_completeness(
     lifecycle_loader: LifecycleLoader = load_campaign_lifecycle,
     disabled_consumers: frozenset[str] = frozenset(),
     control_consumers: Mapping[str, ContractConsumer] = CONTROL_CONSUMERS,
+    source_inputs: CandidateSourceSnapshot | None = None,
 ) -> dict[str, object]:
     """Return one deterministic, public-safe per-contract consumer matrix."""
 
@@ -438,6 +466,7 @@ def validate_registry_completeness(
             lifecycle_loader=lifecycle_loader,
             disabled_consumers=disabled_consumers,
             control_consumers=control_consumers,
+            source_inputs=source_inputs,
         )
         for _version, contract in sorted(
             selected_contracts.items(), key=lambda item: int(item[0][1:])
@@ -451,7 +480,9 @@ def validate_registry_completeness(
         errors.extend(
             f"{entry['version']}: {error}" for error in entry_errors if isinstance(error, str)
         )
-    commit, tree = _git_identity(root)
+    commit, tree = (
+        _git_identity(root) if source_inputs is None else source_inputs.package_identity(root)
+    )
     receipt: dict[str, object] = {
         "schema_version": REGISTRY_SCHEMA_VERSION,
         "repository_commit": commit,

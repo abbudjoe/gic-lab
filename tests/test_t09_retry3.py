@@ -516,7 +516,9 @@ def test_retry3_selection_receipt_crash_is_reconciled_without_rewrite(
     )
     original = pilot_state._write_json_atomic
 
-    def crash_before_projection(_path: Path, _document: object) -> None:
+    def crash_before_projection(
+        _path: Path, _document: object, *, before_write=None, after_output_write=None
+    ) -> None:
         raise OSError("fixture state projection crash")
 
     monkeypatch.setattr(pilot_state, "_write_json_atomic", crash_before_projection)

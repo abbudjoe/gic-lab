@@ -79,7 +79,7 @@ def test_invalid_command_package_fails(
     monkeypatch.setattr(
         composition,
         "resolve_registered_command_package",
-        lambda _root, _contract: (mutant, sha256, source),
+        lambda _root, _contract, *, source_inputs=None: (mutant, sha256, source),
     )
     with pytest.raises(CompositionError, match="attempt matrix"):
         _compose(deterministic_inputs)
@@ -97,7 +97,7 @@ def test_invalid_pair_diff_fails(
     monkeypatch.setattr(
         composition,
         "resolve_registered_command_package",
-        lambda _root, _contract: (mutant, sha256, source),
+        lambda _root, _contract, *, source_inputs=None: (mutant, sha256, source),
     )
     with pytest.raises(CompositionError, match="invalid pair diff"):
         _compose(deterministic_inputs)
@@ -129,7 +129,7 @@ def test_invalid_finalizer_source_contract_fails(
     monkeypatch.setattr(
         composition,
         "resolve_registered_command_package",
-        lambda _root, _contract: (mutant, sha256, source),
+        lambda _root, _contract, *, source_inputs=None: (mutant, sha256, source),
     )
     with pytest.raises(CompositionError, match="finalizer selector"):
         _compose(deterministic_inputs)

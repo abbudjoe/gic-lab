@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-live-method-map.schema.json",
+  "title": "T09 shared live-method source map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "effect_protocol_version",
+    "accounting_owner",
+    "launch_mutation_authority",
+    "methods",
+    "shared_phase_order"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "effect_protocol_version": {"const": "2.0.0"},
+    "accounting_owner": {
+      "const": "shared ConditionEventObserver over ProviderBudgetBoundary"
+    },
+    "launch_mutation_authority": {
+      "const": "launch_campaign through selected campaign_transport"
+    },
+    "methods": {
+      "type": "array",
+      "minItems": 29,
+      "uniqueItems": true,
+      "items": {"$ref": "#/$defs/method"}
+    },
+    "shared_phase_order": {
+      "type": "array",
+      "minItems": 24,
+      "maxItems": 24,
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "classification": {
+      "enum": [
+        "maps directly to one retained live primitive",
+        "maps after this PR through the generic bridge",
+        "shadow-only fixture",
+        "redundant and must be removed",
+        "historical compatibility only"
+      ]
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method_name",
+        "shared_caller",
+        "retained_primitive",
+        "input_type",
+        "output_type",
+        "phase",
+        "authority_owner",
+        "accounting_owner",
+        "evidence_owner",
+        "pre_repair_classification",
+        "post_repair_classification",
+        "live_mapping_complete"
+      ],
+      "properties": {
+        "method_name": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "shared_caller": {"type": "string", "minLength": 1},
+        "retained_primitive": {"type": "string", "minLength": 1},
+        "input_type": {"type": "string", "minLength": 1},
+        "output_type": {"type": "string", "minLength": 1},
+        "phase": {"type": "string", "minLength": 1},
+        "authority_owner": {"type": "string", "minLength": 1},
+        "accounting_owner": {"type": "string", "minLength": 1},
+        "evidence_owner": {"type": "string", "minLength": 1},
+        "pre_repair_classification": {"$ref": "#/$defs/classification"},
+        "post_repair_classification": {"$ref": "#/$defs/classification"},
+        "live_mapping_complete": {"const": true}
+      }
+    }
+  }
+}

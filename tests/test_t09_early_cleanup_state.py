@@ -411,3 +411,127 @@ def test_remote_continuation_import_preserves_one_exact_hash_chain(tmp_path: Pat
     assert [path.read_bytes() for path in local._version_paths()] == [
         path.read_bytes() for path in remote._version_paths()
     ]
+
+
+def test_freeze_publication_intent_survives_cleanup_and_cannot_rewind(tmp_path: Path) -> None:
+    from dataclasses import replace
+
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    assert journal.load().freeze_publication_started is False
+    journal.begin_freeze_publication(clock=clock)
+    recorded = journal.load()
+    assert recorded.freeze_publication_started is True
+    with pytest.raises(EarlyCleanupStateError, match="cannot be repeated"):
+        journal.begin_freeze_publication(clock=clock)
+    with pytest.raises(EarlyCleanupStateError, match="moved backwards"):
+        journal._validate_transition(
+            recorded,
+            replace(recorded, sequence=recorded.sequence + 1, freeze_publication_started=False),
+        )
+    journal.advance_lifecycle(CleanupLifecycleStage.CLEANUP_IN_PROGRESS, clock=clock)
+    assert journal.load().freeze_publication_started is True
+
+
+def test_cleanup_does_not_admit_freeze_publication(tmp_path: Path) -> None:
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    journal.advance_lifecycle(CleanupLifecycleStage.CLEANUP_IN_PROGRESS, clock=clock)
+    with pytest.raises(EarlyCleanupStateError, match="does not authorize"):
+        journal.begin_freeze_publication(clock=clock)
+    assert journal.load().freeze_publication_started is False
+
+
+def test_legacy_journal_absence_is_unknown_and_roundtrips_without_relabelling(
+    tmp_path: Path,
+) -> None:
+    from giclab.harness.t09_cleanup_state import EarlyCleanupState
+
+    journal = initialize_journal(tmp_path, IncrementingClock())
+    legacy = journal.load().to_document()
+    legacy.pop("freeze_publication_started")
+    observed = EarlyCleanupState.from_document(legacy)
+    assert observed.freeze_publication_started is None
+    assert observed.to_document() == legacy
+
+
+@pytest.mark.parametrize("denied", [False, True])
+def test_cleanup_journal_versions_consume_admission_before_growth(tmp_path, denied):
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    prior = {p.name: p.read_bytes() for p in journal.versions.iterdir()}
+    grants = []
+
+    def admit(path, count):
+        assert path.parent == journal.versions and not path.exists()
+        assert {p.name: p.read_bytes() for p in journal.versions.iterdir()} == prior
+        grants.append((path, count))
+        if denied:
+            raise RuntimeError("cleanup shared allowance denied")
+
+    journal = EarlyCleanupJournal(journal.root, before_write=admit)
+    if denied:
+        with pytest.raises(RuntimeError, match="shared allowance"):
+            journal.advance_lifecycle(CleanupLifecycleStage.PACKAGE_TRANSITION, clock=clock)
+        assert {p.name: p.read_bytes() for p in journal.versions.iterdir()} == prior
+    else:
+        journal.advance_lifecycle(CleanupLifecycleStage.PACKAGE_TRANSITION, clock=clock)
+        assert len(grants) == 1
+        path, count = grants[0]
+        assert path.stat().st_size == count
+        assert (
+            sum(p.stat().st_size for p in journal.versions.iterdir())
+            == sum(map(len, prior.values())) + count
+        )
+    assert len(grants) == 1
+
+
+@pytest.mark.parametrize("fault", ["create", "link", "published-then-missing"])
+def test_freeze_abort_is_bound_to_actual_exclusive_publisher(tmp_path, monkeypatch, fault):
+    from giclab.control.production import _host_module
+
+    host = _host_module(ROOT)
+    clock = IncrementingClock()
+    journal = initialize_journal(tmp_path, clock)
+    path = tmp_path / "frozen-run-manifest.json"
+    with pytest.raises(EarlyCleanupStateError):
+        journal.abort_unpublished_freeze(clock=clock)
+    journal.begin_freeze_publication(clock=clock)
+    original_open, original_link = host.os.open, host.os.link
+
+    def fail_open(target, flags, *args, **kwargs):
+        if target == host._atomic_publication_temporary(path) and flags & host.os.O_CREAT:
+            raise OSError("injected publication create failure")
+        return original_open(target, flags, *args, **kwargs)
+
+    def fail_link(source, destination, **kwargs):
+        if destination == path:
+            raise OSError("injected publication link failure")
+        return original_link(source, destination, **kwargs)
+
+    if fault == "create":
+        monkeypatch.setattr(host.os, "open", fail_open)
+    elif fault == "link":
+        monkeypatch.setattr(host.os, "link", fail_link)
+    if fault != "published-then-missing":
+        with pytest.raises(OSError, match="injected publication"):
+            host.write_exclusive(
+                path,
+                {"actual": "publication"},
+                on_unpublished=lambda: journal.abort_unpublished_freeze(clock=clock),
+            )
+        assert not path.exists()
+        assert journal.load().freeze_publication_aborted is True
+        with pytest.raises(EarlyCleanupStateError):
+            journal.abort_unpublished_freeze(clock=clock)
+    else:
+        host.write_exclusive(
+            path, {"actual": "publication"}, on_unpublished=journal.abort_unpublished_freeze
+        )
+        path.unlink()  # Explicit negative: disappearance supplies no abort proof.
+        assert journal.load().freeze_publication_aborted is None
+    state = journal.load()
+    assert state.freeze_publication_started is True
+    Draft202012Validator(json.loads(SCHEMA_PATH.read_bytes())).validate(state.to_document())
+    with pytest.raises(EarlyCleanupStateError):
+        journal.begin_freeze_publication(clock=clock)

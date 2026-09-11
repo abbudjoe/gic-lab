@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-condition-runtime-detachment.schema.json",
+  "title": "T09 remote condition runtime detachment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "mode",
+    "authoritative_accounting",
+    "host_evidence_pending",
+    "terminal_sequence",
+    "terminal_frame_sha256",
+    "frame_chain_sha256",
+    "remote_journal_bytes",
+    "remote_journal_file_sha256",
+    "remote_journal_sha256"
+  ],
+  "properties": {
+    "mode": {"const": "duplex-supervisor-client"},
+    "authoritative_accounting": {"const": false},
+    "host_evidence_pending": {"const": true},
+    "terminal_sequence": {"type": "integer", "minimum": 1, "maximum": 20000},
+    "terminal_frame_sha256": {"$ref": "#/$defs/sha256"},
+    "frame_chain_sha256": {"$ref": "#/$defs/sha256"},
+    "remote_journal_bytes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 67108864
+    },
+    "remote_journal_file_sha256": {"$ref": "#/$defs/sha256"},
+    "remote_journal_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -15,7 +15,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["2.0.0", "3.0.0"]},
+    "schema_version": {"enum": ["2.0.0", "3.0.0", "4.0.0"]},
     "repository_commit": {"$ref": "#/$defs/git"},
     "repository_tree": {"$ref": "#/$defs/git"},
     "selected_runtime_target": {"$ref": "#/$defs/target"},
@@ -41,7 +41,9 @@
         "state_capsule": {"$ref": "#/$defs/check"},
         "source_binding": {"$ref": "#/$defs/check"},
         "anti_shadow_lint": {"$ref": "#/$defs/check"},
-        "live_effect_conformance": {"$ref": "#/$defs/check"}
+        "live_effect_conformance": {"$ref": "#/$defs/check"},
+        "live_method_viability": {"$ref": "#/$defs/check"},
+        "remote_execution_bridge_conformance": {"$ref": "#/$defs/check"}
       }
     },
     "complete": {"type": "boolean"},
@@ -66,6 +68,31 @@
               "source_binding",
               "anti_shadow_lint",
               "live_effect_conformance"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "4.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "checks": {
+            "required": [
+              "active_version_lint",
+              "registry_completeness",
+              "incident_completeness",
+              "offline_composition",
+              "category3_shadow",
+              "state_capsule",
+              "source_binding",
+              "anti_shadow_lint",
+              "live_effect_conformance",
+              "live_method_viability",
+              "remote_execution_bridge_conformance"
             ]
           }
         }

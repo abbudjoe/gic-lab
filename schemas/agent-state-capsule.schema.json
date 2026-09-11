@@ -30,7 +30,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["3.0.0", "4.0.0"]},
+    "schema_version": {"enum": ["3.0.0", "4.0.0", "5.0.0"]},
     "generated_at_policy": {"enum": ["deterministic-fixed", "caller-supplied-or-wall-clock"]},
     "generated_at": {"type": "string", "minLength": 1},
     "repository": {
@@ -44,7 +44,13 @@
     },
     "terminal_goal": {"const": "evaluate simulative versus reactive SiRA"},
     "current_subgoal": {"type": "string", "minLength": 1},
-    "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"},
+    "next_technical_subgoal": {
+      "enum": [
+        "generate-package-only-v17-after-governance",
+        "close-r1-through-r6-with-integrated-retained-path-evidence",
+        "validate-exact-commit-v16-before-independent-review"
+      ]
+    },
     "science": {
       "type": "object",
       "additionalProperties": false,
@@ -64,7 +70,8 @@
         "revision": {
           "enum": [
             "T09-control-target-selection",
-            "T09-live-capable-production-effects"
+            "T09-live-capable-production-effects",
+            "T09-remote-execution-bridge"
           ]
         },
         "status": {
@@ -72,7 +79,10 @@
             "implementation-complete-external-governance",
             "successor-package-bound-not-authorized",
             "live-capable-production-effects-repair-in-progress",
-            "live-capable-production-effects-complete-external-governance"
+            "live-capable-production-effects-complete-external-governance",
+            "remote-execution-bridge-complete-external-governance",
+            "remote-execution-bridge-review-repair-blocked",
+            "remote-execution-bridge-final-validation-pending"
           ]
         },
         "registry_complete": {"type": "boolean"},
@@ -81,7 +91,9 @@
         "shadow_happy_path": {"type": "boolean"},
         "failure_matrix_valid": {"type": "boolean"},
         "anti_shadow_lint_valid": {"type": "boolean"},
-        "live_effect_conformance_valid": {"type": "boolean"}
+        "live_effect_conformance_valid": {"type": "boolean"},
+        "live_method_viability_valid": {"type": "boolean"},
+        "remote_execution_bridge_conformance_valid": {"type": "boolean"}
       }
     },
     "runtime_package": {
@@ -178,6 +190,51 @@
   "allOf": [
     {
       "if": {
+        "properties": {
+          "control_plane": {
+            "properties": {"status": {"const": "remote-execution-bridge-review-repair-blocked"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["control_plane"]
+      },
+      "then": {
+        "properties": {
+          "next_technical_subgoal": {"const": "close-r1-through-r6-with-integrated-retained-path-evidence"},
+          "blocking_incident": {"const": "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW"},
+          "control_plane": {
+            "properties": {
+              "live_method_viability_valid": {"const": false},
+              "remote_execution_bridge_conformance_valid": {"const": false}
+            }
+          }
+        }
+      },
+      "else": {
+        "if": {
+          "properties": {
+            "control_plane": {
+              "properties": {"status": {"const": "remote-execution-bridge-final-validation-pending"}},
+              "required": ["status"]
+            }
+          },
+          "required": ["control_plane"]
+        },
+        "then": {
+          "properties": {
+            "next_technical_subgoal": {"const": "validate-exact-commit-v16-before-independent-review"},
+            "blocking_incident": {"const": "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW"}
+          }
+        },
+        "else": {
+          "properties": {
+            "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"}
+          }
+        }
+      }
+    },
+    {
+      "if": {
         "properties": {"schema_version": {"const": "4.0.0"}},
         "required": ["schema_version"]
       },
@@ -201,6 +258,41 @@
                 "enum": [
                   "live-capable-production-effects-repair-in-progress",
                   "live-capable-production-effects-complete-external-governance"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"const": "5.0.0"}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "control_plane": {
+            "required": [
+              "revision",
+              "status",
+              "registry_complete",
+              "composition_valid",
+              "active_version_lint_valid",
+              "shadow_happy_path",
+              "failure_matrix_valid",
+              "anti_shadow_lint_valid",
+              "live_effect_conformance_valid",
+              "live_method_viability_valid",
+              "remote_execution_bridge_conformance_valid"
+            ],
+            "properties": {
+              "revision": {"const": "T09-remote-execution-bridge"},
+              "status": {
+                "enum": [
+                  "remote-execution-bridge-complete-external-governance",
+                  "remote-execution-bridge-review-repair-blocked",
+                  "remote-execution-bridge-final-validation-pending"
                 ]
               }
             }

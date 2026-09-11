@@ -16,7 +16,7 @@ import sys
 import tempfile
 import xml.etree.ElementTree as ET
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Final, Literal
@@ -365,6 +365,8 @@ def build_pytest_command(report: Path, basetemp: Path) -> tuple[str, ...]:
         f"--junitxml={report}",
         f"--basetemp={basetemp}",
     ]
+    if os.environ.get("GICLAB_CI_GUARD_JOURNAL"):
+        command.extend(("-p", "offline_guard"))
     for node_id in PRIVATE_LOCAL_NODE_IDS:
         command.extend(("--deselect", node_id))
     return tuple(command)
@@ -390,6 +392,10 @@ def _run_pytest(repository: Path, report: Path, basetemp: Path) -> PytestOutcome
         env=build_pytest_environment(repository),
         stdin=subprocess.DEVNULL,
         check=False,
+    )
+    report.with_suffix(".execution.json").write_text(
+        json.dumps({"command": command, "exit_code": completed.returncode}, sort_keys=True) + "\n",
+        encoding="utf-8",
     )
     if completed.returncode not in {0, 1} or not report.is_file():
         raise PytestParityError(
@@ -542,6 +548,7 @@ def run_parity(
     base_sha: str,
     *,
     expected_head_sha: str | None = None,
+    evidence_root: Path | None = None,
 ) -> dict[str, object]:
     """Run base and head pytest in one interpreter/dependency environment."""
 
@@ -553,7 +560,22 @@ def run_parity(
         if verified_head != resolved_expected_head:
             raise PytestParityError("checked-out HEAD differs from the exact pull-request head")
     _require_clean_repository(root)
-    with tempfile.TemporaryDirectory(prefix="giclab-pytest-parity-") as temporary:
+    if evidence_root is not None:
+        evidence_root = evidence_root.absolute()
+        if ".." in evidence_root.parts:
+            raise PytestParityError("parity evidence path contains parent traversal")
+        if any(path.is_symlink() for path in (evidence_root, *evidence_root.parents)):
+            raise PytestParityError("parity evidence path contains a symlink")
+        if evidence_root.is_relative_to(root) or root.is_relative_to(evidence_root):
+            raise PytestParityError("parity evidence must be separate from the source")
+        evidence_root.parent.resolve(strict=True)
+        evidence_root.mkdir(mode=0o700)
+    lifetime = (
+        nullcontext(str(evidence_root))
+        if evidence_root is not None
+        else tempfile.TemporaryDirectory(prefix="giclab-pytest-parity-")
+    )
+    with lifetime as temporary:
         temporary_root = Path(temporary)
         base_root = temporary_root / "base"
         with _checked_detached_worktree(root, base_root, verified_base):
@@ -574,6 +596,10 @@ def run_parity(
     )
     comparison["base_sha"] = verified_base
     comparison["head_sha"] = verified_head
+    if evidence_root is not None:
+        (evidence_root / "parity.json").write_text(
+            json.dumps(comparison, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
     return comparison
 
 
@@ -582,6 +608,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--repository", type=Path, default=Path.cwd())
     parser.add_argument("--base-sha", required=True)
     parser.add_argument("--head-sha")
+    parser.add_argument("--evidence-root", type=Path)
     return parser
 
 
@@ -591,6 +618,7 @@ def main() -> int:
         args.repository,
         args.base_sha,
         expected_head_sha=args.head_sha,
+        evidence_root=args.evidence_root,
     )
     print(json.dumps(comparison, indent=2, sort_keys=True))
     return 0 if comparison["parity_passed"] is True else 1

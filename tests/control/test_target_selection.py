@@ -126,6 +126,24 @@ def test_synthetic_package_bound_successor_selects_v17_without_shared_edits(
     assert target.selected_plan_id == "PLAN-EXP0001-PILOT-V17"
     assert target.selected_package_status == "package-bound-not-authorized"
     assert before == after
+    execution_path = target.selected_contract.execution_contract_path
+    assert execution_path is not None
+    execution = json.loads((repository / execution_path).read_bytes())
+    runtime_binding = execution["contract_bindings"]["runtime"]
+    runtime_bytes = (repository / runtime_binding["path"]).read_bytes()
+    runtime_sha = hashlib.sha256(runtime_bytes).hexdigest()
+    assert runtime_binding["sha256"] == runtime_sha
+    assert json.loads(runtime_bytes)["plan_id"] == target.selected_plan_id
+    command_path = target.selected_contract.command_manifest_path
+    assert command_path is not None
+    commands = json.loads((repository / command_path).read_bytes())
+    assert len(execution["attempts"]) == len(commands["manifests"]) == 4
+    for attempt, manifest in zip(execution["attempts"], commands["manifests"], strict=True):
+        condition = yaml.safe_load((repository / attempt["condition_plan_path"]).read_text())
+        assert attempt["environment_sha256"] == runtime_sha
+        assert condition["sources"]["environment_sha256"] == runtime_sha
+        assert manifest["equality_surface"]["environment_sha256"] == runtime_sha
+    assert not (ROOT / runtime_binding["path"]).exists()
 
 
 def test_successor_explicit_selector_accepts_only_v17(

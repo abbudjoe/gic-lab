@@ -43,6 +43,7 @@ from giclab.control.proofs import (
     validate_current_control_receipt_set,
     validate_deterministic_staging,
 )
+from giclab.harness.t09_candidate_inputs import CandidateSourceSnapshot
 from giclab.harness.t09_provider_contracts import (
     MetadataPolicy,
     ReplacementPolicy,
@@ -58,13 +59,14 @@ class Category3Phase(StrEnum):
     OFFLINE_COMPOSITION = "offline-composition"
     STATE_CAPSULE = "state-capsule-snapshot"
     SHADOW_RECEIPTS = "shadow-rehearsal-receipt-validation"
-    LOCAL_STAGING = "local-staging"
+    LOCAL_PACKAGE_ASSEMBLY = "local-package-assembly"
     SECRET_CHANNEL = "secret-channel-qualification"
     METADATA_RECEIPT = "metadata-receipt"
     PROVIDER_PREFLIGHT = "provider-read-only-preflight"
     FINAL_METADATA_FRESHNESS = "final-metadata-freshness"
     LAUNCH = "launch"
     PROVIDER_ENTRY = "provider-entry"
+    HOST_PACKAGE_TRANSFER = "host-package-transfer"
     HOST_PREFLIGHT = "host-preflight"
     QUALIFICATION = "image-finalizer-qualification"
     SCIENTIFIC_FREEZE = "scientific-freeze"
@@ -88,6 +90,7 @@ class Category3Request:
     expected_repository_commit: str
     expected_repository_tree: str
     control_proof: ControlProofReference | ValidatedShadowRehearsal
+    source_inputs: CandidateSourceSnapshot | None = None
 
 
 @dataclass(frozen=True, slots=True, init=False)
@@ -97,7 +100,7 @@ class PreparedCategory3:
     contract_version: str
     composition_sha256: str
     state_capsule_sha256: str
-    stage_sha256: str
+    local_assembly_sha256: str
     effect_authorization_context_sha256: str
     shadow_prerequisite_policy: str
     shadow_receipt_sha256s: tuple[str, ...]
@@ -186,6 +189,11 @@ def prepare_category3(
 
     transitions: list[dict[str, object]] = []
     context = adapters.authorization_context
+    command_package_sha256 = request.contract.expected_command_manifest_sha256
+    if request.source_inputs is not None:
+        if adapters.authority.kind is not EffectAuthorityKind.SHADOW_ONLY:
+            raise ValueError("candidate transaction cannot use live authority")
+        command_package_sha256 = request.source_inputs.command_package_sha256(request.repository)
     if (
         adapters.authority.kind
         not in {
@@ -196,9 +204,11 @@ def prepare_category3(
         or context.provider_contract_version != request.contract.version
         or context.plan_id != request.contract.plan_id
         or context.plan_sha256 != request.contract.expected_plan_sha256
-        or context.command_package_sha256 != request.contract.expected_command_manifest_sha256
+        or context.command_package_sha256 != command_package_sha256
         or context.control_commit != request.expected_repository_commit
         or context.control_tree != request.expected_repository_tree
+        or context.candidate_source_binding_sha256
+        != (None if request.source_inputs is None else request.source_inputs.digest)
         or not adapters.authority.authorizes(context)
     ):
         _transition(
@@ -214,7 +224,11 @@ def prepare_category3(
             Category3Phase.VERIFY_IDENTITY.value,
             "effect authority is unavailable",
         )
-    commit, tree = repository_identity(request.repository)
+    commit, tree = (
+        repository_identity(request.repository)
+        if request.source_inputs is None
+        else request.source_inputs.package_identity(request.repository)
+    )
     if (commit, tree) != (
         request.expected_repository_commit,
         request.expected_repository_tree,
@@ -235,7 +249,15 @@ def prepare_category3(
     _transition(transitions, Category3Phase.VERIFY_IDENTITY, "passed")
 
     try:
-        composition = composition_builder(request.repository, request.contract)
+        if (
+            request.source_inputs is not None
+            and composition_builder is _default_composition_builder
+        ):
+            composition = compose_control_plane(
+                request.repository, contract=request.contract, source_inputs=request.source_inputs
+            )
+        else:
+            composition = composition_builder(request.repository, request.contract)
     except Exception as exc:
         _transition(
             transitions,
@@ -350,7 +372,7 @@ def prepare_category3(
     except (ControlProofError, OSError, ValueError) as exc:
         _transition(
             transitions,
-            Category3Phase.LOCAL_STAGING,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
             "failed",
             detail=str(exc),
         )
@@ -358,15 +380,15 @@ def prepare_category3(
             None,
             composition,
             tuple(transitions),
-            Category3Phase.LOCAL_STAGING.value,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY.value,
             f"deterministic staging validation failed: {exc}",
         )
     try:
-        stage_sha256 = adapters.host_runtime.stage()
+        local_assembly_sha256 = adapters.host_runtime.assemble_local_package()
     except AdapterFailure as exc:
         _transition(
             transitions,
-            Category3Phase.LOCAL_STAGING,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY,
             "failed",
             detail=str(exc),
         )
@@ -374,15 +396,15 @@ def prepare_category3(
             None,
             composition,
             tuple(transitions),
-            Category3Phase.LOCAL_STAGING.value,
+            Category3Phase.LOCAL_PACKAGE_ASSEMBLY.value,
             str(exc),
         )
-    _transition(transitions, Category3Phase.LOCAL_STAGING, "passed")
+    _transition(transitions, Category3Phase.LOCAL_PACKAGE_ASSEMBLY, "passed")
     prepared = object.__new__(PreparedCategory3)
     object.__setattr__(prepared, "contract_version", request.contract.version)
     object.__setattr__(prepared, "composition_sha256", str(composition["semantic_sha256"]))
     object.__setattr__(prepared, "state_capsule_sha256", state_capsule_sha256)
-    object.__setattr__(prepared, "stage_sha256", stage_sha256)
+    object.__setattr__(prepared, "local_assembly_sha256", local_assembly_sha256)
     object.__setattr__(
         prepared,
         "effect_authorization_context_sha256",
@@ -661,6 +683,33 @@ def _establish_provider(
             )
         if failed_phase is None:
             try:
+                adapters.host_runtime.transfer_package(handle)
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PACKAGE_TRANSFER,
+                    "passed",
+                )
+            except ReplacementEligibleFailure as exc:
+                failed_phase = Category3Phase.HOST_PACKAGE_TRANSFER
+                failed_reason = str(exc)
+                replacement_eligible = True
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PACKAGE_TRANSFER,
+                    "failed",
+                    detail=failed_reason,
+                )
+            except AdapterFailure as exc:
+                failed_phase = Category3Phase.HOST_PACKAGE_TRANSFER
+                failed_reason = str(exc)
+                _transition(
+                    state.transitions,
+                    Category3Phase.HOST_PACKAGE_TRANSFER,
+                    "failed",
+                    detail=failed_reason,
+                )
+        if failed_phase is None:
+            try:
                 adapters.host_runtime.preflight(handle)
                 _transition(state.transitions, Category3Phase.HOST_PREFLIGHT, "passed")
             except ReplacementEligibleFailure as exc:
@@ -684,6 +733,17 @@ def _establish_provider(
                 )
         if failed_phase is None:
             return
+        replacement_allowed = (
+            replacement_eligible
+            and request.contract.capabilities.replacement_policy
+            is ReplacementPolicy.BOUNDED_PREFLIGHT
+            and launch_ordinal < max_launches
+        )
+        if not replacement_allowed:
+            # Preserve the exact handle for the ordinary terminal cleanup path.
+            # Remote cleanup must finish before that path terminates the host.
+            state.stop(failed_phase, failed_reason)
+            return
         try:
             adapters.provider_transport.terminate(handle)
         except TerminationUnavailable as exc:
@@ -693,15 +753,6 @@ def _establish_provider(
         inventory = adapters.provider_transport.inventory()
         if inventory != ():
             state.stop(failed_phase, f"{failed_reason}; replacement absence is unverified")
-            return
-        replacement_allowed = (
-            replacement_eligible
-            and request.contract.capabilities.replacement_policy
-            is ReplacementPolicy.BOUNDED_PREFLIGHT
-            and launch_ordinal < max_launches
-        )
-        if not replacement_allowed:
-            state.stop(failed_phase, failed_reason)
             return
         state.replacement_count += 1
     state.stop(Category3Phase.LAUNCH, "provider launch envelope exhausted")
@@ -716,6 +767,7 @@ def _run_conditions(
         if index == 2:
             _transition(state.transitions, Category3Phase.REMAINING_CONDITIONS, "entered")
         try:
+            active_phase = Category3Phase.CONDITION_RESERVATION
             adapters.condition_runtime.reserve(run_id)
             state.condition_reserved.append(run_id)
             _transition(
@@ -724,6 +776,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.EMPIRICAL_ENTRY
             adapters.condition_runtime.enter(run_id)
             state.condition_consumed.append(run_id)
             _transition(
@@ -732,6 +785,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.CONDITION_EXECUTION
             run_output = adapters.condition_runtime.run(run_id)
             _transition(
                 state.transitions,
@@ -739,6 +793,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.RAW_EXPORT
             raw = adapters.condition_runtime.export_raw(run_id)
             state.raw_evidence.append(run_id)
             state.effect_evidence.append(
@@ -756,6 +811,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.FINALIZATION
             finalized = adapters.condition_runtime.finalize(run_id)
             state.finalized_evidence.append(run_id)
             state.effect_evidence.append(
@@ -773,6 +829,7 @@ def _run_conditions(
                 "passed",
                 detail=run_id,
             )
+            active_phase = Category3Phase.EVALUATION
             evaluated = adapters.condition_runtime.evaluate(run_id)
             state.evaluator_outputs.append(run_id)
             state.effect_evidence.append(
@@ -827,16 +884,9 @@ def _run_conditions(
             state.stop(failure_phase, str(exc))
             return
         except AdapterFailure as exc:
-            operation = adapters.audit.calls[-1].operation if adapters.audit.calls else ""
-            phase = {
-                "condition.reserve": Category3Phase.CONDITION_RESERVATION,
-                "condition.enter": Category3Phase.EMPIRICAL_ENTRY,
-                "condition.run": Category3Phase.CONDITION_EXECUTION,
-                "condition.export_raw": Category3Phase.RAW_EXPORT,
-                "condition.finalize": Category3Phase.FINALIZATION,
-                "condition.evaluate": Category3Phase.EVALUATION,
-                "evidence.record": Category3Phase.FINALIZATION,
-            }.get(operation, Category3Phase.CONDITION_EXECUTION)
+            # The operation selected by this controller is authoritative even
+            # when admission fails before an adapter emits its audit event.
+            phase = active_phase
             _transition(state.transitions, phase, "failed", detail=f"{run_id}: {exc}")
             state.stop(phase, str(exc))
             return

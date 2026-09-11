@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, NoReturn, cast
 
 import yaml
+from referencing import Registry, Resource
+from referencing.jsonschema import SchemaRegistry
 
 
 class DuplicateKeyError(ValueError):
@@ -107,6 +109,38 @@ def load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise TypeError(f"{path} must contain a top-level object")
     return cast(dict[str, Any], value)
+
+
+def local_schema_registry(schema_root: Path) -> SchemaRegistry:
+    """Build an offline-only registry for exact repository-local JSON Schemas."""
+
+    if schema_root.is_symlink():
+        raise ValueError("local schema root is not a regular directory")
+    root = schema_root.resolve(strict=True)
+    if not root.is_dir():
+        raise ValueError("local schema root is not a regular directory")
+    resources: list[tuple[Path, dict[str, Any]]] = []
+    by_identifier: dict[str, list[dict[str, Any]]] = {}
+    for path in sorted(root.glob("*.json")):
+        if path.is_symlink() or not path.is_file():
+            raise ValueError("local schema registry contains a non-regular member")
+        schema = load_json(path)
+        resources.append((path, schema))
+        identifier = schema.get("$id")
+        if not isinstance(identifier, str):
+            continue
+        by_identifier.setdefault(identifier, []).append(schema)
+    registry: SchemaRegistry = Registry()
+    for path, schema in resources:
+        registry = registry.with_resource(path.resolve().as_uri(), Resource.from_contents(schema))
+    for identifier, schemas in sorted(by_identifier.items()):
+        # Historical execution schemas intentionally reuse one identifier across
+        # incompatible versions.  Such an ambiguous alias is never registered;
+        # callers must select its exact file.  A relative reference can resolve
+        # only to a unique repository-local identifier.
+        if len(schemas) == 1:
+            registry = registry.with_resource(identifier, Resource.from_contents(schemas[0]))
+    return registry
 
 
 def resolve_repo_path(root: Path, relative: str) -> Path:

@@ -1,6 +1,6 @@
 {
   "complete": true,
-  "incident_count": 6,
+  "incident_count": 8,
   "incidents": [
     {
       "complete": true,
@@ -13,7 +13,7 @@
         "tests/control/test_version_lint.py::test_literal_provider_contract_call_fails_even_with_historical_annotation",
         "tests/control/test_version_lint.py::test_old_agent_check_direct_import_and_assignment_form_fails"
       ],
-      "regression_output": "....                                                                     [100%]",
+      "regression_output": "pytest exit 0; 4 requested regression nodes",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -44,7 +44,7 @@
         "tests/control/test_live_effect_conformance.py::test_live_shaped_checkpoint_authority_and_held_identity_repairs",
         "tests/control/test_live_effect_conformance.py::test_live_shaped_review_failure_subreceipts_are_complete"
       ],
-      "regression_output": ".....................................................                    [100%]",
+      "regression_output": "pytest exit 0; 20 requested regression nodes",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -68,7 +68,7 @@
         "tests/control/test_held_identity_boundaries.py::test_public_shadow_receipt_is_stable_across_fresh_transaction_roots",
         "tests/control/test_live_effect_conformance.py::test_public_receipt_topology_injection_is_rejected"
       ],
-      "regression_output": "......................................                                   [100%]",
+      "regression_output": "pytest exit 0; 13 requested regression nodes",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -87,7 +87,7 @@
         "tests/control/test_production_coupling.py::test_post_export_raw_mutation_stops_before_effect_finalizer",
         "tests/control/test_production_coupling.py::test_effect_produced_answer_changes_retained_evaluator_output"
       ],
-      "regression_output": "....................                                                     [100%]",
+      "regression_output": "pytest exit 0; 8 requested regression nodes",
       "regressions_passed": true,
       "status": "resolved"
     },
@@ -111,9 +111,41 @@
         "tests/control/test_historical_receipts.py::test_restored_selected_v17_and_retained_v16_topology_both_validate",
         "tests/control/test_version_lint.py::test_literal_package_receipt_root_fails"
       ],
-      "regression_output": "..................                                                       [100%]",
+      "regression_output": "pytest exit 0; 13 requested regression nodes",
       "regressions_passed": true,
       "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW",
+      "path": "control/incidents/INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW.json",
+      "regression_nodes": [
+        "tests/control/test_remote_transaction_review.py::test_r1_fresh_runtime_processes_preserve_campaign_call_history",
+        "tests/control/test_remote_transaction_review.py::test_r5_write_deadline_includes_kernel_backpressure",
+        "tests/control/test_remote_transaction_review.py::test_retained_qualification_rejects_substitute_historical_archive",
+        "tests/control/test_candidate_inputs.py::test_normal_local_qualifier_rejects_candidate_before_runtime_access",
+        "tests/control/test_candidate_inputs.py::test_candidate_actual_package_verifier_in_isolated_source_process[local-qualification]",
+        "tests/control/test_candidate_inputs.py::test_candidate_actual_package_verifier_in_isolated_source_process[preflight-start-failure]",
+        "tests/control/test_candidate_inputs.py::test_candidate_actual_package_verifier_in_isolated_source_process[qualification-start-failure]",
+        "tests/test_t09_v14_cleanup_lifecycle.py::test_published_manifest_cannot_contradict_tracked_no_publication",
+        "tests/control/test_remote_transaction_review.py::test_r6_runtime_event_writer_cannot_grow_without_shared_output_headroom",
+        "tests/control/test_remote_bridge.py::test_output_allowance_is_shared_and_distinct_from_observed_usage",
+        "tests/control/test_remote_bridge.py::test_actual_event_writer_reconciles_exact_bytes_after_shared_grant",
+        "tests/control/test_candidate_inputs.py::test_retained_image_file_hashes_are_bound_actual_bytes",
+        "tests/control/test_candidate_inputs.py::test_retained_process_qualification_uses_bound_observations",
+        "tests/control/test_candidate_inputs.py::test_offline_freeze_inputs_reject_missing_or_mixed_selection",
+        "tests/control/test_candidate_inputs.py::test_retained_sealing_probe_does_not_publish_container_mutation_authority",
+        "tests/control/test_offline_effect_guard.py::test_environmental_process_denied_before_creation",
+        "tests/control/test_offline_effect_guard.py::test_child_keeps_guard_with_replaced_environment",
+        "tests/control/test_local_container_ci.py::test_outer_cleanup_uses_exact_id_even_on_failure",
+        "tests/control/test_candidate_inputs.py::test_sealing_probe_failure_preserves_separate_evidence",
+        "tests/control/test_candidate_inputs.py::test_candidate_carrier_consumes_durable_credential_target",
+        "tests/control/test_local_container_ci.py::test_every_colima_operation_uses_global_gic_profile_selector"
+      ],
+      "regression_output": "pytest exit 0; 21 requested regression nodes",
+      "regressions_passed": true,
+      "status": "open"
     },
     {
       "complete": true,
@@ -125,13 +157,30 @@
         "tests/control/test_composition.py::test_historical_v16_lifecycle_omission_fails_before_secret_access",
         "tests/control/test_category3_shadow.py::test_lifecycle_omission_stops_before_every_external_boundary"
       ],
-      "regression_output": "...                                                                      [100%]",
+      "regression_output": "pytest exit 0; 3 requested regression nodes",
+      "regressions_passed": true,
+      "status": "resolved"
+    },
+    {
+      "complete": true,
+      "errors": [],
+      "incident_id": "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE",
+      "path": "control/incidents/INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE.json",
+      "regression_nodes": [
+        "tests/control/test_category3_shadow.py::test_local_assembly_and_host_transfer_are_ordered_around_provider_entry",
+        "tests/control/test_remote_host_phases.py::test_preflight_is_phase_specific_and_cannot_qualify_or_freeze",
+        "tests/control/test_remote_bridge.py::test_missing_shared_observer_cannot_admit_a_remote_provider_send",
+        "tests/control/test_live_method_viability.py::test_live_method_viability_has_one_launch_seam_and_zero_gaps",
+        "tests/control/test_remote_execution_conformance.py::test_remote_execution_bridge_conformance_uses_full_shared_controller",
+        "tests/control/test_historical_receipts.py::test_synthetic_successor_remote_bridge_uses_exact_inherited_contract_child"
+      ],
+      "regression_output": "pytest exit 0; 6 requested regression nodes",
       "regressions_passed": true,
       "status": "resolved"
     }
   ],
-  "repository_commit": "f5c19404c483fea7ed4b47235e5a1763213e017f",
-  "repository_tree": "52aba08c58342ab714ccb548b1049cb3685c5574",
+  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
   "schema_version": "1.0.0",
-  "semantic_sha256": "3f220e26cb9878c8eea333519a4d7e06b51e2e3ac9731414930dabb7e350d2a0"
+  "semantic_sha256": "1e24052b92158445d52618b3bc792201bec4b60f98db589322d426a275a9f693"
 }

@@ -16,7 +16,7 @@
     "semantic_sha256"
   ],
   "properties": {
-    "schema_version": {"enum": ["4.0.0", "5.0.0"]},
+    "schema_version": {"enum": ["4.0.0", "5.0.0", "6.0.0", "7.0.0"]},
     "repository_slug": {"const": "abbudjoe/gic-lab"},
     "base_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
     "control_plane_revision": {
@@ -97,7 +97,7 @@
               "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
             },
             "authority_grant_schema_version": {"const": "1.0.0"},
-            "effect_protocol_version": {"const": "1.0.0"}
+            "effect_protocol_version": {"enum": ["1.0.0", "2.0.0"]}
           }
         }
       ]
@@ -133,7 +133,9 @@
         "source_binding_receipt": {"$ref": "#/$defs/artifact"},
         "incident_receipt": {"$ref": "#/$defs/artifact"},
         "anti_shadow_lint_receipt": {"$ref": "#/$defs/artifact"},
-        "live_effect_conformance_receipt": {"$ref": "#/$defs/artifact"}
+        "live_effect_conformance_receipt": {"$ref": "#/$defs/artifact"},
+        "live_method_viability_receipt": {"$ref": "#/$defs/artifact"},
+        "remote_execution_bridge_conformance_receipt": {"$ref": "#/$defs/artifact"}
       }
     },
     "authority": {
@@ -175,6 +177,35 @@
               "incident_receipt",
               "anti_shadow_lint_receipt",
               "live_effect_conformance_receipt"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {"schema_version": {"enum": ["6.0.0", "7.0.0"]}},
+        "required": ["schema_version"]
+      },
+      "then": {
+        "required": ["package_effect_registration"],
+        "properties": {
+          "artifacts": {
+            "required": [
+              "goal_record",
+              "registry_receipt",
+              "active_version_lint_receipt",
+              "composition_receipt",
+              "state_capsule",
+              "shadow_happy_path",
+              "shadow_failures",
+              "agent_check_receipt",
+              "source_binding_receipt",
+              "incident_receipt",
+              "anti_shadow_lint_receipt",
+              "live_effect_conformance_receipt",
+              "live_method_viability_receipt",
+              "remote_execution_bridge_conformance_receipt"
             ]
           }
         }

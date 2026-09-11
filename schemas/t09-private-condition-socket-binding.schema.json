@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-private-condition-socket-binding.schema.json",
+  "title": "T09 private condition socket binding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "binding",
+    "transaction_root_identity",
+    "socket_relative_path",
+    "socket_device",
+    "socket_inode",
+    "socket_uid",
+    "socket_mode",
+    "socket_link_count",
+    "deadline_monotonic",
+    "remote_journal_relative_path"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "protocol_version": {"const": "1.0.0"},
+    "binding": {"type": "object"},
+    "transaction_root_identity": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "socket_relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$"
+    },
+    "socket_device": {"type": "integer", "minimum": 0},
+    "socket_inode": {"type": "integer", "minimum": 1},
+    "socket_uid": {"type": "integer", "minimum": 0},
+    "socket_mode": {"const": 384},
+    "socket_link_count": {"const": 1},
+    "deadline_monotonic": {"type": "number", "exclusiveMinimum": 0},
+    "remote_journal_relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    }
+  }
+}

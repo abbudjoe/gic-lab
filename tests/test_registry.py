@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from referencing.exceptions import NoSuchResource
 
 from giclab.registry import (
     DuplicateKeyError,
@@ -10,8 +11,11 @@ from giclab.registry import (
     load_json,
     load_yaml,
     loads_json,
+    local_schema_registry,
     resolve_repo_path,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_duplicate_yaml_keys_are_rejected(tmp_path: Path) -> None:
@@ -48,3 +52,14 @@ def test_repo_root_is_discovered_from_nested_project_markers(tmp_path: Path) -> 
     nested = tmp_path / "a/b/c"
     nested.mkdir(parents=True)
     assert discover_repo_root(nested) == tmp_path
+
+
+def test_local_schema_registry_requires_exact_files_for_ambiguous_historical_ids() -> None:
+    registry = local_schema_registry(ROOT / "schemas")
+    with pytest.raises(NoSuchResource):
+        registry.contents("urn:gic-lab:schema:t09-sira-pilot-execution:0.5.0")
+    for version in ("v10", "v16"):
+        path = ROOT / f"schemas/t09-sira-pilot-{version}-execution.schema.json"
+        assert registry.contents(path.resolve().as_uri())["title"].startswith(
+            f"T09 {version.upper()}"
+        )

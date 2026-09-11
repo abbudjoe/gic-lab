@@ -26,6 +26,13 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Final, Protocol, cast
 
+from giclab.harness.campaign_output import (
+    CampaignWriteAllowance,
+    CampaignWriterRole,
+    admit_campaign_write,
+    observe_campaign_write,
+    verify_campaign_write,
+)
 from giclab.harness.t09_provider_contracts import (
     MetadataPolicy,
     T09ContractCapabilities,
@@ -245,6 +252,21 @@ def _read_private_bytes(path: Path, *, label: str) -> bytes:
         os.close(descriptor)
 
 
+def _read_credential_buffer(descriptor: int, buffer: bytearray) -> int:
+    """Fill a caller-bounded mutable buffer without immutable secret copies."""
+    offset = 0
+    while offset < len(buffer):
+        target = memoryview(buffer)[offset:]
+        try:
+            count = os.readv(descriptor, [target])
+        finally:
+            target.release()
+        if count == 0:
+            break
+        offset += count
+    return offset
+
+
 def _read_openai_dotenv_bytes(path: Path) -> bytearray:
     """Read the approved external dotenv shape without relaxing private JSON.
 
@@ -267,6 +289,7 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
     except OSError as exc:
         raise ModelMetadataReceiptError(f"{label} is unavailable") from exc
     raw = bytearray()
+    confirmation = bytearray()
     try:
         before = os.fstat(descriptor)
         if (
@@ -279,16 +302,14 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
             raise ModelMetadataReceiptError(f"{label} metadata is unsafe")
 
         raw = bytearray(before.st_size + 1)
-        offset = 0
-        while offset < len(raw):
-            target = memoryview(raw)[offset:]
-            try:
-                count = os.readv(descriptor, [target])
-            finally:
-                target.release()
-            if count == 0:
-                break
-            offset += count
+        offset = _read_credential_buffer(descriptor, raw)
+        # Adjacent writes can have equal timestamp observations. Compare a
+        # second bounded read through the held descriptor, without hashing or
+        # retaining immutable credential bytes. This is a consistency check
+        # between observations, not an atomic snapshot against arbitrary writes.
+        os.lseek(descriptor, 0, os.SEEK_SET)
+        confirmation = bytearray(len(raw))
+        confirmed_offset = _read_credential_buffer(descriptor, confirmation)
 
         held_after = os.fstat(descriptor)
         try:
@@ -305,6 +326,8 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
         )
         if (
             offset != before.st_size
+            or confirmed_offset != offset
+            or raw != confirmation
             or not _same_identity(before, held_after)
             or not _same_identity(before, path_after)
             or not stat.S_ISREG(held_after.st_mode)
@@ -323,15 +346,19 @@ def _read_openai_dotenv_bytes(path: Path) -> bytearray:
         _destroy_bytearray(raw)
         raise
     finally:
+        _destroy_bytearray(confirmation)
         os.close(descriptor)
 
 
-def _write_all(descriptor: int, encoded: bytes) -> None:
+def _write_all(
+    descriptor: int, encoded: bytes, allowance: CampaignWriteAllowance | None = None
+) -> None:
     written = 0
     while written < len(encoded):
         count = os.write(descriptor, encoded[written:])
         if count <= 0:
             raise ModelMetadataReceiptError("private write made no progress")
+        observe_campaign_write(allowance, count)
         written += count
 
 
@@ -343,10 +370,11 @@ def _write_private_exclusive(path: Path, value: Mapping[str, object]) -> None:
     if not 0 < len(encoded) <= MODEL_METADATA_MAX_PRIVATE_BYTES:
         raise ModelMetadataReceiptError("private output exceeds its bound")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    allowance = admit_campaign_write(path, len(encoded), CampaignWriterRole.PROVIDER_RECORD)
     descriptor = os.open(path, flags, 0o600)
     complete = False
     try:
-        _write_all(descriptor, encoded)
+        _write_all(descriptor, encoded, allowance)
         os.fsync(descriptor)
         held = os.fstat(descriptor)
         path_metadata = path.stat(follow_symlinks=False)
@@ -362,9 +390,10 @@ def _write_private_exclusive(path: Path, value: Mapping[str, object]) -> None:
         complete = True
     finally:
         os.close(descriptor)
-        if not complete:
+        if not complete and allowance is None:
             with contextlib.suppress(OSError):
                 path.unlink()
+    verify_campaign_write(allowance, path)
     _fsync_parent(path)
 
 

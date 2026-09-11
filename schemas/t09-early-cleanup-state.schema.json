@@ -30,6 +30,11 @@
     "terminal_cleanup_disposition"
   ],
   "properties": {
+    "freeze_publication_started": {"type": "boolean"},
+    "freeze_publication_aborted": {
+      "type": "boolean",
+      "description": "Durable exclusive-publisher failure before publication; missing output alone does not establish this state."
+    },
     "schema_version": {"const": "1.0.0"},
     "state_type": {"const": "t09-early-cleanup-state"},
     "journal_id": {"$ref": "#/$defs/sha256"},
@@ -121,7 +126,8 @@
             "owned-ruleset",
             "temporary-local-secret",
             "temporary-remote-secret",
-            "owned-container"
+            "owned-container",
+            "source-package-archive"
           ]
         },
         "locator": {"type": "string", "minLength": 1, "maxLength": 4096},
