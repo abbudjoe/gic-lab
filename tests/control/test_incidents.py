@@ -1,13 +1,68 @@
 from __future__ import annotations
 
 import copy
+import subprocess
 from pathlib import Path
 
+import pytest
+
+from giclab.control import incidents as incidents_module
 from giclab.control.incidents import validate_incident_document, validate_incidents
 from giclab.registry import load_json
 
 ROOT = Path(__file__).resolve().parents[2]
 INCIDENT_PATH = ROOT / "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json"
+
+
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_incident_diagnostics_remain_private_without_changing_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    exit_code: int,
+) -> None:
+    stdout = b"fixture diagnostic /Users/synthetic/report\n"
+    stderr = b"fixture diagnostic /tmp/synthetic/report\n"
+    original_run = incidents_module.subprocess.run
+
+    def run(*args, **kwargs):
+        if args[0][1:3] == ["-m", "pytest"]:
+            home = Path(kwargs["env"]["HOME"])
+            assert home.is_dir() and home.stat().st_mode & 0o777 == 0o700
+            assert home.parent.name.startswith("incident-regressions-")
+            return subprocess.CompletedProcess(args[0], exit_code, stdout, stderr)
+        return original_run(*args, **kwargs)
+
+    monkeypatch.setattr(incidents_module.subprocess, "run", run)
+    passed, public_output = incidents_module._run_regressions(
+        tmp_path, ["tests/example.py::test_example"]
+    )
+    assert passed is (exit_code == 0)
+    assert public_output == f"pytest exit {exit_code}; 1 requested regression nodes"
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert stdout.decode() + stderr.decode() in captured.err
+    assert "/Users/" not in public_output and "/tmp/" not in public_output
+
+    receipt = validate_incidents(ROOT, execute_regressions=True)
+    assert receipt["complete"] is (exit_code == 0)
+    assert all(
+        incident["regressions_passed"] is (exit_code == 0) for incident in receipt["incidents"]
+    )
+    assert "/Users/" not in str(receipt) and "/tmp/" not in str(receipt)
+    assert stdout.decode() + stderr.decode() in capsys.readouterr().err
+
+
+def test_incident_regression_child_runs_the_pinned_offline_evaluator() -> None:
+    passed, output = incidents_module._run_regressions(
+        ROOT,
+        [
+            "tests/control/test_production_coupling.py::"
+            "test_effect_produced_answer_changes_retained_evaluator_output"
+        ],
+    )
+    assert passed, output
+    assert output == "pytest exit 0; 1 requested regression nodes"
 
 
 def test_v16_incident_validates_and_named_regressions_pass() -> None:

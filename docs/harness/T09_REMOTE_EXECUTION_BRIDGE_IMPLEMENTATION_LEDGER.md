@@ -4765,3 +4765,20 @@ context reset handles and fixture binding sentinels now have explicit role
 names; the credential scanner and its patterns remain unchanged. The original
 failed checks are retained externally. Current receipt generation, exact final
 CI and independent review are still pending at this source boundary.
+
+The next normal receipt attempt, `gic-pr15-ci-b39aceaa45da0e2a`, failed the
+unchanged public-topology gate because incident receipts embedded raw regression
+diagnostics. The producer now keeps actual exits in the public projection and
+routes diagnostics to the private command log. A separate bounded probe traced
+unscored incident-child evaluation to NLTK import without a private `HOME`;
+incident subprocesses now create their own protected temporary home. An older
+failure-envelope assertion also compared the sealed accounting snapshot with
+later output consumption. Its regression now binds the actual held call-ledger
+bytes and checks that later observed growth consumes the same reserved allowance
+without changing the upper bound or provider history. Original failures remain
+retained; a new source ancestor, regenerated receipts and final CI are required.
+The historical-receipt tests also exposed an omitted runtime-identity role in
+their existing temporary successor fixture. That helper now materializes the
+test-owned file and derives its execution/condition/command references from the
+actual bytes. Frozen V16 inputs remain unchanged; no persistent successor
+package or live authority is created.

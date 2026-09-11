@@ -96,6 +96,9 @@ def _run_regressions(repository: Path, nodes: Sequence[str]) -> tuple[bool, str]
     if fixture_parent is not None:
         Path(fixture_parent).mkdir(mode=0o700, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="incident-regressions-", dir=fixture_parent) as work:
+        home = Path(work) / "home"
+        home.mkdir(mode=0o700)
+        environment["HOME"] = str(home)
         completed = subprocess.run(
             [
                 sys.executable,
@@ -112,8 +115,19 @@ def _run_regressions(repository: Path, nodes: Sequence[str]) -> tuple[bool, str]
             check=False,
             timeout=INCIDENT_REGRESSION_TIMEOUT_SECONDS,
         )
-    output = (completed.stdout + completed.stderr).decode("utf-8", "replace").strip()
-    return completed.returncode == 0, output[-2000:]
+    # Test diagnostics are untrusted runtime evidence, not public receipt fields.
+    # The command caller retains stderr in its private, bounded run log. Keep the
+    # public projection deterministic and preserve the actual failing exit.
+    output = (completed.stdout + completed.stderr).decode("utf-8", "replace")
+    if output:
+        sys.stderr.write("Incident regression diagnostics (private run evidence):\n")
+        sys.stderr.write(output)
+        if not output.endswith("\n"):
+            sys.stderr.write("\n")
+    return (
+        completed.returncode == 0,
+        f"pytest exit {completed.returncode}; {len(nodes)} requested regression nodes",
+    )
 
 
 def validate_incidents(
