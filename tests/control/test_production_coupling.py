@@ -226,17 +226,29 @@ def test_breaking_empirical_prefix_cleanup_handoff_fails_cleanup(
     rehearsal: ValidatedShadowRehearsal,
 ) -> None:
     retained: Callable[..., object] = production.pilot.load_validated_pilot_state
+    retained_cleanup = production.ProductionCategory3World.cleanup
     calls = 0
+    in_cleanup = False
+
+    def cleanup_scope(world, handle):
+        nonlocal in_cleanup
+        in_cleanup = True
+        try:
+            return retained_cleanup(world, handle)
+        finally:
+            in_cleanup = False
 
     def broken_cleanup(*args: object, **kwargs: object) -> object:
         nonlocal calls
-        calls += 1
-        if calls == 3:
+        if in_cleanup:
+            calls += 1
             raise RuntimeError("mutated empirical-prefix cleanup handoff")
         return retained(*args, **kwargs)
 
+    monkeypatch.setattr(production.ProductionCategory3World, "cleanup", cleanup_scope)
     monkeypatch.setattr(production.pilot, "load_validated_pilot_state", broken_cleanup)
     receipt = _execute(rehearsal)
+    assert calls == 1
     assert receipt["earliest_stopping_phase"] == Category3Phase.CLEANUP.value
     cleanup = receipt["cleanup"]
     assert isinstance(cleanup, dict) and cleanup["state"] == "unresolved"

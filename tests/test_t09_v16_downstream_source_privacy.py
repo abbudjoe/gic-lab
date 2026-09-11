@@ -418,7 +418,15 @@ def test_production_preflight_receipt_is_structurally_clean(
     commands.write_text("{}\n", encoding="utf-8")
 
     class FixtureIdentity:
-        def __init__(self, *, root: Path, dataset_path: Path, task_index: int) -> None:
+        def __init__(
+            self,
+            *,
+            root: Path,
+            dataset_path: Path,
+            task_index: int,
+            fixture_subset: bool = False,
+        ) -> None:
+            assert fixture_subset is False
             self._identity = EvaluatorIdentity(
                 root=root,
                 dataset_path=dataset_path,

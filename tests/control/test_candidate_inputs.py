@@ -478,8 +478,17 @@ def test_rehashed_candidate_binding_mutations_still_fail(candidate, mutation):
     elif mutation == "tree":
         document["parent_tree"] = "0" * 40
     elif mutation == "delta":
-        document["dirty_delta"] = []
-        document["dirty_delta_sha256"] = sha(canonical([]))
+        # An empty delta is valid for an exact committed candidate. Inject an
+        # independently false row so this negative also mutates clean inputs.
+        document["dirty_delta"] = [
+            {
+                "path": document["source_members"][0]["path"],
+                "parent_sha256": "0" * 64,
+                "candidate_sha256": "f" * 64,
+            }
+        ]
+        document["source_kind"] = "dirty-snapshot"
+        document["dirty_delta_sha256"] = sha(canonical(document["dirty_delta"]))
     elif mutation == "fixture-id":
         document["qualification_fixture"]["fixture_id"] = "WRONG-FIXTURE"
     elif mutation == "archive-sha":

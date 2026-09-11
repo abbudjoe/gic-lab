@@ -115,7 +115,7 @@ def test_v11_plan_binds_exact_repaired_control_sources() -> None:
         assert isinstance(relative, str)
         observed = (
             sha256_git_blob(relative, reviewed_ancestor)
-            if relative.endswith(".py")
+            if relative.endswith(".py") or relative == "schemas/t09-early-cleanup-state.schema.json"
             else sha256_file(ROOT / relative)
         )
         assert observed == expected_sha256

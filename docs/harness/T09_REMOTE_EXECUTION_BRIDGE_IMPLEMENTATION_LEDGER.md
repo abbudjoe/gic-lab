@@ -4816,3 +4816,26 @@ results were verified. The active regression requires retaining started
 containers with unresolved exports, with normal exact-owned stopping and
 explicit unresolved evidence. This maintenance correction does not alter
 experimental cleanup policy, scientific budgets or the accepted R1–R6 matrix.
+
+The third complete exact-candidate run, `gic-pr15-ci-05ea63eaa724cda4` at
+`0d1fc465744119ff433e8cde1ee2c4f7fc750a26`, passed static/control/privacy/site
+checks and reproduced all 53 accepted matrix rows and all 37 joined parameters.
+Its full parity gate nevertheless failed: base raw pytest had 2,282 passes,
+30 failures and two skips; head had 2,916 passes, 41 failures and two skips,
+including 14 new failures. No missing base nodes or weakened transitions were
+reported. Complete original results, guard journals, source integrity and
+exact-owned ephemeral cleanup were verified. This is a failed final candidate,
+not final certification or a combined green suite.
+
+The new failures exposed outdated negative-test setup: a no-op dirty delta on a
+clean commit, doubles missing actual candidate/writer/fixture arguments, a held
+cleanup component without its validated temporary contract/policy, a checkpoint
+loader fault injected before cleanup, and a published-freeze fixture without its
+prior durable publication intent. Historical plan tests now select their frozen
+implementation and shared cleanup-schema ancestor explicitly while retaining
+current exact versioned artifact pins. No expected historical hash or production
+acceptance rule changed. Focused run `gic-pr15-ci-94d9af94f1878258` retained 11
+passes and three setup failures; their corrected actual nodes all passed in
+`gic-pr15-ci-34fa9f462dca1ffc` (14 passes, no failures/errors/skips). The original
+red runs remain retained. New source/receipt descendants and the complete final
+gate remain required; independent review is pending.

@@ -106,6 +106,7 @@ def test_v10_plan_binds_exact_repaired_control_sources() -> None:
         observed = (
             hashlib.sha256(git_blob(relative)).hexdigest()
             if Path(relative).suffix == ".py"
+            or relative == "schemas/t09-early-cleanup-state.schema.json"
             else sha256_file(ROOT / relative)
         )
         assert observed == expected_sha256
