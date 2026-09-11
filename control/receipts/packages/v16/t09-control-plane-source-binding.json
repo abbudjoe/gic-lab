@@ -212,9 +212,9 @@
       "sha256": "6ad14251511b6b0cb73dac6112845e5a078b091405c2e7291adb2908b4fd558c"
     },
     {
-      "bytes": 44112,
+      "bytes": 44932,
       "path": "src/giclab/harness/t09_model_metadata_receipt.py",
-      "sha256": "e3340f689a7dfbf4c5f2629d95b10d3c0e1dad8b2cb250a506d7111082a9032e"
+      "sha256": "83d16d8f13213ba78384928f819cd0e9a77c86af25413b8ab49fbb20c569eb32"
     },
     {
       "bytes": 390277,
@@ -262,7 +262,7 @@
   "schema_version": "4.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "468497b8ad33fe89734fec7559371585797c14c6634d72dc25edc8761c70e1ed",
-  "source_commit": "01c19d0d7dc6e9b24fe8768d7c661bdd5160c52d",
-  "source_tree": "00e55e81eefb541a4104d89f13f1e3f0ae463f21"
+  "semantic_sha256": "2edd545571a201fdd56dea4b50c64f7b4cad92556d6cfb85cd4e07d5d3aaeb18",
+  "source_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "source_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb"
 }

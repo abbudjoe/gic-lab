@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "120bca61ec30345e76eafa43025045123828c4a3d7f0eb3f4f3346a5ba19bca2"
+      "subject": "bed3df43d9a3b1ae408f85b3c0fdd3f0c07431a74125b7cc7502be66b1c510f4"
     },
     {
       "adapter": "provider",
@@ -91,12 +91,12 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "64b715d49525096ddad8b37b0e172a2c65c93e1200e2285a20cb2a20d758decf",
+  "composition_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "launch",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "8a2783b76fc952d95f27a323d61d4368d41db5e7e653c252ed4a0b443cf74c09",
+  "effect_authorization_context_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -190,7 +190,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "8a2783b76fc952d95f27a323d61d4368d41db5e7e653c252ed4a0b443cf74c09",
+    "authorization_context_semantic_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
     "cleanup_handoff_sha256": "4240baa87d838671f53209c0715e1193793fa443458c7a4a2d1daa3fdb6ad132",
     "cleanup_receipt_sha256": "d5f50c8e719dac4f4a3fde9d6e82c23126719e9dbacd7987875868a2d66a24a6",
     "cleanup_resume_byte_identical": true,
@@ -242,7 +242,7 @@
       "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
       "package_source": "working-tree",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "source_manifest_sha256": "8d4239a8d20640eac58f43f27d395076c684e7fd05f4aea38ec2508e22ea9b40",
+      "source_manifest_sha256": "b100bf13dc91157e14513af28ca3015cc428b66df7ce92c30b778ccafbb32c4d",
       "tracked_only": true,
       "uploaded": false,
       "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
@@ -381,8 +381,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "01c19d0d7dc6e9b24fe8768d7c661bdd5160c52d",
-  "repository_tree": "00e55e81eefb541a4104d89f13f1e3f0ae463f21",
+  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
+  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
   "scenario": "ambiguous-provider-call-outcome",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -391,7 +391,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "7fe12ad9ae0ee7f4b63d267fa8726d2b3d08b35fb691dc1a24c8f36eef349c16",
+  "semantic_sha256": "a9c0aa6c39a053799d4916aa1e0ba39fc8aecad22addb0dcd002054ee9c59a6c",
   "shadow_only": true,
   "stop_reason": "provider launch acknowledgement is ambiguous",
   "terminal_state": "category3-shadow-stopped-cleanup-unresolved",
