@@ -24,7 +24,7 @@ DATASET_PATH: Final = "tests/fixtures/t09/fanout-two-task-fixture.json"
 EVALUATOR_ROOT: Final = "tests/fixtures/t09/pinned-evaluator"
 MAX_DECODED_BYTES: Final = 1_048_576
 MAX_ARCHIVE_BYTES: Final = 1_048_576
-_TOKEN = object()
+_BINDING_SENTINEL = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,7 +163,7 @@ class DeterministicQualificationArchive:
 
     def evaluator_files(self) -> list[dict[str, str]]:
         """The ordered source projection selected by this explicit test input."""
-        if self._token is not _TOKEN or self.fixture_id != FIXTURE_ID:
+        if self._token is not _BINDING_SENTINEL or self.fixture_id != FIXTURE_ID:
             raise ValueError("qualification fixture binding was not constructed locally")
         return [
             {
@@ -175,7 +175,7 @@ class DeterministicQualificationArchive:
         ]
 
     def validate(self, repository: Path, *, archive_path: Path | None = None) -> None:
-        if self._token is not _TOKEN or self.fixture_id != FIXTURE_ID:
+        if self._token is not _BINDING_SENTINEL or self.fixture_id != FIXTURE_ID:
             raise ValueError("qualification fixture binding was not constructed locally")
         data, sources = _contents(repository)
         encoded = _encode(data)
@@ -252,7 +252,7 @@ def load_deterministic_qualification_archive(
         tuple(FixtureMember(name, len(value), _sha(value)) for name, value in sorted(data.items())),
         sources,
         _sha((repository / GENERATOR_PATH).read_bytes()),
-        _TOKEN,
+        _BINDING_SENTINEL,
     )
     binding.validate(repository)
     return binding

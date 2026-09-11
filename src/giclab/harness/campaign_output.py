@@ -134,11 +134,11 @@ _CLEANUP: ContextVar[bool] = ContextVar("gic_campaign_cleanup_output", default=F
 
 @contextmanager
 def campaign_cleanup_scope() -> Iterator[None]:
-    token = _CLEANUP.set(True)
+    admission_reset = _CLEANUP.set(True)
     try:
         yield
     finally:
-        _CLEANUP.reset(token)
+        _CLEANUP.reset(admission_reset)
 
 
 def campaign_cleanup_active() -> bool:
@@ -147,11 +147,11 @@ def campaign_cleanup_active() -> bool:
 
 @contextmanager
 def campaign_output_scope(admission: CampaignOutputAdmission) -> Iterator[None]:
-    token = _ADMISSION.set(admission)
+    admission_reset = _ADMISSION.set(admission)
     try:
         yield
     finally:
-        _ADMISSION.reset(token)
+        _ADMISSION.reset(admission_reset)
 
 
 def admit_campaign_write(

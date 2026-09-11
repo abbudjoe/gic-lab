@@ -398,7 +398,8 @@ def _two_commit_repository(tmp_path: Path) -> tuple[Path, str, str]:
     _git(repository, "commit", "--quiet", "-m", "base")
     base_sha = _git(repository, "rev-parse", "HEAD")
     tracked.write_text("head\n", encoding="utf-8")
-    _git(repository, "commit", "--quiet", "-am", "head")
+    _git(repository, "add", "--", "tracked.txt")
+    _git(repository, "commit", "--quiet", "-m", "head")
     head_sha = _git(repository, "rev-parse", "HEAD")
     return repository, base_sha, head_sha
 
@@ -576,3 +577,72 @@ def test_materialization_error_retains_partial_cleanup_failure_note(
     assert caught.value.__notes__ == [
         "partial detached-worktree cleanup also failed: simulated partial cleanup failure"
     ]
+
+
+def test_parity_retains_original_reports_and_scratch_on_failure(tmp_path, monkeypatch):
+    repository, base_sha, head_sha = _two_commit_repository(tmp_path)
+    evidence = tmp_path / "evidence"
+    reports = []
+
+    def produce_then_fail(tested_repository, report, basetemp):
+        del tested_repository
+        basetemp.mkdir()
+        (basetemp / "original-receipt.json").write_bytes(b'{"original":true}\n')
+        report.write_bytes(b"original-junit-bytes")
+        reports.append(report)
+        if report.name == "head.xml":
+            raise PytestParityError("injected incomplete head")
+        return _outcome(passed=(OLD,))
+
+    monkeypatch.setattr(ci_pytest_parity, "_run_pytest", produce_then_fail)
+    with pytest.raises(PytestParityError, match="injected incomplete head"):
+        run_parity(repository, base_sha, expected_head_sha=head_sha, evidence_root=evidence)
+    assert [p.name for p in reports] == ["base.xml", "head.xml"]
+    assert all(p.read_bytes() == b"original-junit-bytes" for p in reports)
+    for role in ("base", "head"):
+        assert (
+            evidence / f"{role}-pytest/original-receipt.json"
+        ).read_bytes() == b'{"original":true}\n'
+    assert not (evidence / "parity.json").exists()
+    assert ci_pytest_parity._registered_worktree_paths(repository) == frozenset(
+        {repository.resolve()}
+    )
+
+
+def test_parity_retains_complete_comparison_and_rejects_evidence_reuse(tmp_path, monkeypatch):
+    import json
+
+    repository, base_sha, head_sha = _two_commit_repository(tmp_path)
+    evidence = tmp_path / "evidence"
+
+    def produce(tested_repository, report, basetemp):
+        del tested_repository, basetemp
+        report.write_bytes(b"unchanged-original")
+        return _outcome(passed=(OLD,))
+
+    monkeypatch.setattr(ci_pytest_parity, "_run_pytest", produce)
+    comparison = run_parity(
+        repository, base_sha, expected_head_sha=head_sha, evidence_root=evidence
+    )
+    assert json.loads((evidence / "parity.json").read_bytes()) == comparison
+    assert comparison["parity_passed"] is True
+    with pytest.raises(FileExistsError):
+        run_parity(repository, base_sha, expected_head_sha=head_sha, evidence_root=evidence)
+    assert (evidence / "head.xml").read_bytes() == b"unchanged-original"
+
+
+@pytest.mark.parametrize("unsafe", ["source", "symlink", "parent-traversal"])
+def test_parity_evidence_cannot_alias_source_or_follow_links(tmp_path, unsafe):
+    repository, base_sha, head_sha = _two_commit_repository(tmp_path)
+    evidence = repository / "evidence"
+    if unsafe == "symlink":
+        link = tmp_path / "link"
+        link.symlink_to(repository, target_is_directory=True)
+        evidence = link / "evidence"
+    elif unsafe == "parent-traversal":
+        sibling = tmp_path / "sibling"
+        sibling.mkdir()
+        evidence = sibling / ".." / repository.name / "evidence"
+    with pytest.raises(PytestParityError, match="evidence"):
+        run_parity(repository, base_sha, expected_head_sha=head_sha, evidence_root=evidence)
+    assert not (repository / "evidence").exists()

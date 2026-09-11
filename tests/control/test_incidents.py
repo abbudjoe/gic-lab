@@ -13,7 +13,7 @@ INCIDENT_PATH = ROOT / "control/incidents/INC-T09-V16-LIFECYCLE-REGISTRY.json"
 def test_v16_incident_validates_and_named_regressions_pass() -> None:
     receipt = validate_incidents(ROOT, execute_regressions=True)
     assert receipt["complete"] is True
-    assert receipt["incident_count"] == 7
+    assert receipt["incident_count"] == 8
     incidents = {
         incident["incident_id"]: incident
         for incident in receipt["incidents"]  # type: ignore[union-attr]
@@ -26,8 +26,10 @@ def test_v16_incident_validates_and_named_regressions_pass() -> None:
         "INC-T09-CONTROL-THIRD-EXACT-HEAD-RESIDUAL-BOUNDARY",
         "INC-T09-V16-LIFECYCLE-REGISTRY",
         "INC-T09-V17-PACKAGE-VIABILITY-SHARED-BRIDGE",
+        "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW",
     }
     assert all(incident["regressions_passed"] is True for incident in incidents.values())
+    assert len(incidents["INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW"]["regression_nodes"]) == 21
     assert len(incidents["INC-T09-V16-LIFECYCLE-REGISTRY"]["regression_nodes"]) == 3
     assert len(incidents["INC-T09-CONTROL-FIXED-TARGET-SELECTION"]["regression_nodes"]) == 4
     assert len(incidents["INC-T09-CONTROL-SHADOW-SHAPED-LIVE-BOUNDARY"]["regression_nodes"]) == 8

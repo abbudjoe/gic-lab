@@ -280,7 +280,7 @@ class ImageCommandChannel:
             "/opt/giclab-evidence",
         }:
             raise RuntimeError("container mount roles differ from canary contract")
-        secret = mapped["/run/secrets/sira_api_key"]
+        credential_path = mapped["/run/secrets/sira_api_key"]
         evidence = mapped["/opt/giclab-evidence"]
         cidfile = evidence / "secret-channel-probe.container-id"
         expected = [
@@ -313,7 +313,7 @@ class ImageCommandChannel:
             "--mount",
             f"type=bind,src={source},dst=/opt/giclab/t09_secret_preflight.py,readonly",
             "--mount",
-            f"type=bind,src={secret},dst=/run/secrets/sira_api_key,readonly",
+            f"type=bind,src={credential_path},dst=/run/secrets/sira_api_key,readonly",
             "--mount",
             f"type=bind,src={evidence},dst=/opt/giclab-evidence",
             "--entrypoint",
@@ -354,7 +354,7 @@ class ImageCommandChannel:
             sys.argv = [
                 str(source),
                 "--secret",
-                str(secret),
+                str(credential_path),
                 "--output",
                 str(evidence / "receipt.json"),
             ]
@@ -2291,11 +2291,11 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                 package=self.repository,
             )
             self.remote_environment = remote
-        secret = self._credential_target(request.provider_entry_receipt_path)
-        secret.parent.mkdir(mode=0o700, exist_ok=True)
-        with secret.open("xb") as stream:
+        credential_path = self._credential_target(request.provider_entry_receipt_path)
+        credential_path.parent.mkdir(mode=0o700, exist_ok=True)
+        with credential_path.open("xb") as stream:
             stream.write(self.read_model_secret())
-        secret.chmod(0o600)
+        credential_path.chmod(0o600)
         archive = root / "source-package.tar"
         if self.fault_plan.fail_operation == "matrix-transfer-partial":
             with (
@@ -2801,11 +2801,11 @@ class RetainedCandidateEffects(DeterministicLowLevelEffects):
                     raise RuntimeError("export carrier changed its owned record role")
                 parent_allowance(count)
 
-            token = host._HOST_OUTPUT_ADMISSION.set(admit)
+            admission_reset = host._HOST_OUTPUT_ADMISSION.set(admit)
             try:
                 host.write_bytes_exclusive(path, encoded)
             finally:
-                host._HOST_OUTPUT_ADMISSION.reset(token)
+                host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
             return path
 
         try:
@@ -4911,12 +4911,12 @@ def _main(invocation):
                     raise RuntimeError("finalizer host writer escaped its bound root")
                 allowance(count)
 
-            token = host._HOST_OUTPUT_ADMISSION.set(admit_host)
+            admission_reset = host._HOST_OUTPUT_ADMISSION.set(admit_host)
             try:
                 result = host.finalize_attempt(args)
                 allowance.require_no_denial()
             finally:
-                host._HOST_OUTPUT_ADMISSION.reset(token)
+                host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
             write(
                 transaction / "runtime-inputs" / (invocation["instance"] + "-receipt.json"), result
             )
@@ -4996,12 +4996,12 @@ def _main(invocation):
                     archive_allowance(count)
                 allowance(count)
 
-            token = host._HOST_OUTPUT_ADMISSION.set(admit_export)
+            admission_reset = host._HOST_OUTPUT_ADMISSION.set(admit_export)
             try:
                 _export_condition_evidence(invocation, host, snapshot, fixture, environment_binding)
                 allowance.require_no_denial()
             finally:
-                host._HOST_OUTPUT_ADMISSION.reset(token)
+                host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
         elif "runtime_command" in invocation:
             _run_condition_runtime(invocation, snapshot, package, environment_root)
         else:

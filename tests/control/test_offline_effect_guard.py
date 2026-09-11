@@ -241,3 +241,119 @@ def test_scratch_git_guard_rejects_unbound_mutation_before_dispatch(tmp_path, op
     assert not (repo / ".git/refs/heads/master").exists()
     assert not (repo / ".git/refs/heads/main").exists()
     assert Path(repo / ".git/config").read_text().find("hooksPath") == -1
+
+
+def test_parity_worktree_admission_rejects_other_targets_and_revisions(tmp_path, monkeypatch):
+    import offline_guard
+
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    (repository / ".git").mkdir()
+    scratch = tmp_path / "parity"
+    scratch.mkdir()
+    monkeypatch.setattr(offline_guard, "_parity_repository", repository)
+    monkeypatch.setattr(offline_guard, "_parity_base", "a" * 40)
+    target = scratch / "base"
+    command = ["git", "-C", str(repository), "worktree", "add", "--detach", str(target), "a" * 40]
+    assert offline_guard._parity_git_allowed(command, None)
+    for replacement in (str(repository / "base"), str(tmp_path / "other"), "/outside/base"):
+        wrong = [*command[:-2], replacement, command[-1]]
+        assert not offline_guard._parity_git_allowed(wrong, None)
+    assert not offline_guard._parity_git_allowed([*command[:-1], "b" * 40], None)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    alias = scratch / "alias"
+    alias.symlink_to(foreign, target_is_directory=True)
+    assert not offline_guard._parity_git_allowed(
+        [*command[:-2], str(alias / "base"), command[-1]], None
+    )
+    assert not target.exists()
+
+
+def test_local_shared_fixture_clone_retains_history_and_fixed_commit_clock(tmp_path):
+    from pathlib import Path
+
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True, timeout=5)
+    (source / "member").write_text("bounded fixture\n")
+    subprocess.run(["git", "-C", str(source), "add", "--all"], check=True, timeout=5)
+    environment = dict(os.environ)
+    environment.update(
+        GIT_AUTHOR_DATE="2026-09-01T00:00:00+00:00", GIT_COMMITTER_DATE="2026-09-01T00:00:00+00:00"
+    )
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "fixture",
+        ],
+        env=environment,
+        check=True,
+        timeout=5,
+    )
+    clone = tmp_path / "clone"
+    subprocess.run(
+        ["git", "clone", "--shared", "--quiet", str(source), str(clone)], check=True, timeout=5
+    )
+    result = subprocess.run(
+        ["git", "-C", str(clone), "show", "-s", "--format=%aI%n%cI", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.splitlines() == ["2026-09-01T00:00:00+00:00"] * 2
+    assert (clone / "member").read_text() == "bounded fixture\n"
+    assert (
+        Path((clone / ".git/objects/info/alternates").read_text().strip())
+        == source / ".git/objects"
+    )
+
+
+def test_shared_clone_cannot_select_url_or_symlink_or_foreign_destination(tmp_path):
+    import offline_guard
+    from offline_guard import EffectDenied, expected_denial
+
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True, timeout=5)
+    alias = tmp_path / "alias"
+    alias.symlink_to(source, target_is_directory=True)
+    for name, origin, target in (
+        ("url", "https://example.invalid/never", str(tmp_path / "url")),
+        ("alias", str(alias), str(tmp_path / "via-alias")),
+        ("foreign", str(source), str(offline_guard._git_fixture_root.parent / "foreign-clone")),
+    ):
+        with expected_denial("clone-" + name, "process:git"), pytest.raises(EffectDenied):
+            subprocess.run(
+                ["git", "clone", "--shared", "--quiet", origin, target], check=False, timeout=5
+            )
+
+
+def test_shared_clone_rejects_linked_alternate_metadata_before_dispatch(tmp_path):
+    import offline_guard
+    from offline_guard import EffectDenied, expected_denial
+
+    source = tmp_path / "source"
+    source.mkdir()
+    subprocess.run(["git", "init", "-q", str(source)], check=True, timeout=5)
+    info = source / ".git/objects/info"
+    info.rename(source / ".git/objects/retained-info")
+    info.symlink_to(tmp_path / "absent-foreign-target", target_is_directory=True)
+    assert not offline_guard._safe_source_objects(str(source / ".git/objects"))
+    with expected_denial("linked-alternate", "process:git"), pytest.raises(EffectDenied):
+        subprocess.run(
+            ["git", "clone", "--shared", "--quiet", str(source), str(tmp_path / "clone")],
+            check=False,
+            timeout=5,
+        )
+    assert not (tmp_path / "clone").exists()

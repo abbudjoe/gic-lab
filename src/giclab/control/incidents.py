@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final
@@ -91,15 +92,26 @@ def _run_regressions(repository: Path, nodes: Sequence[str]) -> tuple[bool, str]
         "LC_ALL": "C",
         "PYTHONPATH": str(repository / "src"),
     }
-    completed = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", *nodes],
-        cwd=repository,
-        env=environment,
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=False,
-        timeout=INCIDENT_REGRESSION_TIMEOUT_SECONDS,
-    )
+    fixture_parent = os.environ.get("GICLAB_CI_GIT_FIXTURE_ROOT")
+    if fixture_parent is not None:
+        Path(fixture_parent).mkdir(mode=0o700, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="incident-regressions-", dir=fixture_parent) as work:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                *nodes,
+                "--basetemp=" + str(Path(work) / "pytest"),
+            ],
+            cwd=repository,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=False,
+            timeout=INCIDENT_REGRESSION_TIMEOUT_SECONDS,
+        )
     output = (completed.stdout + completed.stderr).decode("utf-8", "replace").strip()
     return completed.returncode == 0, output[-2000:]
 

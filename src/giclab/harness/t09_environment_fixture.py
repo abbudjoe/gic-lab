@@ -35,7 +35,7 @@ TEMPLATE: Final = (
 )
 ARCHIVE: Final = "offline-image.tar"
 MAX_BYTES: Final = 1_048_576
-_TOKEN = object()
+_BINDING_SENTINEL = object()
 COMMAND_PROBE_PATH: Final = "command-inputs/timeout-metadata-only"
 COMMAND_PROBE_BYTES: Final = b"offline timeout file identity; execution is forbidden\n"
 
@@ -289,6 +289,8 @@ class OfflineEnvironmentBinding:
         selected = json.loads(
             read_member(source.root, "schemas/t09-sira-pilot-evidence.schema.json")
         )
+        if not isinstance(selected, dict):
+            raise CandidateInputError("candidate evidence schema is not an object")
         if schema != selected:
             raise CandidateInputError("candidate evidence schema source differs")
         properties = selected["properties"]["runtime"]["properties"]
@@ -304,7 +306,7 @@ class OfflineEnvironmentBinding:
         return selected
 
     def validate(self, source: CandidateSourceSnapshot, package: Path) -> None:
-        if self._token is not _TOKEN:
+        if self._token is not _BINDING_SENTINEL:
             raise CandidateInputError("offline environment lacks its explicit loader binding")
         validate_candidate_package(source, package)
         expected_archive, expected = _inputs(source)
@@ -386,7 +388,7 @@ def build_environment_fixture(
             (root / name).chmod(0o500)
         else:
             (root / name).chmod(0o400)
-    result = OfflineEnvironmentBinding(root, canonical(document), _TOKEN)
+    result = OfflineEnvironmentBinding(root, canonical(document), _BINDING_SENTINEL)
     result.validate(source, package)
     return result
 
@@ -397,6 +399,6 @@ def load_environment_fixture(
     data = read_member(root, "environment.json")
     if sha(data) != expected_sha256:
         raise CandidateInputError("offline environment binding digest drifted")
-    result = OfflineEnvironmentBinding(root, data, _TOKEN)
+    result = OfflineEnvironmentBinding(root, data, _BINDING_SENTINEL)
     result.validate(source, package)
     return result

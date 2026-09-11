@@ -11437,7 +11437,7 @@ class _ConditionSessionBridge:
                     raise RemoteBridgeError("terminal publication exceeded its shared allocation")
                 terminal_capacity -= count
 
-            token = (
+            admission_reset = (
                 _HOST_OUTPUT_ADMISSION.set(consume_terminal)
                 if self.host_output is not None
                 else None
@@ -11449,8 +11449,8 @@ class _ConditionSessionBridge:
                     host_terminal,
                 )
             finally:
-                if token is not None:
-                    _HOST_OUTPUT_ADMISSION.reset(token)
+                if admission_reset is not None:
+                    _HOST_OUTPUT_ADMISSION.reset(admission_reset)
             self.finished = True
         except (OSError, TimeoutError, RemoteBridgeError) as exc:
             raise T09HostError("condition bridge terminal evidence failed") from exc
@@ -27699,7 +27699,7 @@ def _publish_failure_bytes(
         finally:
             item.close()
     else:
-        token = None
+        admission_reset = None
         if output_observer is not None:
 
             def admit(candidate: Path, count: int) -> None:
@@ -27712,7 +27712,7 @@ def _publish_failure_bytes(
                     raise T09HostError("essential writer changed its exact held destination")
                 output_observer.consume_failure_output_bytes(count=count)
 
-            token = _HOST_OUTPUT_ADMISSION.set(admit)
+            admission_reset = _HOST_OUTPUT_ADMISSION.set(admit)
         try:
             write_bytes_exclusive(
                 path,
@@ -27724,8 +27724,8 @@ def _publish_failure_bytes(
                 else None,
             )
         finally:
-            if token is not None:
-                _HOST_OUTPUT_ADMISSION.reset(token)
+            if admission_reset is not None:
+                _HOST_OUTPUT_ADMISSION.reset(admission_reset)
         item = hold_sealed_artifact(root, path, max_bytes=len(data))
         try:
             if item.read_bytes() != data:
@@ -28342,7 +28342,7 @@ def condition_session(args: argparse.Namespace) -> None:
             early_cleanup_journal(args).root,
         ),
     )
-    admission_token = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+    condition_admission_reset = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
     try:
         try:
             _receive_shared_first_pair_checkpoint(
@@ -28350,13 +28350,13 @@ def condition_session(args: argparse.Namespace) -> None:
             )
             returncode = execute_condition(args, condition_bridge=bridge)
         finally:
-            _HOST_OUTPUT_ADMISSION.reset(admission_token)
+            _HOST_OUTPUT_ADMISSION.reset(condition_admission_reset)
     except BaseException as exc:
         essential_manifest = attempt_root / "essential-failure-manifest.json"
         essential_receipt = attempt_root / "essential-failure-complete.json"
         try:
             if essential_manifest.is_file() and essential_receipt.is_file():
-                token = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+                admission_reset = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
                 try:
                     completion = retained_essential_condition_completion(
                         attempt_root=attempt_root,
@@ -28365,7 +28365,7 @@ def condition_session(args: argparse.Namespace) -> None:
                         condition_manifest=manifest,
                     )
                 finally:
-                    _HOST_OUTPUT_ADMISSION.reset(token)
+                    _HOST_OUTPUT_ADMISSION.reset(admission_reset)
                 bridge.finish(
                     attempt_root=attempt_root,
                     exit_code=cast(int, completion["process_exit_code"]),
@@ -28384,7 +28384,7 @@ def condition_session(args: argparse.Namespace) -> None:
         bridge.close()
         raise T09HostError("condition session completed without an exact raw seal")
     try:
-        token = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+        admission_reset = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
         try:
             completion = retained_condition_completion(
                 attempt_root=attempt_root,
@@ -28393,7 +28393,7 @@ def condition_session(args: argparse.Namespace) -> None:
                 exit_code=returncode,
             )
         finally:
-            _HOST_OUTPUT_ADMISSION.reset(token)
+            _HOST_OUTPUT_ADMISSION.reset(admission_reset)
     except BaseException:
         bridge.close()
         raise
@@ -28401,7 +28401,7 @@ def condition_session(args: argparse.Namespace) -> None:
     if returncode == 0 and expectations is not None:
         if not isinstance(expectations, dict):
             raise T09HostError("shared process expectations are malformed")
-        token = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+        admission_reset = _HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
         try:
             retained_control_projection(
                 attempt_root=attempt_root,
@@ -28412,7 +28412,7 @@ def condition_session(args: argparse.Namespace) -> None:
                 publish=True,
             )
         finally:
-            _HOST_OUTPUT_ADMISSION.reset(token)
+            _HOST_OUTPUT_ADMISSION.reset(admission_reset)
     bridge.finish(
         attempt_root=attempt_root,
         exit_code=returncode,

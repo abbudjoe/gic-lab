@@ -1785,7 +1785,24 @@ class DeterministicLowLevelEffects:
             raise RuntimeError("deterministic condition process crashed before answer")
         answer = self._answer_for(request)
         self._last_answers[request.run_id] = answer
-        answer_bytes = len(answer.encode())
+        requested_raw_root = request.transaction_root / request.raw_output_root
+        raw_root = requested_raw_root
+        attempt_root = raw_root.parent
+        written_output = 0
+
+        def write_output(path: Path, data: bytes) -> None:
+            nonlocal written_output
+            observer.reserve_output_bytes(total_bytes=written_output + len(data))
+            path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+            with path.open("xb") as handle:
+                handle.write(data)
+            path.chmod(0o600)
+            written_output += len(data)
+            observer.output_bytes(total_bytes=written_output)
+
+        if self.fault_plan.output_bytes_over_cap:
+            observer.reserve_output_bytes(total_bytes=request.caps.max_output_bytes + 1)
+            raise AssertionError("over-cap fixture output was unexpectedly admitted")
         nonzero_mode = self.fault_plan.name in {
             "process-exit-nonzero-before-answer",
             "process-exit-nonzero-after-answer",
@@ -1795,8 +1812,11 @@ class DeterministicLowLevelEffects:
             before_answer = self.fault_plan.name == "process-exit-nonzero-before-answer"
             completed_with_answer = self.fault_plan.name == "process-exit-nonzero-completed"
             failure_answer = None if before_answer else answer
-            output_bytes = 0 if before_answer else answer_bytes
-            observer.output_bytes(total_bytes=output_bytes)
+            if not before_answer:
+                write_output(raw_root / "condition-stdout.log", answer.encode())
+            output_bytes = written_output
+            if before_answer:
+                observer.output_bytes(total_bytes=0)
             observer.process_exit(exit_code=23)
             observer.completion(
                 completed=completed_with_answer,
@@ -1823,13 +1843,6 @@ class DeterministicLowLevelEffects:
                 process_outcome_path=raw_root / "process-outcome.json",
                 retry_count=0,
             )
-        observer.output_bytes(
-            total_bytes=(
-                request.caps.max_output_bytes + 1
-                if self.fault_plan.output_bytes_over_cap
-                else answer_bytes
-            )
-        )
         observer.process_exit(exit_code=0)
         observer.completion(completed=True, answer=answer, error="")
         if self.fault_plan.name == "process-crash-after-answer":
@@ -1847,9 +1860,12 @@ class DeterministicLowLevelEffects:
         browser_ledger = raw_root / "browser-action-ledger.json"
         answer_path = raw_root / "condition-answer.json"
         process_path = raw_root / "process-outcome.json"
-        call_ledger.write_bytes(_canonical_bytes({"run_id": request.run_id, "calls": calls}))
-        browser_ledger.write_bytes(_canonical_bytes({"run_id": request.run_id, "actions": actions}))
-        answer_path.write_bytes(
+        write_output(call_ledger, _canonical_bytes({"run_id": request.run_id, "calls": calls}))
+        write_output(
+            browser_ledger, _canonical_bytes({"run_id": request.run_id, "actions": actions})
+        )
+        write_output(
+            answer_path,
             _canonical_bytes(
                 {
                     "run_id": request.run_id,
@@ -1857,9 +1873,10 @@ class DeterministicLowLevelEffects:
                     "answer": answer,
                     "error": "",
                 }
-            )
+            ),
         )
-        process_path.write_bytes(
+        write_output(
+            process_path,
             _canonical_bytes(
                 {
                     "run_id": request.run_id,
@@ -1873,7 +1890,7 @@ class DeterministicLowLevelEffects:
                     "service_tier": request.service_tier,
                     "caps": asdict(request.caps),
                 }
-            )
+            ),
         )
         for path in (call_ledger, browser_ledger, answer_path, process_path):
             path.chmod(0o600)
@@ -1907,7 +1924,7 @@ class DeterministicLowLevelEffects:
             "private_access_controlled": True,
         }
         manifest_path = attempt_root / "raw-attempt-manifest.json"
-        manifest_path.write_bytes(_canonical_bytes(manifest))
+        write_output(manifest_path, _canonical_bytes(manifest))
         manifest_path.chmod(0o600)
         receipt = {
             "schema_version": "0.1.0",
@@ -1937,7 +1954,7 @@ class DeterministicLowLevelEffects:
         if self.fault_plan.name == "raw-export-failure":
             receipt["raw_file_count"] = len(files) + 1
         receipt_path = attempt_root / "raw-attempt-complete.json"
-        receipt_path.write_bytes(_canonical_bytes(receipt))
+        write_output(receipt_path, _canonical_bytes(receipt))
         receipt_path.chmod(0o600)
         if self.fault_plan.held_identity_fault == "raw-manifest-hardlink":
             os.link(manifest_path, attempt_root / "raw-manifest-hardlink.json")
@@ -1963,7 +1980,7 @@ class DeterministicLowLevelEffects:
             raw_receipt_path=receipt_path,
             raw_file_count=len(files),
             raw_total_bytes=total,
-            output_bytes=answer_bytes,
+            output_bytes=written_output,
             call_ledger_path=call_ledger,
             browser_ledger_path=browser_ledger,
             completion_path=answer_path,

@@ -117,3 +117,31 @@ def test_bridge_anti_bypass_lint_rejects_second_accountant_and_hidden_retry(
     assert before in suffix
     admission.write_text(prefix + marker + suffix.replace(before, after, 1), encoding="utf-8")
     assert "T09S036" in {finding.code for finding in bridge_bypass_findings(repository)}
+
+
+def test_symlink_resolution_lint_tracks_lexical_binding_not_global_variable_spelling():
+    from giclab.control.anti_shadow_lint import lint_effect_neutral_source
+
+    source = """
+parent = outside.resolve()
+def unsafe():
+    parent = supplied.resolve()
+    return parent.is_symlink()
+def safe(supplied):
+    parent = supplied.parent
+    return parent.is_symlink()
+def captured():
+    return parent.is_symlink()
+def shadowed(parent):
+    return parent.is_symlink()
+def outer(supplied):
+    held = supplied.resolve()
+    def nested():
+        return held.is_symlink()
+    return nested()
+"""
+    findings = lint_effect_neutral_source(
+        source, relative_path="src/giclab/control/remote_bridge.py"
+    )
+    assert [f.line for f in findings if f.code == "T09S014"] == [5, 10, 16]
+    assert not any(f.line in {8, 12} for f in findings)

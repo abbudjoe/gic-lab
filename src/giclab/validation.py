@@ -3049,7 +3049,12 @@ def _validate_t09_successor_plan(
             continue
         if hashlib.sha256(target.read_bytes()).hexdigest() == expected:
             continue
-        historical_match = path.suffix == ".py" and any(
+        # Shared implementation schemas evolve alongside Python. Frozen plans
+        # retain their original bytes at their own reviewed source ancestor.
+        historical_source = path.suffix == ".py" or (
+            path.parts[0] == "schemas" and path.suffix == ".json"
+        )
+        historical_match = historical_source and any(
             _t09_git_blob_sha256(root, source_ancestor, relative) == expected
             for source_ancestor in source_ancestors
         )

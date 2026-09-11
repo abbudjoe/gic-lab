@@ -220,6 +220,7 @@ def main():
     os.environ["GICLAB_CI_GUARD_JOURNAL"] = str(environment_guard)
     os.environ["GICLAB_CI_GIT_FIXTURE_ROOT"] = str(scratch / "pytest")
     os.environ["PYTHONPATH"] = "/opt/local-ci"
+    os.environ["GICLAB_CI_SOURCE_OBJECTS"] = str(checkout / ".git/objects")
     if development:
         if any(
             not node.startswith("tests/") or ".." in Path(node.split("::")[0]).parts
@@ -239,7 +240,16 @@ def main():
             "cache_dir=" + str(scratch / "pytest-cache"),
         ]
     else:
-        argv = ["make", "ci-check", "BASE_SHA=" + contract["base"], "HEAD_SHA=" + contract["head"]]
+        (scratch / "pytest").mkdir(mode=0o700)
+        os.environ["GICLAB_CI_PARITY_REPOSITORY"] = str(checkout)
+        os.environ["GICLAB_CI_PARITY_BASE"] = contract["base"]
+        argv = [
+            "make",
+            "ci-check",
+            "BASE_SHA=" + contract["base"],
+            "HEAD_SHA=" + contract["head"],
+            "PARITY_EVIDENCE_ROOT=" + str(scratch / "pytest/parity"),
+        ]
 
     def verify_source():
         if development:

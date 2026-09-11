@@ -4727,3 +4727,41 @@ rerun is pending at this source-record boundary; its external final records must
 bind all required nodes to these actual bytes before a matrix-complete checkpoint
 is claimed. No final CI/parity, final V16 receipts, product push, PR mutation,
 independent closure or Source109 recovery is authorized by this increment.
+
+
+### 2026-09-10 — Accepted development matrix; finalization in progress
+
+The owner delivered independent acceptance of the 53-row R1–R6 development
+matrix at immutable checkpoint `0b27b74cbf160130b8177f47323e4d4f37a11986`
+(tree `b0a610beb99da1456c63738feda5cb168b936d97`). The 340-pass run,
+including all 37 joined parameters, is retained at private evidence commit
+`fabc0e75f504c8e4e401a5fd986507908b3712a4`. This is progression authority,
+not independent PR approval or a substitute for the final exact-commit gate.
+
+The initial checkpoint was verified clean and designated externally. Required
+finalization corrections now supersede that designation for affected current
+receipts: preserve original parity JUnit and subprocess exits; admit only the
+bounded local Git operations required by parity/conformance; and use the existing
+canonical host-phase wire binding when no candidate fixture is present. The
+initial capsule and agent-check failures are retained as development evidence.
+A new clean implementation/test ancestor and normal generated V16 descendants
+must follow affected focused checks. No current receipt may certify itself.
+
+Source109 collection/post-test integrity remain UNKNOWN and recovery is deferred;
+the original storage fault and old container/three-volume absence remain
+unresolved. The fresh GIC-only lane does not cure that incident. Source106,
+Source108 and the accepted matrix keep their separate original identities.
+Final static/control/privacy/site/native and base/head parity gates, complete
+export, publication and independent exact-head review remain pending. Final run
+records belong outside the candidate; no post-validation tracked success edit is
+required. Frozen science, zero retries and zero new real experimental cost are
+unchanged. No V17, live authority, hosted CI, shared runtime or merge is granted.
+
+Further pre-validation corrections preserve the normal shadow writers' shared
+pre-growth admission, keep anti-shadow name tracking within lexical scope,
+place nested incident Git fixtures in declared guarded scratch, and validate
+frozen shared schemas at their exact recorded source ancestors. Nonsecret
+context reset handles and fixture binding sentinels now have explicit role
+names; the credential scanner and its patterns remain unchanged. The original
+failed checks are retained externally. Current receipt generation, exact final
+CI and independent review are still pending at this source boundary.

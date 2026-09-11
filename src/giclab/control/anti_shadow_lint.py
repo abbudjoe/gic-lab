@@ -272,16 +272,59 @@ def _review_bypass_findings(source: str, *, relative_path: str) -> list[AntiShad
 
     findings: list[AntiShadowFinding] = []
     tree = ast.parse(source, filename=relative_path)
-    resolved_names = {
-        target.id
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and isinstance(node.value, ast.Call)
-        and isinstance(node.value.func, ast.Attribute)
-        and node.value.func.attr == "resolve"
-        for target in node.targets
-        if isinstance(target, ast.Name)
-    }
+    # A local named "parent" in one function must not inherit the resolution
+    # state of an unrelated function. Preserve lexical captures and shadowing.
+    scopes: dict[ast.AST, ast.AST] = {}
+    parents: dict[ast.AST, ast.AST | None] = {tree: None}
+    bindings: dict[ast.AST, set[str]] = {}
+    resolved: dict[ast.AST, set[str]] = {}
+    globals_by_scope: dict[ast.AST, set[str]] = {}
+
+    def visit(node: ast.AST, scope: ast.AST) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            if not isinstance(node, ast.Lambda):
+                bindings.setdefault(scope, set()).add(node.name)
+            parents[node] = scope
+            scope = node
+        scopes[node] = scope
+        names = bindings.setdefault(scope, set())
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            names.add(node.id)
+        elif isinstance(node, ast.arg):
+            names.add(node.arg)
+        elif isinstance(node, ast.Global):
+            globals_by_scope.setdefault(scope, set()).update(node.names)
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            value = node.value
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if (
+                isinstance(value, ast.Call)
+                and isinstance(value.func, ast.Attribute)
+                and value.func.attr == "resolve"
+            ):
+                resolved.setdefault(scope, set()).update(
+                    t.id for t in targets if isinstance(t, ast.Name)
+                )
+        for child in ast.iter_child_nodes(node):
+            visit(child, scope)
+
+    visit(tree, tree)
+
+    def resolved_name(node: ast.AST, name: str) -> bool:
+        scope: ast.AST | None = scopes[node]
+        while scope is not None:
+            if name in globals_by_scope.get(scope, set()):
+                return name in resolved.get(tree, set())
+            if name in resolved.get(scope, set()):
+                return True
+            if name in bindings.get(scope, set()):
+                return False
+            parent = parents[scope]
+            if isinstance(scope, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                while isinstance(parent, ast.ClassDef):
+                    parent = parents[parent]
+            scope = parent
+        return False
 
     def add(node: ast.AST, code: str, message: str) -> None:
         findings.append(
@@ -354,7 +397,10 @@ def _review_bypass_findings(source: str, *, relative_path: str) -> list[AntiShad
                     and isinstance(node.func.value.func, ast.Attribute)
                     and node.func.value.func.attr == "resolve"
                 )
-                or (isinstance(node.func.value, ast.Name) and node.func.value.id in resolved_names)
+                or (
+                    isinstance(node.func.value, ast.Name)
+                    and resolved_name(node, node.func.value.id)
+                )
             )
         ):
             add(

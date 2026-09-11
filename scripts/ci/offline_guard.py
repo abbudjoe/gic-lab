@@ -30,6 +30,8 @@ _ipc_roots: set[Path] = set()
 _bulk_root: Path | None = None
 _bulk_identity: tuple[int, int] | None = None
 _git_fixture_root: Path | None = None
+_parity_repository: Path | None = None
+_parity_base: str | None = None
 _GIT_FIXTURE_PREFIX = (
     "-c",
     "core.hooksPath=/dev/null",
@@ -128,6 +130,13 @@ def child_environment(environment=None):
     result["GICLAB_CI_GUARD_IPC_ROOTS"] = json.dumps(sorted(map(str, _ipc_roots)))
     if _git_fixture_root is not None:
         result["GICLAB_CI_GIT_FIXTURE_ROOT"] = str(_git_fixture_root)
+    for name in (
+        "GICLAB_CI_SOURCE_OBJECTS",
+        "GICLAB_CI_PARITY_REPOSITORY",
+        "GICLAB_CI_PARITY_BASE",
+    ):
+        if name in os.environ:
+            result[name] = os.environ[name]
     if _bulk_root is not None:
         result.update({key: os.environ[key] for key in STORAGE_ENV_KEYS if key in os.environ})
     return result
@@ -162,6 +171,19 @@ def _inspect_fixture_git(argv, cwd):
     if command[:1] == ["-C"] and len(command) >= 3:
         repository = (repository / command[1]).absolute()
         command = command[2:]
+    while command[:1] == ["-c"]:
+        if len(command) < 3:
+            return False
+        key, equal, value = command[1].partition("=")
+        if (
+            key not in {"user.name", "user.email"}
+            or not equal
+            or not value
+            or len(value) > 256
+            or "\n" in value
+        ):
+            return False
+        command = command[2:]
     if not command or command[0] not in {"init", "config", "add", "commit", "switch"}:
         return False
     operation, arguments = command[0], command[1:]
@@ -185,8 +207,21 @@ def _inspect_fixture_git(argv, cwd):
         meta = dotgit.lstat()
         if not stat.S_ISDIR(meta.st_mode) or meta.st_uid != os.getuid():
             return False
-        if any(os.path.lexists(dotgit / p) for p in ("commondir", "objects/info/alternates")):
+        if os.path.lexists(dotgit / "commondir"):
             return False
+        alternates = dotgit / "objects/info/alternates"
+        if any(p.is_symlink() for p in (dotgit / "objects", alternates.parent)):
+            return False
+        if os.path.lexists(alternates):
+            bound = os.environ.get("GICLAB_CI_SOURCE_OBJECTS")
+            if (
+                bound is None
+                or alternates.is_symlink()
+                or not alternates.is_file()
+                or alternates.stat().st_size > 4096
+                or not _safe_source_objects(alternates.read_text().removesuffix("\n"))
+            ):
+                return False
         config = dotgit / "config"
         metadata = config.lstat()
         if (
@@ -209,11 +244,24 @@ def _inspect_fixture_git(argv, cwd):
             },
             "user": {"name", "email"},
         }
-        if any(
-            section not in allowed or not set(parser[section]) <= allowed[section]
-            for section in parser.sections()
-        ):
-            return False
+        for section in parser.sections():
+            if section == 'remote "origin"':
+                if (
+                    set(parser[section]) != {"url", "fetch"}
+                    or parser[section]["fetch"] != "+refs/heads/*:refs/remotes/origin/*"
+                ):
+                    return False
+                if not _safe_source_objects(str(Path(parser[section]["url"]) / ".git/objects")):
+                    return False
+            elif section.startswith('branch "'):
+                if (
+                    set(parser[section]) != {"remote", "merge"}
+                    or parser[section]["remote"] != "origin"
+                    or not parser[section]["merge"].startswith("refs/heads/")
+                ):
+                    return False
+            elif section not in allowed or not set(parser[section]) <= allowed[section]:
+                return False
     elif operation != "init":
         return False
     if operation == "init":
@@ -235,7 +283,7 @@ def _inspect_fixture_git(argv, cwd):
         )
     if operation == "add":
         return bool(arguments) and all(
-            value == "--"
+            value in {"--", "--all", "-A"}
             or (
                 not value.startswith("-")
                 and ".." not in Path(value).parts
@@ -253,6 +301,116 @@ def _inspect_fixture_git(argv, cwd):
         _, *arguments = arguments
         messages += 1
     return messages == 1
+
+
+def _safe_source_objects(value, seen=frozenset()):
+    """Read-only alternate object storage inside the bound input or fixture roots."""
+    path = Path(value)
+    bound = os.environ.get("GICLAB_CI_SOURCE_OBJECTS")
+    if value in seen or len(seen) >= 4:
+        return False
+    valid = (
+        path.is_absolute()
+        and ".." not in path.parts
+        and path.name == "objects"
+        and path.parent.name == ".git"
+        and (
+            value == bound
+            or (_git_fixture_root is not None and path.is_relative_to(_git_fixture_root))
+        )
+        and not any(p.is_symlink() for p in (path, *path.parents))
+        and path.is_dir()
+        and path.stat().st_uid == os.getuid()
+    )
+    if not valid:
+        return False
+    alternate = path / "info/alternates"
+    if alternate.parent.is_symlink():
+        return False
+    if os.path.lexists(alternate):
+        if alternate.is_symlink() or not alternate.is_file() or alternate.stat().st_size > 4096:
+            return False
+        lines = alternate.read_text().splitlines()
+        return len(lines) == 1 and _safe_source_objects(lines[0], seen | {value})
+    return True
+
+
+def _local_clone_allowed(argv, cwd):
+    del cwd
+    if len(argv) != 6 or argv[1:4] != ["clone", "--shared", "--quiet"]:
+        return False
+    source, destination = Path(argv[4]), Path(argv[5])
+    return (
+        _safe_source_objects(str(source / ".git/objects"))
+        and _git_fixture_root is not None
+        and destination.is_absolute()
+        and destination.is_relative_to(_git_fixture_root)
+        and destination != _git_fixture_root
+        and ".." not in destination.parts
+        and not os.path.lexists(destination)
+        and not any(p.is_symlink() for p in (destination, *destination.parents))
+        and destination.parent.is_dir()
+        and destination.parent.stat().st_uid == os.getuid()
+    )
+
+
+def _parity_git_allowed(argv, cwd):
+    """Exact local detached-base lifecycle; never general Git mutation authority."""
+    command = argv[1:]
+    repository = Path(cwd or os.getcwd()).absolute()
+    if command[:1] == ["-C"] and len(command) >= 3:
+        repository = (repository / command[1]).absolute()
+        command = command[2:]
+    if not command or command[0] != "worktree":
+        return False
+    if command == ["worktree", "list", "--porcelain", "-z"]:
+        return True  # A read-only registration query.
+    if any(p.is_symlink() for p in (repository, *repository.parents)):
+        return False
+    actual = repository == _parity_repository
+    if actual:
+        if not (repository / ".git").is_dir():
+            return False
+    elif not _fixture_git_allowed([argv[0], "-C", str(repository), "add", "--", "fixture"], cwd):
+        return False
+    if len(command) == 5 and command[1:3] == ["add", "--detach"]:
+        target, commit = Path(command[3]), command[4]
+        if len(commit) != 40 or any(c not in "0123456789abcdef" for c in commit):
+            return False
+        if actual and commit != _parity_base:
+            return False
+        if os.path.lexists(target):
+            return False
+    elif len(command) == 4 and command[1:3] == ["remove", "--force"]:
+        target = Path(command[3])
+        if not target.is_dir() or target.is_symlink():
+            return False
+        metadata = target / ".git"
+        if metadata.is_symlink() or not metadata.is_file() or metadata.stat().st_size > 4096:
+            return False
+        text = metadata.read_text()
+        expected = repository / ".git/worktrees"
+        if not text.startswith("gitdir: "):
+            return False
+        linked = Path(text.removeprefix("gitdir: ").strip())
+        if not linked.is_relative_to(expected) or any(
+            p.is_symlink() for p in (linked, *linked.parents)
+        ):
+            return False
+    else:
+        return False
+    if not target.is_absolute() or target.name != "base" or ".." in target.parts:
+        return False
+    if target.is_relative_to(repository) or repository.is_relative_to(target):
+        return False
+    if any(p.is_symlink() for p in (target, *target.parents)):
+        return False
+    parent = target.parent
+    if not parent.is_dir() or parent.stat().st_uid != os.getuid():
+        return False
+    return (_git_fixture_root is not None and parent.is_relative_to(_git_fixture_root)) or (
+        parent in _ipc_roots and parent.name.startswith("giclab-pytest-parity-")
+    )
 
 
 def _check_bulk_write(path, dir_fd=None):
@@ -320,9 +478,21 @@ def _audit(event, args):
                     "GIT_CONFIG_SYSTEM": os.devnull,
                     "GIT_TERMINAL_PROMPT": "0",
                 }
+                for name in ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"):
+                    if selected.get(name) == "2026-09-01T00:00:00+00:00":
+                        required[name] = selected[name]
                 if {k: v for k, v in selected.items() if k.startswith("GIT_")} != required:
                     _deny("process:git")
-                if _fixture_git_allowed([argv[0], *command[len(_GIT_FIXTURE_PREFIX) :]], _cwd):
+                admitted = command[len(_GIT_FIXTURE_PREFIX) :]
+                if admitted[:2] == ["-c", "protocol.file.allow=always"]:
+                    if _local_clone_allowed([argv[0], *admitted[2:]], _cwd):
+                        return
+                    _deny("process:git")
+                if (
+                    _fixture_git_allowed([argv[0], *command[len(_GIT_FIXTURE_PREFIX) :]], _cwd)
+                    or _local_clone_allowed([argv[0], *command[len(_GIT_FIXTURE_PREFIX) :]], _cwd)
+                    or _parity_git_allowed([argv[0], *command[len(_GIT_FIXTURE_PREFIX) :]], _cwd)
+                ):
                     return
                 _deny("process:git")
             if command[:1] == ["-C"]:
@@ -357,6 +527,7 @@ def _audit(event, args):
 
 def install() -> None:
     global _installed, _journal, _bulk_root, _bulk_identity, _git_fixture_root
+    global _parity_repository, _parity_base
     if _installed:
         return
     _journal = Path(os.environ["GICLAB_CI_GUARD_JOURNAL"])
@@ -380,6 +551,16 @@ def install() -> None:
             p.is_symlink() for p in (_git_fixture_root, *_git_fixture_root.parents)
         ):
             raise RuntimeError("Git fixture root is not an explicit safe scratch path")
+    if "GICLAB_CI_PARITY_REPOSITORY" in os.environ:
+        _parity_repository = Path(os.environ["GICLAB_CI_PARITY_REPOSITORY"])
+        _parity_base = os.environ["GICLAB_CI_PARITY_BASE"]
+        if (
+            not _parity_repository.is_absolute()
+            or any(p.is_symlink() for p in (_parity_repository, *_parity_repository.parents))
+            or len(_parity_base) != 40
+            or any(c not in "0123456789abcdef" for c in _parity_base)
+        ):
+            raise RuntimeError("invalid exact parity source binding")
     native = subprocess.Popen
 
     class GuardedPopen(native):
@@ -390,11 +571,23 @@ def install() -> None:
             elif (
                 normalized
                 and Path(normalized[0]).name == "git"
-                and _fixture_git_allowed(normalized, kwargs.get("cwd"))
+                and (
+                    _fixture_git_allowed(normalized, kwargs.get("cwd"))
+                    or _parity_git_allowed(normalized, kwargs.get("cwd"))
+                    or _local_clone_allowed(normalized, kwargs.get("cwd"))
+                )
             ):
-                args = [normalized[0], *_GIT_FIXTURE_PREFIX, *normalized[1:]]
+                extra = (
+                    ["-c", "protocol.file.allow=always"]
+                    if _local_clone_allowed(normalized, kwargs.get("cwd"))
+                    else []
+                )
+                args = [normalized[0], *_GIT_FIXTURE_PREFIX, *extra, *normalized[1:]]
                 environment = os.environ if kwargs.get("env") is None else kwargs["env"]
                 kwargs["env"] = {k: v for k, v in environment.items() if not k.startswith("GIT_")}
+                for name in ("GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"):
+                    if environment.get(name) == "2026-09-01T00:00:00+00:00":
+                        kwargs["env"][name] = environment[name]
                 kwargs["env"].update(
                     GIT_CONFIG_NOSYSTEM="1",
                     GIT_CONFIG_SYSTEM=os.devnull,

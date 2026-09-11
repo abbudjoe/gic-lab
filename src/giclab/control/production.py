@@ -2279,6 +2279,9 @@ class ProductionCategory3World:
     def _qualification_receipt_identity(receipt: HostQualificationReceipt) -> str:
         values = asdict(receipt)
         values.pop("receipt_sha256")
+        # Wire bindings omit an absent test-only candidate identity. Dataclass
+        # expansion includes None and would reject the normal committed source.
+        values["binding"] = receipt.binding.to_document()
         return _identity(values)
 
     def qualify(self, handle: ProviderHandle) -> str:
@@ -4720,13 +4723,13 @@ class ProductionCategory3World:
             with self._pilot_control_writer(run_id, extra_paths=(exported,)) as (admit, observed):
                 encoded_export = _canonical_bytes(export_document)
                 host = _host_module(self.repository)
-                token = host._HOST_OUTPUT_ADMISSION.set(admit)
+                admission_reset = host._HOST_OUTPUT_ADMISSION.set(admit)
                 try:
                     host.write_bytes_exclusive(
                         exported, encoded_export, after_output_write=observed
                     )
                 finally:
-                    host._HOST_OUTPUT_ADMISSION.reset(token)
+                    host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
                 if load_json(exported) != export_document:
                     raise AdapterFailure("off-host raw acknowledgement changed bytes")
                 pilot.mark_raw_attempt_complete(

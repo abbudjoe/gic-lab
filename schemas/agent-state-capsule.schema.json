@@ -47,7 +47,8 @@
     "next_technical_subgoal": {
       "enum": [
         "generate-package-only-v17-after-governance",
-        "close-r1-through-r6-with-integrated-retained-path-evidence"
+        "close-r1-through-r6-with-integrated-retained-path-evidence",
+        "validate-exact-commit-v16-before-independent-review"
       ]
     },
     "science": {
@@ -80,7 +81,8 @@
             "live-capable-production-effects-repair-in-progress",
             "live-capable-production-effects-complete-external-governance",
             "remote-execution-bridge-complete-external-governance",
-            "remote-execution-bridge-review-repair-blocked"
+            "remote-execution-bridge-review-repair-blocked",
+            "remote-execution-bridge-final-validation-pending"
           ]
         },
         "registry_complete": {"type": "boolean"},
@@ -209,8 +211,25 @@
         }
       },
       "else": {
-        "properties": {
-          "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"}
+        "if": {
+          "properties": {
+            "control_plane": {
+              "properties": {"status": {"const": "remote-execution-bridge-final-validation-pending"}},
+              "required": ["status"]
+            }
+          },
+          "required": ["control_plane"]
+        },
+        "then": {
+          "properties": {
+            "next_technical_subgoal": {"const": "validate-exact-commit-v16-before-independent-review"},
+            "blocking_incident": {"const": "INC-T09-RETAINED-REMOTE-TRANSACTION-REVIEW"}
+          }
+        },
+        "else": {
+          "properties": {
+            "next_technical_subgoal": {"const": "generate-package-only-v17-after-governance"}
+          }
         }
       }
     },
@@ -272,7 +291,8 @@
               "status": {
                 "enum": [
                   "remote-execution-bridge-complete-external-governance",
-                  "remote-execution-bridge-review-repair-blocked"
+                  "remote-execution-bridge-review-repair-blocked",
+                  "remote-execution-bridge-final-validation-pending"
                 ]
               }
             }

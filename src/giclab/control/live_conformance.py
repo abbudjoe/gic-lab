@@ -201,8 +201,23 @@ def _commit_temporary_package(repository: Path) -> tuple[str, str]:
         "GIT_AUTHOR_DATE": "2026-09-01T00:00:00+00:00",
         "GIT_COMMITTER_DATE": "2026-09-01T00:00:00+00:00",
     }
+    for name, value in (
+        ("user.name", "GIC Lab Conformance"),
+        ("user.email", "gic-lab-conformance@example.invalid"),
+    ):
+        subprocess.run(
+            ["git", "-C", str(repository), "config", name, value],
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
+    members = sorted(
+        str(path.relative_to(repository)) for path in repository.iterdir() if path.name != ".git"
+    )
     subprocess.run(
-        ["git", "-C", str(repository), "add", "--all"],
+        ["git", "-C", str(repository), "add", "--", *members],
         env=environment,
         stdin=subprocess.DEVNULL,
         capture_output=True,
@@ -214,10 +229,6 @@ def _commit_temporary_package(repository: Path) -> tuple[str, str]:
             "git",
             "-C",
             str(repository),
-            "-c",
-            "user.name=GIC Lab Conformance",
-            "-c",
-            "user.email=gic-lab-conformance@example.invalid",
             "commit",
             "-q",
             "-m",
@@ -1474,7 +1485,12 @@ def run_live_effect_conformance(repository: Path) -> dict[str, object]:
         root,
         successor_version=selected.successor_contract_version,
     )
-    with tempfile.TemporaryDirectory(prefix="giclab-t09-live-conformance-") as directory:
+    fixture_parent = os.environ.get("GICLAB_CI_GIT_FIXTURE_ROOT")
+    if fixture_parent is not None:
+        Path(fixture_parent).mkdir(mode=0o700, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix="giclab-t09-live-conformance-", dir=fixture_parent
+    ) as directory:
         temporary_repository = Path(directory) / "repository"
         _copy_working_repository(root, temporary_repository)
         package_result = _run_temporary_package(

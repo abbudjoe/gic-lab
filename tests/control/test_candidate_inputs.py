@@ -1147,9 +1147,9 @@ def test_retained_canary_runs_real_leaf_and_rejects_bad_uid(
         contract=contract,
         lambda_started_at_epoch=999.0,
     )
-    secret = root / "test-canary"
-    secret.write_bytes(b"offline-test-canary-content-only")
-    secret.chmod(0o600)
+    credential_path = root / "test-canary"
+    credential_path.write_bytes(b"offline-test-canary-content-only")
+    credential_path.chmod(0o600)
     journal = EarlyCleanupJournal.initialize(
         root / "preflight-cleanup-state",
         plan_id=contract.plan_id,
@@ -1200,7 +1200,7 @@ def test_retained_canary_runs_real_leaf_and_rejects_bad_uid(
             receipt = host.secret_channel_preflight(
                 repository=package,
                 artifact_root=root,
-                secret_file=secret,
+                secret_file=credential_path,
                 prefix=["docker"],
                 image_id=environment.image_id,
                 cleanup_journal=journal,
@@ -1212,7 +1212,7 @@ def test_retained_canary_runs_real_leaf_and_rejects_bad_uid(
     receipt = host.secret_channel_preflight(
         repository=package,
         artifact_root=root,
-        secret_file=secret,
+        secret_file=credential_path,
         prefix=["docker"],
         image_id=environment.image_id,
         cleanup_journal=journal,
@@ -1461,6 +1461,25 @@ def test_deterministic_qualification_propagates_explicit_candidate_source(candid
     except Exception as error:
         pytest.fail(f"explicit candidate input lost at actual qualification consumer: {error}")
     assert receipt.binding == binding
+    # The normal committed-source wire omits the optional candidate field;
+    # admission must hash the producer's document, not dataclass-only None.
+    from dataclasses import asdict, replace
+
+    from giclab.control.production import ProductionCategory3World
+
+    committed = replace(
+        receipt,
+        binding=replace(
+            binding, transfer=replace(binding.transfer, candidate_source_binding_sha256=None)
+        ),
+    )
+    wire = asdict(committed)
+    wire.pop("receipt_sha256")
+    wire["binding"] = committed.binding.to_document()
+    expected_identity = sha(
+        (json.dumps(wire, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n").encode()
+    )
+    assert ProductionCategory3World._qualification_receipt_identity(committed) == expected_identity
     assert receipt.finalizer_selector_sha256 == sha(
         (package / "containers/sira-smoke/pragmatic/t09_remote_runner.py").read_bytes()
     )

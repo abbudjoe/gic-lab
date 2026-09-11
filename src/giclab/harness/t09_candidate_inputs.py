@@ -34,7 +34,7 @@ PACKAGE_PREFIX: Final = "experiments/EXP-0001-sira-simulative-vs-reactive/contra
 RUNTIME_PATH: Final = PACKAGE_PREFIX + "T09_PILOT_RUNTIME_IDENTITY_V16.json"
 EXECUTION_PATH: Final = PACKAGE_PREFIX + "T09_PILOT_EXECUTION_CONTRACT_V16.json"
 COMMAND_PATH: Final = PACKAGE_PREFIX + "T09_PILOT_COMMAND_MANIFESTS_V16.json"
-_TOKEN = object()
+_BINDING_SENTINEL = object()
 
 
 class CandidateInputError(ValueError):
@@ -300,7 +300,7 @@ class CandidateSourceSnapshot:
         return self.parent_repository
 
     def validate(self) -> None:
-        if self._token is not _TOKEN:
+        if self._token is not _BINDING_SENTINEL:
             raise CandidateInputError("candidate input was not explicitly loaded")
         root_metadata = self.root.lstat()
         if (
@@ -450,7 +450,11 @@ def build_candidate_source_snapshot(
             os.fsync(stream.fileno())
     root_metadata = snapshot_root.lstat()
     result = CandidateSourceSnapshot(
-        snapshot_root, binding, repository, _TOKEN, (root_metadata.st_dev, root_metadata.st_ino)
+        snapshot_root,
+        binding,
+        repository,
+        _BINDING_SENTINEL,
+        (root_metadata.st_dev, root_metadata.st_ino),
     )
     result.validate()
     return result
@@ -537,7 +541,7 @@ def load_candidate_source_snapshot(
         destination / "source",
         binding,
         parent_repository,
-        _TOKEN,
+        _BINDING_SENTINEL,
         (root_metadata.st_dev, root_metadata.st_ino),
     )
     result.validate()

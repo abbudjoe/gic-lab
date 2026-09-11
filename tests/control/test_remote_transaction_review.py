@@ -158,7 +158,7 @@ def test_r6_essential_copy_consumes_prefunded_capacity_after_transport_failure(
     source = tmp_path / "source"
     source.write_bytes(b"x" * (1024 if denied else 128))
     destination = tmp_path / "essential-failure" / "condition.stdout"
-    token = host._HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+    admission_reset = host._HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
     try:
         if denied:
             with pytest.raises(host.T09HostError, match="shared failure reserve"):
@@ -178,7 +178,7 @@ def test_r6_essential_copy_consumes_prefunded_capacity_after_transport_failure(
             == 512
         )
     finally:
-        host._HOST_OUTPUT_ADMISSION.reset(token)
+        host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
 
 
 @pytest.mark.parametrize("descriptor", [1, 2])
@@ -1233,7 +1233,7 @@ def test_r6_retained_host_writer_admits_before_any_mutation(tmp_path, role, deni
         calls.append(count)
         observer.reserve_output_bytes(total_bytes=count)
 
-    token = host._HOST_OUTPUT_ADMISSION.set(reserve)
+    admission_reset = host._HOST_OUTPUT_ADMISSION.set(reserve)
     try:
 
         def publish():
@@ -1251,7 +1251,7 @@ def test_r6_retained_host_writer_admits_before_any_mutation(tmp_path, role, deni
             assert target.read_bytes() == expected
             assert list(target.parent.iterdir()) == [target]
     finally:
-        host._HOST_OUTPUT_ADMISSION.reset(token)
+        host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
     assert calls == [len(expected)]
     assert observer.output_total_bytes is None
 
@@ -1277,7 +1277,7 @@ def test_r6_retained_host_writer_interruption_keeps_admitted_prefix(tmp_path, mo
         return original(descriptor, data[:3])
 
     monkeypatch.setattr(host.os, "write", partial)
-    token = host._HOST_OUTPUT_ADMISSION.set(reserve)
+    admission_reset = host._HOST_OUTPUT_ADMISSION.set(reserve)
     try:
 
         def publish():
@@ -1295,7 +1295,7 @@ def test_r6_retained_host_writer_interruption_keeps_admitted_prefix(tmp_path, mo
             publish()
         assert temporary.read_bytes() == prefix and len(grants) == 1
     finally:
-        host._HOST_OUTPUT_ADMISSION.reset(token)
+        host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
     assert (
         boundary.accounting_document()["reserved_upper_bound"]["condition"]["output_bytes"]
         == grants[0]
@@ -1942,7 +1942,7 @@ def test_r6_actual_archive_writer_reserves_each_chunk_before_write(tmp_path, mon
             requests.append(count)
             allocation(count)
 
-        token = host._HOST_OUTPUT_ADMISSION.set(admit)
+        admission_reset = host._HOST_OUTPUT_ADMISSION.set(admit)
         original = output.write
         calls = 0
 
@@ -1979,7 +1979,7 @@ def test_r6_actual_archive_writer_reserves_each_chunk_before_write(tmp_path, mon
                 assert writer.write(b"payload") == 7
                 assert output.tell() == 7 and allocation.remaining == 57
         finally:
-            host._HOST_OUTPUT_ADMISSION.reset(token)
+            host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
     assert requests == [7]
     assert path.read_bytes() == {"none": b"payload", "denied": b"", "partial": b"pay"}[fault]
 
@@ -2005,7 +2005,7 @@ def test_r6_retained_restoration_state_is_admitted_before_temporary_creation(tmp
         assert list(tmp_path.iterdir()) == [target]
         allowance(count)
 
-    token = host._HOST_OUTPUT_ADMISSION.set(admit)
+    admission_reset = host._HOST_OUTPUT_ADMISSION.set(admit)
     try:
         if denied:
             with pytest.raises(GateAContractError, match="allowance exhausted"):
@@ -2017,7 +2017,7 @@ def test_r6_retained_restoration_state_is_admitted_before_temporary_creation(tmp
             assert target.read_bytes() == encoded
             assert allowance.remaining == 0
     finally:
-        host._HOST_OUTPUT_ADMISSION.reset(token)
+        host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
 
 
 def test_r6_carrier_cannot_reset_prior_controller_writer_allocation_or_usage(tmp_path):
@@ -2199,7 +2199,7 @@ def test_r6_condition_bridge_admits_control_roots_before_actual_writers(tmp_path
         for p in root.rglob("*")
         if p.is_file()
     }
-    token = host._HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
+    admission_reset = host._HOST_OUTPUT_ADMISSION.set(bridge.admit_path)
     try:
 
         def publish():
@@ -2241,7 +2241,7 @@ def test_r6_condition_bridge_admits_control_roots_before_actual_writers(tmp_path
             host.write_exclusive(tmp_path / "foreign/denied.json", {"forbidden": True})
         assert not (tmp_path / "foreign").exists()
     finally:
-        host._HOST_OUTPUT_ADMISSION.reset(token)
+        host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
 
 
 def test_r6_shared_pilot_entry_establishes_and_reuses_one_accountant(tmp_path):
@@ -2846,7 +2846,9 @@ def test_r6_cleanup_child_channel_actual_writer_before_growth(tmp_path, role, de
         thread.start()
         try:
             client.connect()
-            token = host._HOST_OUTPUT_ADMISSION.set(lambda *_: calls.append("legacy-host"))
+            admission_reset = host._HOST_OUTPUT_ADMISSION.set(
+                lambda *_: calls.append("legacy-host")
+            )
             try:
                 with campaign_output_scope(client.admit):
                     if denied:
@@ -2855,7 +2857,7 @@ def test_r6_cleanup_child_channel_actual_writer_before_growth(tmp_path, role, de
                     else:
                         action()
             finally:
-                host._HOST_OUTPUT_ADMISSION.reset(token)
+                host._HOST_OUTPUT_ADMISSION.reset(admission_reset)
             if not denied:
                 client.finish()
         finally:

@@ -358,3 +358,22 @@ def test_v11_through_v14_command_artifacts_remain_byte_identical_and_valid(
 
 def test_v15_complete_package_validator_passes() -> None:
     assert validate_t09_v15_plan(ROOT) == []
+
+
+def test_historical_shared_schema_requires_its_exact_ancestor_bytes(monkeypatch) -> None:
+    import giclab.validation as validation
+
+    original = validation._t09_git_blob_sha256
+    observed = []
+
+    def wrong_schema(root, ancestor, relative):
+        if relative == "schemas/t09-early-cleanup-state.schema.json":
+            observed.append((ancestor, relative))
+            return "0" * 64
+        return original(root, ancestor, relative)
+
+    assert validate_t09_v15_plan(ROOT) == []
+    monkeypatch.setattr(validation, "_t09_git_blob_sha256", wrong_schema)
+    errors = validate_t09_v15_plan(ROOT)
+    assert observed
+    assert "T09 V15 schema_path binding drifted" in errors
