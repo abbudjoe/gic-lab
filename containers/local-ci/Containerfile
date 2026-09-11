@@ -11,7 +11,7 @@ RUN python /opt/local-ci/prepare_dependencies.py
 RUN uv sync --all-groups --frozen --no-install-project --no-editable
 RUN uv pip install --target /opt/build-backends --require-hashes -r /opt/local-ci/build-requirements.txt
 RUN python --version && uv --version && /opt/quarto/bin/quarto --version
-COPY run_gates.py offline_guard.py sitecustomize.py /opt/local-ci/
+COPY run_gates.py offline_guard.py offline_fixtures.py sitecustomize.py /opt/local-ci/
 ENV PATH=/opt/quarto/bin:/usr/local/bin:/usr/bin:/bin
 ENV UV_OFFLINE=1 PYTHONDONTWRITEBYTECODE=1
 USER 10001:10001

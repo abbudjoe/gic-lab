@@ -410,7 +410,8 @@ def test_ci_configuration_is_bounded_and_not_experimental(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "failure", [None, "admission", "wait", "collect", "interruption", "wrong-id"]
+    "failure",
+    [None, "admission", "start", "wait", "collect", "interruption", "wrong-id", "test-exit"],
 )
 def test_outer_cleanup_uses_exact_id_even_on_failure(failure):
     calls = []
@@ -422,12 +423,14 @@ def test_outer_cleanup_uses_exact_id_even_on_failure(failure):
         if argv[0] == "create":
             return {"exit_code": 0, "output": CID}
         assert argv[-1] == CID
+        if argv[0] == "start" and failure == "start":
+            return {"exit_code": 1, "output": "start acknowledgement unavailable"}
         if argv[0] == "wait":
             if failure == "wait":
                 raise TimeoutError("stalled test")
             if failure == "interruption":
                 raise KeyboardInterrupt
-            return {"exit_code": 0, "output": "0"}
+            return {"exit_code": 0, "output": "7" if failure == "test-exit" else "0"}
         if argv[0] == "inspect":
             if state["removed"]:
                 return {"exit_code": 1, "output": "error: no such object: " + CID}
@@ -469,8 +472,16 @@ def test_outer_cleanup_uses_exact_id_even_on_failure(failure):
     if failure == "wrong-id":
         assert not any(call[0] in {"stop", "kill", "rm"} for call in calls)
         assert record["cleanup"] == "unresolved"
+    elif failure in {"start", "wait", "interruption", "collect"}:
+        assert not state["running"]
+        assert not any(call[0] == "rm" for call in calls)
+        assert record["cleanup"] == "exact-id-stopped-export-unresolved"
+        assert record["export_verified"] is False
     else:
         assert record["cleanup"] == "exact-id-absent"
+        assert record["export_verified"] is (failure != "admission")
+    if failure == "test-exit":
+        assert record["test_exit_code"] == 7
 
 
 def test_ambiguous_creation_never_relaunches_or_deletes_by_name():
@@ -538,6 +549,48 @@ def test_inner_gate_checks_source_and_retains_failed_outcome(tmp_path, exit_code
     assert receipt["source_unchanged"] is not mutate
     assert receipt["gate"] == ("failed" if exit_code or mutate else "passed")
     assert (results / "gate.log").read_text().strip() == "bounded local gate output"
+
+
+@pytest.mark.parametrize("case", ["originals", "symlink", "oversized"])
+def test_guard_journal_export_preserves_bytes_and_refuses_unsafe_growth(tmp_path, case):
+    import hashlib
+
+    spec = importlib.util.spec_from_file_location(
+        "journal_export", SOURCE.with_name("run_gates.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    source, results = tmp_path / "journal", tmp_path / "results"
+    source.mkdir()
+    results.mkdir()
+    data = b'{"operation":"process:docker","expected_by":"negative"}\n'
+    journal = source / "123.jsonl"
+    if case == "symlink":
+        foreign = tmp_path / "foreign"
+        foreign.write_bytes(data)
+        journal.symlink_to(foreign)
+    elif case == "oversized":
+        with journal.open("wb") as stream:
+            stream.truncate(1024**2 + 1)
+    else:
+        journal.write_bytes(data)
+    if case != "originals":
+        with pytest.raises(RuntimeError, match="metadata or byte cap"):
+            module.export_guard_journals(source, results)
+        assert list((results / "guard-journals").iterdir()) == []
+    else:
+        module.export_guard_journals(source, results)
+        index = json.loads((results / "guard-journals/index.json").read_bytes())
+        assert index["files"] == [
+            {
+                "path": "0000.jsonl",
+                "bytes": len(data),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "kind": "denial",
+            }
+        ]
+        assert (results / "guard-journals/0000.jsonl").read_bytes() == data
+        assert journal.read_bytes() == data
 
 
 @pytest.mark.parametrize("outcome", ["pass", "cap", "nonzero", "stall"])

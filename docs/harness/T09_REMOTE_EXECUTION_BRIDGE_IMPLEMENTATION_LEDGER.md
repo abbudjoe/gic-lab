@@ -4788,3 +4788,31 @@ The next normal V16 generation passed at source ancestor `ced4df2ea33a138ac5a441
 Normal generation then passed against `00e94b61c5123649227d7c0a8c4127ba03e7489e`, producing receipt descendant `b95ae42031aef013e5b6607d33a9a8dd51423943`; its guarded native counterpart passed all 88 tests. Exact-candidate run `gic-pr15-ci-c757f679362fbc22` passed lock/sync, format, lint, mypy and the aggregate agent check, but repository validation rejected three changed retained runtime files absent from the current source receipt. Site and base/head pytest parity were not reached. Source integrity, original export and exact-owned ephemeral cleanup passed independently.
 
 The current shared-source receipt now includes the retained evaluator, finalizer qualification, evidence regression, runtime preflight and the four new campaign/candidate/environment/qualification helpers. Source-binding schema `4.0.0` and aggregate binding generation `7.0.0` identify that exact 51-file closure; historical source schema `3.0.0` retains its original 43-file set. This extends the existing proof contract without changing scientific packages or historical hashes. Normal-generation integration and per-file current-source mutation negatives cover the new members; a relabelled older aggregate generation must reject the new source schema. New immutable source, regenerated V16 receipts and the complete exact-candidate gate remain required.
+
+The next exact-candidate run, `gic-pr15-ci-9d6a9cd96caddb7b` at receipt descendant
+`452485a8dad1a30f1fe9a875a3876263e3bfbe11`, passed static, control, repository,
+privacy and site gates. Its base pytest then exited 90 after guard denials;
+head pytest and parity were not reached. The original base JUnit recorded 2,222
+passes, 70 failures, 20 errors and two skips. Those outcomes are not a qualified
+parity baseline. Original exports, source integrity and exact-owned cleanup
+passed independently; the old image did not export its guard journals.
+
+The corrected offline environment admits narrowly specified native process-state
+queries, guarded isolated Python entrypoints and exact fixture Git operations.
+Legacy system-Python spelling selects the pinned interpreter with a separate
+fixture record. A source-bound empty container-inventory input completes one
+existing pre-entry negative's low-level environmental closure, symmetrically for
+base and head; actual retained consumers and original assertions still execute.
+Unexpected caught denials remain failures. Immutable guard journals are now
+exported and independently checked before cleanup. Focused run
+`gic-pr15-ci-deeb44b364ae6511` passed all 156 tests; full baseline diagnosis and
+renewed exact-candidate validation remain separate pending gates.
+
+A base-diagnostic wrapper's missing scratch parent failed before pytest. Its
+original exports were independently reconciled and the exact retained volumes
+closed without changing the failed receipt. This also exposed an outer-launcher
+contract gap: failed collection could remove the stopped container before its
+results were verified. The active regression requires retaining started
+containers with unresolved exports, with normal exact-owned stopping and
+explicit unresolved evidence. This maintenance correction does not alter
+experimental cleanup policy, scientific budgets or the accepted R1–R6 matrix.

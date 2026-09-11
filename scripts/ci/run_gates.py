@@ -11,6 +11,7 @@ import json
 import os
 import selectors
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -142,6 +143,88 @@ def execute_checked_gate(argv, *, checkout, results, verify_source, identity):
         raise gate_error
 
 
+def export_guard_journals(source: Path, results: Path):
+    """Retain original denial/fixture bytes on failure as well as success."""
+    destination = results / "guard-journals"
+    destination.mkdir(mode=0o700)
+    entries = []
+    for entry in source.iterdir():
+        if len(entries) >= 4096:
+            raise RuntimeError("guard journal entry cap")
+        if entry.name.endswith((".jsonl", ".fixture-jsonl")):
+            entries.append(entry)
+        else:
+            raise RuntimeError("unexpected guard journal entry")
+    rows, total = [], 0
+    for index, entry in enumerate(sorted(entries)):
+        meta = entry.lstat()
+        if (
+            not stat.S_ISREG(meta.st_mode)
+            or meta.st_nlink != 1
+            or meta.st_uid != os.getuid()
+            or meta.st_size > 1024**2
+            or total + meta.st_size > 32 * 1024**2
+        ):
+            raise RuntimeError("guard journal metadata or byte cap")
+        fd = os.open(entry, os.O_RDONLY | os.O_NOFOLLOW)
+        digest = hashlib.sha256()
+        name = f"{index:04d}.jsonl"
+        actual = 0
+        with os.fdopen(fd, "rb") as src, (destination / name).open("xb") as out:
+            held = os.fstat(src.fileno())
+            if (
+                held.st_dev,
+                held.st_ino,
+                held.st_mode,
+                held.st_size,
+                held.st_mtime_ns,
+                held.st_ctime_ns,
+            ) != (
+                meta.st_dev,
+                meta.st_ino,
+                meta.st_mode,
+                meta.st_size,
+                meta.st_mtime_ns,
+                meta.st_ctime_ns,
+            ):
+                raise RuntimeError("guard journal identity changed")
+            while block := src.read(65536):
+                if actual + len(block) > meta.st_size:
+                    raise RuntimeError("guard journal grew during export")
+                out.write(block)
+                digest.update(block)
+                actual += len(block)
+            after = os.fstat(src.fileno())
+            if (actual, after.st_mtime_ns, after.st_ctime_ns) != (
+                meta.st_size,
+                meta.st_mtime_ns,
+                meta.st_ctime_ns,
+            ):
+                raise RuntimeError("guard journal changed during export")
+        total += actual
+        rows.append(
+            {
+                "path": name,
+                "bytes": actual,
+                "sha256": digest.hexdigest(),
+                "kind": "fixture" if entry.name.endswith(".fixture-jsonl") else "denial",
+            }
+        )
+    (destination / "index.json").write_text(
+        json.dumps(
+            {
+                "files": rows,
+                "bytes": total,
+                "representation": (
+                    "byte-identical journal contents; opaque ordinal filenames omit process IDs"
+                ),
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--focused-node", action="append", default=[])
@@ -268,22 +351,25 @@ def main():
         else:
             run(["git", "diff", "--exit-code", contract["head"]], cwd=checkout)
 
-    execute_checked_gate(
-        argv,
-        checkout=checkout,
-        results=results,
-        verify_source=verify_source,
-        identity={
-            "head": contract["head"],
-            "base": contract["base"],
-            "history_manifest_sha256": hashlib.sha256(
-                (inputs / "history.json").read_bytes()
-            ).hexdigest(),
-            "classification": "focused-dirty-development"
-            if development
-            else "exact-commit-final-gate",
-        },
-    )
+    try:
+        execute_checked_gate(
+            argv,
+            checkout=checkout,
+            results=results,
+            verify_source=verify_source,
+            identity={
+                "head": contract["head"],
+                "base": contract["base"],
+                "history_manifest_sha256": hashlib.sha256(
+                    (inputs / "history.json").read_bytes()
+                ).hexdigest(),
+                "classification": "focused-dirty-development"
+                if development
+                else "exact-commit-final-gate",
+            },
+        )
+    finally:
+        export_guard_journals(environment_guard, results)
 
 
 if __name__ == "__main__":

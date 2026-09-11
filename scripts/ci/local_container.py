@@ -621,13 +621,16 @@ def validate_container_isolation(
 
 
 def run_owned_container(command, create_argv, *, admit, collect, record):
-    """One launch, immutable ID cleanup, and honest unresolved creation evidence.
+    """One launch; remove an executed container only after verified export.
 
     command is the narrow outer client channel, also exercised with deterministic
     fake responses. No experimental path imports this launcher.
     """
     container_id = None
-    record.update({"create_attempts": 1, "cleanup": "unresolved", "id": None})
+    start_attempted = False
+    record.update(
+        {"create_attempts": 1, "cleanup": "unresolved", "id": None, "export_verified": False}
+    )
     try:
         created = command(create_argv, timeout=30)
         if created["exit_code"] != 0:
@@ -635,6 +638,8 @@ def run_owned_container(command, create_argv, *, admit, collect, record):
         container_id = checked_container_id(created["output"].strip())
         record["id"] = container_id
         admit(container_id)
+        # A failed acknowledgement does not prove that execution never started.
+        start_attempted = True
         started = command(["start", container_id], timeout=30)
         if started["exit_code"] != 0:
             raise LocalCIError("owned CI container failed to start")
@@ -643,8 +648,12 @@ def run_owned_container(command, create_argv, *, admit, collect, record):
             raise LocalCIError("owned CI container wait failed")
         record["test_exit_code"] = int(waited["output"].strip())
         collect(container_id)
+        record["export_verified"] = True
         if record["test_exit_code"] != 0:
             raise LocalCIError("container gate failed; evidence retained")
+    except BaseException as error:
+        record["primary_error_type"] = type(error).__name__
+        raise
     finally:
         if container_id is not None:
 
@@ -663,13 +672,18 @@ def run_owned_container(command, create_argv, *, admit, collect, record):
                     killed = command(["kill", container_id], timeout=15)
                     if killed["exit_code"] != 0 or state()["Running"]:
                         raise LocalCIError("owned CI container termination unresolved")
-            removed = command(["rm", container_id], timeout=15)
-            if removed["exit_code"] != 0:
-                raise LocalCIError("owned CI container removal unresolved")
-            absent = command(["inspect", "--format", "{{.Id}}", container_id], timeout=15)
-            if not exact_container_absent(absent, container_id):
-                raise LocalCIError("owned CI container absence unproven")
-            record["cleanup"] = "exact-id-absent"
+            if start_attempted and not record["export_verified"]:
+                # Stop effects, retain possible results and the immutable ID.
+                # No return here: the original failure must still propagate.
+                record["cleanup"] = "exact-id-stopped-export-unresolved"
+            else:
+                removed = command(["rm", container_id], timeout=15)
+                if removed["exit_code"] != 0:
+                    raise LocalCIError("owned CI container removal unresolved")
+                absent = command(["inspect", "--format", "{{.Id}}", container_id], timeout=15)
+                if not exact_container_absent(absent, container_id):
+                    raise LocalCIError("owned CI container absence unproven")
+                record["cleanup"] = "exact-id-absent"
 
 
 def main():

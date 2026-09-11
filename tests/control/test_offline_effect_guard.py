@@ -78,6 +78,216 @@ def test_authorized_python_pipe_and_private_socket_work(tmp_path):
         assert right.recv(32) == b"exact-unix-frame"
 
 
+@pytest.mark.parametrize("fields", ["pid=,pgid=,state=", "pid=,ppid=,pgid=,state="])
+def test_readonly_process_inventory_preserves_real_owned_processes(fields):
+    result = subprocess.run(
+        ["ps", "-axo", fields], capture_output=True, text=True, check=True, timeout=5
+    )
+    assert str(os.getpid()) in {line.split()[0] for line in result.stdout.splitlines()}
+
+
+def test_exact_pid_state_query_is_real_and_system_python_spelling_is_pinned():
+    result = subprocess.run(
+        ["ps", "-o", "state=", "-p", str(os.getpid())],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.strip() and not result.stdout.strip().startswith("Z")
+    result = subprocess.run(
+        [
+            "/usr/bin/python3",
+            "-I",
+            "-S",
+            "-c",
+            "import sys,offline_guard; assert offline_guard._installed; print(sys.executable)",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.strip() == sys.executable
+
+
+def test_copied_venv_interpreter_spelling_keeps_its_path_and_guard():
+    from pathlib import Path
+
+    sibling = Path(sys.executable).with_name(
+        "python" if Path(sys.executable).name != "python" else "python3"
+    )
+    assert sibling.is_file()
+    result = subprocess.run(
+        [
+            str(sibling),
+            "-I",
+            "-c",
+            "import sys,offline_guard; assert offline_guard._installed; print(sys.executable)",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.strip() == str(sibling)
+
+
+@pytest.mark.parametrize(
+    "argv", [["ps", "aux"], ["ps", "-axo", "pid=,args="], ["/usr/bin/true", "extra"]]
+)
+def test_native_inventory_admission_does_not_allow_other_commands(argv):
+    from offline_guard import EffectDenied, expected_denial
+
+    name = argv[0].rsplit("/", 1)[-1]
+    with expected_denial("exact-native-shape", "process:" + name), pytest.raises(EffectDenied):
+        subprocess.run(argv, check=False, timeout=5)
+
+
+def test_native_noop_and_nonexecutable_fixture_keep_actual_exit_contract(tmp_path):
+    assert subprocess.run(["/usr/bin/true"], check=False, timeout=5).returncode == 0
+    executable = tmp_path / "not-executable"
+    executable.write_text("not executable\n")
+    executable.chmod(0o600)
+    with pytest.raises(PermissionError):
+        subprocess.run([str(executable)], check=False, timeout=5)
+    with pytest.raises(FileNotFoundError):
+        subprocess.run([str(tmp_path / "missing/python")], check=False, timeout=5)
+
+
+@pytest.mark.parametrize("flags", [["-I"], ["-I", "-S"], ["-E"]])
+def test_isolated_python_keeps_flags_and_pre_execution_effect_guard(tmp_path, flags):
+    marker = tmp_path / "ambient-loaded"
+    (tmp_path / "sitecustomize.py").write_text(f"open({str(marker)!r}, 'w').write('bad')\n")
+    code = """
+import sys, subprocess, offline_guard
+assert offline_guard._installed
+with offline_guard.expected_denial('isolated-child-docker', 'process:docker'):
+    try:
+        subprocess.run(['docker', 'info'], timeout=1)
+    except offline_guard.EffectDenied:
+        pass
+    else:
+        raise AssertionError('Docker dispatched')
+print(sys.flags.isolated, sys.flags.no_site, sys.flags.ignore_environment)
+"""
+    result = subprocess.run(
+        [sys.executable, *flags, "-c", code],
+        env={"PYTHONPATH": str(tmp_path), "PATH": os.defpath},
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.strip() == f"{int('-I' in flags)} {int('-S' in flags)} 1"
+    assert not marker.exists()
+
+
+def test_isolated_script_executes_original_bytes_with_actual_argv(tmp_path):
+    script = tmp_path / "script.py"
+    script.write_text(
+        "import sys,offline_guard\nassert offline_guard._installed\nprint(sys.argv[1])\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-S", str(script), "original-argument"],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.strip() == "original-argument"
+
+
+def test_isolated_bootstrap_text_in_an_argument_does_not_admit_unguarded_code():
+    import offline_guard
+
+    argv = [sys.executable, "-I", "-c", "pass", offline_guard._ISOLATED_BOOTSTRAP]
+    with (
+        offline_guard.expected_denial("misplaced-isolated-guard", "process:unguarded-python"),
+        pytest.raises(offline_guard.EffectDenied),
+    ):
+        offline_guard._audit("subprocess.Popen", (sys.executable, argv, None, dict(os.environ)))
+
+
+def test_python_admission_rejects_a_different_executable_before_dispatch():
+    from offline_guard import EffectDenied, expected_denial
+
+    with (
+        expected_denial("python-executable-override", "process:executable-override"),
+        pytest.raises(EffectDenied),
+    ):
+        subprocess.run([sys.executable, "-c", "pass"], executable="/usr/bin/true", check=False)
+
+
+def test_bound_container_inventory_is_one_low_level_input_and_other_dispatch_stays_denied():
+    from offline_fixtures import INVENTORY_ARGV, BoundContainerInventory
+    from offline_guard import EffectDenied, expected_denial
+
+    runner = BoundContainerInventory(subprocess)
+    result = runner.run(INVENTORY_ARGV, text=True)
+    assert result.stdout == "" and result.returncode == 0 and runner.calls == 1
+    with pytest.raises(AssertionError, match="twice"):
+        runner.run(INVENTORY_ARGV, text=True)
+    with expected_denial("fixture-unmatched-docker", "process:docker"), pytest.raises(EffectDenied):
+        runner.run(["docker", "info"], timeout=1)
+
+
+def test_detached_exact_base_can_seed_a_local_fixture_without_rebinding_history(
+    tmp_path, monkeypatch
+):
+    import offline_guard
+    from offline_guard import EffectDenied, expected_denial
+
+    repository = tmp_path / "source"
+    repository.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "fixture-main"], cwd=repository, check=True)
+    (repository / "bytes").write_text("exact committed fixture\n")
+    subprocess.run(["git", "add", "."], cwd=repository, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
+        cwd=repository,
+        check=True,
+    )
+    commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+    ).strip()
+    monkeypatch.setattr(offline_guard, "_parity_repository", repository)
+    monkeypatch.setattr(offline_guard, "_parity_base", commit)
+    base = tmp_path / "base"
+    subprocess.run(
+        ["git", "worktree", "add", "--detach", str(base), commit], cwd=repository, check=True
+    )
+    try:
+        clone = tmp_path / "clone"
+        subprocess.run(["git", "clone", "--shared", "--quiet", str(base), str(clone)], check=True)
+        assert (clone / "bytes").read_text() == "exact committed fixture\n"
+        assert (
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=clone, text=True).strip()
+            == commit
+        )
+        with monkeypatch.context() as change:
+            change.setattr(offline_guard, "_parity_base", "0" * 40)
+            with expected_denial("wrong-detached-base", "process:git"), pytest.raises(EffectDenied):
+                subprocess.run(
+                    ["git", "clone", "--shared", "--quiet", str(base), str(tmp_path / "wrong")],
+                    check=False,
+                )
+        assert not (tmp_path / "wrong").exists()
+    finally:
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", str(base)], cwd=repository, check=True
+        )
+
+
 def test_external_network_denied_before_connect():
     from offline_guard import EffectDenied, expected_denial
 

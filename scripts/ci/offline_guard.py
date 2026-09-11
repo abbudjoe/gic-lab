@@ -10,8 +10,11 @@ import atexit
 import configparser
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
+import runpy
+import shutil
 import socket
 import stat
 import subprocess
@@ -114,7 +117,145 @@ def _deny(operation: str) -> None:
 
 
 def _python(argv: list[str]) -> bool:
-    return bool(argv) and Path(argv[0]).resolve() == Path(sys.executable).resolve()
+    if not argv:
+        return False
+    selected = shutil.which(argv[0]) if not Path(argv[0]).is_absolute() else argv[0]
+    if selected is None:
+        return False
+    path, current = Path(selected).resolve(), Path(sys.executable).resolve()
+    if path == current:
+        return True
+    aliases = {"python", "python3", f"python{sys.version_info.major}.{sys.version_info.minor}"}
+    if path.parent != current.parent or path.name not in aliases or current.name not in aliases:
+        return False
+    # venv --copies has distinct regular files for its executable spellings.
+    # Accept only byte-identical siblings of the already selected interpreter.
+    hashes = []
+    for candidate in (path, current):
+        fd = os.open(candidate, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode) or before.st_size > 1024**2:
+                return False
+            digest = hashlib.sha256()
+            total = 0
+            while block := stream.read(65536):
+                total += len(block)
+                if total > before.st_size:
+                    return False
+                digest.update(block)
+            after = os.fstat(stream.fileno())
+            if (total, after.st_mtime_ns, after.st_ctime_ns) != (
+                before.st_size,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            ):
+                return False
+            hashes.append(digest.digest())
+    return hashes[0] == hashes[1]
+
+
+_ISOLATED_BOOTSTRAP = (
+    "import sys; sys.path.insert(0, " + repr(str(Path(__file__).resolve().parent)) + "); "
+    "import offline_guard; sys.path.pop(0); offline_guard.install(); "
+    "offline_guard.run_isolated(sys.argv[1:])"
+)
+
+
+def run_isolated(arguments):
+    """Keep native isolated startup, then guard the original Python entry point."""
+    if not arguments:
+        raise ValueError("isolated child requires an explicit entry point")
+    if arguments[0] == "-c" and len(arguments) >= 2:
+        sys.argv = ["-c", *arguments[2:]]
+        namespace = {"__name__": "__main__", "__builtins__": __builtins__}
+        exec(compile(arguments[1], "<string>", "exec"), namespace)
+    elif arguments[0] == "-m" and len(arguments) >= 2:
+        sys.argv = arguments[1:]
+        runpy.run_module(arguments[1], run_name="__main__", alter_sys=True)
+    elif not arguments[0].startswith("-"):
+        sys.argv = arguments
+        runpy.run_path(arguments[0], run_name="__main__")
+    else:
+        raise ValueError("unsupported isolated Python entry point")
+
+
+def _isolated_arguments(argv):
+    flags, remaining = [], list(argv[1:])
+    while remaining and remaining[0] in {"-I", "-E", "-S", "-B", "-u", "-s"}:
+        flags.append(remaining.pop(0))
+    if not any(flag in {"-I", "-E", "-S"} for flag in flags):
+        return argv
+    if remaining[:2] == ["-c", _ISOLATED_BOOTSTRAP]:
+        return argv
+    if not remaining or (remaining[0].startswith("-") and remaining[0] not in {"-c", "-m"}):
+        _deny("process:unguarded-python")
+    return [argv[0], *flags, "-c", _ISOLATED_BOOTSTRAP, *remaining]
+
+
+def _isolated_guard_present(argv):
+    pending = list(argv[1:])
+    isolated = False
+    while pending and pending[0] in {"-I", "-E", "-S", "-B", "-u", "-s"}:
+        flag = pending.pop(0)
+        isolated = isolated or flag in {"-I", "-E", "-S"}
+    return not isolated or pending[:2] == ["-c", _ISOLATED_BOOTSTRAP]
+
+
+def _readonly_native_allowed(argv):
+    selected = shutil.which(argv[0]) if not Path(argv[0]).is_absolute() else argv[0]
+    if selected is None:
+        return False
+    path = Path(selected).resolve()
+    if path in {Path("/bin/ps").resolve(), Path("/usr/bin/ps").resolve()}:
+        return argv[1:] in (["-axo", "pid=,pgid=,state="], ["-axo", "pid=,ppid=,pgid=,state="]) or (
+            len(argv) == 5
+            and argv[1:4] == ["-o", "state=", "-p"]
+            and argv[4].isascii()
+            and argv[4].isdigit()
+            and 0 < int(argv[4]) < 2**31
+        )
+    return path == Path("/usr/bin/true").resolve() and len(argv) == 1
+
+
+def _record_python_alias():
+    """Bind a legacy test command spelling to the already selected interpreter."""
+    assert _journal is not None
+    encoded = (
+        json.dumps(
+            {
+                "fixture": "legacy-system-python3-command-spelling",
+                "requested": "/usr/bin/python3",
+                "selected": "current guarded test interpreter",
+                "version": list(sys.version_info[:3]),
+                "classification": "explicit interpreter selection; real child execution",
+            },
+            sort_keys=True,
+        )
+        + "\n"
+    ).encode()
+    with _lock:
+        fd = os.open(
+            _journal / "python-alias.fixture-jsonl",
+            os.O_WRONLY | os.O_APPEND | os.O_CREAT | os.O_NOFOLLOW,
+            0o600,
+        )
+        try:
+            meta = os.fstat(fd)
+            if (
+                meta.st_nlink != 1
+                or meta.st_uid != os.getuid()
+                or meta.st_size + len(encoded) > 1024**2
+            ):
+                raise RuntimeError("Python alias evidence cap or ownership failure")
+            offset = 0
+            while offset < len(encoded):
+                written = os.write(fd, encoded[offset:])
+                if written <= 0:
+                    raise OSError("Python alias evidence short write")
+                offset += written
+        finally:
+            os.close(fd)
 
 
 def child_environment(environment=None):
@@ -217,7 +358,29 @@ def _inspect_fixture_git(argv, cwd):
         return False
     operation, arguments = command[0], command[1:]
     if operation == "init":
-        targets = [v for v in arguments if v not in {"-q", "--quiet"}]
+        targets = []
+        pending = list(arguments)
+        while pending:
+            value = pending.pop(0)
+            if value in {"-q", "--quiet"}:
+                continue
+            if value in {"-b", "--initial-branch"}:
+                if not pending:
+                    return False
+                branch = pending.pop(0)
+                if (
+                    not branch
+                    or branch.startswith(("-", "/"))
+                    or ".." in branch
+                    or any(
+                        c
+                        not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-"
+                        for c in branch
+                    )
+                ):
+                    return False
+                continue
+            targets.append(value)
         if len(targets) > 1 or any(v.startswith("-") for v in targets):
             return False
         if targets:
@@ -279,7 +442,7 @@ def _inspect_fixture_git(argv, cwd):
                     or parser[section]["fetch"] != "+refs/heads/*:refs/remotes/origin/*"
                 ):
                     return False
-                if not _safe_source_objects(str(Path(parser[section]["url"]) / ".git/objects")):
+                if _source_repository_objects(Path(parser[section]["url"])) is None:
                     return False
             elif section.startswith('branch "'):
                 if (
@@ -324,7 +487,7 @@ def _inspect_fixture_git(argv, cwd):
         value, *arguments = arguments
         if value in {"-q", "--quiet", "--allow-empty"}:
             continue
-        if value == "-am":
+        if value in {"-am", "-qm"}:
             value = "-m"  # Native tracked-file fixture update; hooks remain disabled.
         if value != "-m" or not arguments or len(arguments[0]) > 4096:
             return False
@@ -368,7 +531,7 @@ def _local_clone_allowed(argv, cwd):
         return False
     source, destination = Path(argv[4]), Path(argv[5])
     return (
-        _safe_source_objects(str(source / ".git/objects"))
+        _source_repository_objects(source) is not None
         and _git_fixture_root is not None
         and destination.is_absolute()
         and _inside_git_fixture_scope(destination)
@@ -378,6 +541,40 @@ def _local_clone_allowed(argv, cwd):
         and destination.parent.is_dir()
         and destination.parent.stat().st_uid == os.getuid()
     )
+
+
+def _source_repository_objects(source):
+    """Resolve only a bound source or the exact registered detached parity base."""
+    objects = source / ".git/objects"
+    if _safe_source_objects(str(objects)):
+        return objects
+    if _parity_repository is None or source.name != "base" or not _inside_git_fixture_scope(source):
+        return None
+    metadata = source / ".git"
+    if any(p.is_symlink() for p in (metadata, *metadata.parents)) or not metadata.is_file():
+        return None
+    if metadata.stat().st_size > 4096 or metadata.stat().st_uid != os.getuid():
+        return None
+    value = metadata.read_text()
+    if not value.startswith("gitdir: "):
+        return None
+    linked = Path(value.removeprefix("gitdir: ").strip())
+    expected = _parity_repository / ".git/worktrees"
+    if linked.parent != expected or any(p.is_symlink() for p in (linked, *linked.parents)):
+        return None
+    for name in ("HEAD", "gitdir", "commondir"):
+        p = linked / name
+        if p.is_symlink() or not p.is_file() or p.stat().st_size > 4096:
+            return None
+    if (
+        (linked / "HEAD").read_text().strip() != _parity_base
+        or Path((linked / "gitdir").read_text().strip()) != metadata
+        or (linked / (linked / "commondir").read_text().strip()).resolve()
+        != _parity_repository / ".git"
+    ):
+        return None
+    objects = _parity_repository / ".git/objects"
+    return objects if _safe_source_objects(str(objects)) else None
 
 
 def _parity_git_allowed(argv, cwd):
@@ -486,13 +683,26 @@ def _audit(event, args):
         assert argv is not None
         name = Path(executable).name
         if _python(argv):
-            if any(v in {"-I", "-E", "-S"} for v in argv[1:]):
+            if not _isolated_guard_present(argv):
                 _deny("process:unguarded-python")
             selected = os.environ if env is None else env
+            actual = shutil.which(os.fsdecode(executable), path=selected.get("PATH", os.defpath))
+            if actual is None or not _python([actual]):
+                _deny("process:executable-override")
             if selected.get("GICLAB_CI_GUARD_JOURNAL") != str(_journal) or str(
                 Path(__file__).resolve().parent
             ) not in selected.get("PYTHONPATH", "").split(os.pathsep):
                 _deny("process:unguarded-python")
+            return
+        selected = os.environ if env is None else env
+        actual = shutil.which(os.fsdecode(executable), path=selected.get("PATH", os.defpath))
+        requested = shutil.which(argv[0], path=selected.get("PATH", os.defpath))
+        if (
+            actual
+            and requested
+            and Path(actual).resolve() == Path(requested).resolve()
+            and _readonly_native_allowed([actual, *argv[1:]])
+        ):
             return
         if name == "git":
             command = argv[1:]
@@ -592,9 +802,28 @@ def install() -> None:
     class GuardedPopen(native):
         def __init__(self, args, *positional, **kwargs):
             normalized = _argv_paths(args)
+            if normalized and normalized[0] == "/usr/bin/python3":
+                # The offline lane has one explicit Python toolchain. Do not
+                # dispatch a different ambient system interpreter for old tests.
+                _record_python_alias()
+                normalized = [sys.executable, *normalized[1:]]
+                args = normalized
             if normalized is not None and _python(normalized):
+                args = _isolated_arguments(normalized)
                 kwargs["env"] = child_environment(kwargs.get("env"))
-            elif (
+            elif normalized and Path(normalized[0]).is_absolute():
+                executable = Path(normalized[0])
+                if executable.name in {"python", "python3"} and not os.path.lexists(executable):
+                    raise FileNotFoundError(
+                        2, "requested Python interpreter is absent", str(executable)
+                    )
+                if _inside_git_fixture_scope(executable) and not executable.is_symlink():
+                    metadata = executable.lstat()
+                    if stat.S_ISREG(metadata.st_mode) and not metadata.st_mode & 0o111:
+                        raise PermissionError(
+                            13, "fixture executable has no execute permission", str(executable)
+                        )
+            if (
                 normalized
                 and Path(normalized[0]).name == "git"
                 and (
@@ -643,3 +872,8 @@ def pytest_sessionfinish(session, exitstatus):
         for line in path.read_text().splitlines():
             if json.loads(line)["expected_by"] is None:
                 session.exitstatus = 1
+
+
+def pytest_configure(config):
+    """Load the immutable, exact-bound low-level fixtures after guard admission."""
+    config.pluginmanager.import_plugin("offline_fixtures")
