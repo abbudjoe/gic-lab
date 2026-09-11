@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "expired",
-      "subject": "13a1fdcb2cfb56c0d533c049d74e15e081706d1c053904af31d33bade187d084"
+      "subject": "c5e016d159285399c1cab19bd2991125b54ac8f21343d3a7a61afdebfbdc869a"
     },
     {
       "adapter": "host",
@@ -84,12 +84,12 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "caed461aa195a0ace8775f81bc5364239f74c13c81cf41243abda57623db021f",
+  "composition_sha256": "45b8d73dfdc8c1bb5107e952e07d678929febed36f7e30f07e7d485e405aebf1",
   "condition_identities_consumed": [],
   "condition_identities_reserved": [],
   "earliest_stopping_phase": "final-metadata-freshness",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "5eefdffeea808ec987c47edb26e14cec5c70c3c4e60eccb5892ff0a2c5a3b6bc",
+  "effect_authorization_context_sha256": "8ab348571407e5003a48e080a998d8bbe3938a3f2c9df0f232af8c9b8af4a8ea",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [],
@@ -177,7 +177,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "5eefdffeea808ec987c47edb26e14cec5c70c3c4e60eccb5892ff0a2c5a3b6bc",
+    "authorization_context_semantic_sha256": "8ab348571407e5003a48e080a998d8bbe3938a3f2c9df0f232af8c9b8af4a8ea",
     "cleanup_handoff_sha256": "4240baa87d838671f53209c0715e1193793fa443458c7a4a2d1daa3fdb6ad132",
     "cleanup_receipt_sha256": "a8c2b3d96286244b8855076fe2ed578764b0888fedb517a479fc8ef0e5677866",
     "cleanup_resume_byte_identical": true,
@@ -229,7 +229,7 @@
       "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
       "package_source": "working-tree",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "source_manifest_sha256": "9d2871401b7eaab485093a4d0676f0c559e3f0ac467a5f843c00cfe6816fe10e",
+      "source_manifest_sha256": "a559034b933648c9678f0cdea81daab539babd0c6769591e0a48449474dfbd7c",
       "tracked_only": true,
       "uploaded": false,
       "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
@@ -366,8 +366,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "83025eda686fd64bd7b1e0f2616297fce52d55d0",
-  "repository_tree": "0380392290e54a60f3c293f34dd374e7987274ed",
+  "repository_commit": "2f5918a70cb596c51602b6d47dd53bdb8bbf1493",
+  "repository_tree": "a2067e2b854be01448ad4327c715bab539c24bd2",
   "scenario": "metadata-expired",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -376,7 +376,7 @@
     "run_ids": []
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "eedb1b79fbfdb0389ac19330cf3576f847e8e4e239fc96c0a3bb3e607c96fadc",
+  "semantic_sha256": "a907910766d98e8ca1e61b772dda2d3409a0caa66588e571fea92edf36a65619",
   "shadow_only": true,
   "stop_reason": "metadata receipt expired",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

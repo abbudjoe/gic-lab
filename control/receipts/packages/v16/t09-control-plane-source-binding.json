@@ -262,7 +262,7 @@
   "schema_version": "4.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "5dcd379e6f9ef48b0d50abec5fc7293eb81aef24b055984c7a5fdf89cc841b28",
-  "source_commit": "83025eda686fd64bd7b1e0f2616297fce52d55d0",
-  "source_tree": "0380392290e54a60f3c293f34dd374e7987274ed"
+  "semantic_sha256": "445b4797494322d475162a1ade97f8f52b7492d3e8b41e6c3b84d6539417fe74",
+  "source_commit": "2f5918a70cb596c51602b6d47dd53bdb8bbf1493",
+  "source_tree": "a2067e2b854be01448ad4327c715bab539c24bd2"
 }

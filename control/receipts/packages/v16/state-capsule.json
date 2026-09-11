@@ -64,8 +64,8 @@
   ],
   "recommended_action": "preserve the accepted 53-row R1-R6 development matrix at checkpoint 0b27b74cbf160130b8177f47323e4d4f37a11986; complete current V16 source and receipt ancestry, exact-base/head final local gates and verified export before any product push; Source109 remains unknown and optional recovery is deferred; independent exact-head review remains required",
   "repository": {
-    "commit": "83025eda686fd64bd7b1e0f2616297fce52d55d0",
-    "tree": "0380392290e54a60f3c293f34dd374e7987274ed"
+    "commit": "2f5918a70cb596c51602b6d47dd53bdb8bbf1493",
+    "tree": "a2067e2b854be01448ad4327c715bab539c24bd2"
   },
   "resources": {
     "active_provider_instances": 0,
@@ -105,7 +105,7 @@
     "successor_contract_version": "V17",
     "successor_status": "not-created"
   },
-  "semantic_sha256": "7eb0757d4d28c8624a773f49a912cebca88546e3bd800fc1e8994660d3880c74",
+  "semantic_sha256": "732d9e36365feff118a11be9f96515a5b77a804e001c73581ffbd269558a0870",
   "terminal_goal": "evaluate simulative versus reactive SiRA",
   "uncertainties": [
     "the authorized archive fixture passes focused staging and regression-consumer tests but does not replace V16 frozen instrumentation source bindings",
