@@ -33,7 +33,7 @@
       "index": 5,
       "operation": "metadata.is_fresh",
       "outcome": "passed",
-      "subject": "bed3df43d9a3b1ae408f85b3c0fdd3f0c07431a74125b7cc7502be66b1c510f4"
+      "subject": "b57df600057372127408534c5e0bbf077c7532ba0df4385f0648320f9cc38186"
     },
     {
       "adapter": "provider",
@@ -74,7 +74,7 @@
       "adapter": "evidence",
       "index": 11,
       "operation": "evidence.record",
-      "outcome": "retained:127494a10aae",
+      "outcome": "retained:3fbeb6be1253",
       "subject": "qualification"
     },
     {
@@ -88,7 +88,7 @@
       "adapter": "evidence",
       "index": 13,
       "operation": "evidence.record",
-      "outcome": "retained:866d146f353f",
+      "outcome": "retained:d1a4c29ae67f",
       "subject": "scientific-freeze"
     },
     {
@@ -168,7 +168,7 @@
     "state": "complete"
   },
   "command_package_sha256": "377e45728dc53221e42e7910d0f13f14ed219dd947371c48d9730f1f3140507b",
-  "composition_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
+  "composition_sha256": "aab72f665ca651ff8092d8024bd857f1ff22caea4851a3297c5be975f2c693e8",
   "condition_identities_consumed": [
     "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009"
   ],
@@ -177,19 +177,19 @@
   ],
   "earliest_stopping_phase": "condition-execution",
   "effect_authority": "shadow-only",
-  "effect_authorization_context_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
+  "effect_authorization_context_sha256": "4fda43168eb9b9bd77675341882e35a09b93dccf344e91c12095a9a889d70901",
   "evidence_retained": {
     "classification": "shadow-control-plane-output",
     "essential_failures": [
       {
         "essential_file_count": 7,
         "essential_total_bytes": 5917,
-        "evidence_binding_sha256": "32eb4180048e53e21164ad446f2512e5e3bcf7366571776fd8f9fee548fe6013",
-        "export_receipt_sha256": "3fe0fe4a2b9eb4bd759b92b23bfa12b28707919b99c29a1ec3d8005639b799dd",
+        "evidence_binding_sha256": "fc8782551f8b401c29b383ecca21c04fb01090c250a61cf21fad259cf6f0cfd1",
+        "export_receipt_sha256": "860ce21187b24aa1334f346c77d805c93b7f112bb4038ca08dddb8f2604738ef",
         "failure_class": "known-provider-error",
         "infrastructure_invalid": true,
-        "manifest_sha256": "92bd884e7d96852e11540e6355f585315b7366ee24c16f328d383dd86d9023bc",
-        "receipt_sha256": "3d9bc82fa446873282e1b9e81c8d5a6346d9e007b12ff97fc4e35f48af035bcc",
+        "manifest_sha256": "0bda0861918ac6bfdaf52a5e6f770bc48ef7fa6ebebdd4a8b8d698875a7c7643",
+        "receipt_sha256": "dcdb37b3a5e1f1fdc8731219b6751168b0ce1affecac391635f0c5d9ed432461",
         "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
         "stopping_phase": "condition-execution",
         "unscored": true
@@ -206,7 +206,7 @@
     {
       "kind": "essential-infrastructure-failure",
       "run_id": "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009",
-      "sha256": "32eb4180048e53e21164ad446f2512e5e3bcf7366571776fd8f9fee548fe6013",
+      "sha256": "fc8782551f8b401c29b383ecca21c04fb01090c250a61cf21fad259cf6f0cfd1",
       "shadow_only": true
     }
   ],
@@ -457,7 +457,7 @@
       "terminal_state": "shadow-only"
     },
     "authority_source": "validated-deterministic-production-effects",
-    "authorization_context_semantic_sha256": "f473f341b2f156b0e6fc1e8423b99309949c0818e721b1f3e1dfb3573f3e40d8",
+    "authorization_context_semantic_sha256": "4fda43168eb9b9bd77675341882e35a09b93dccf344e91c12095a9a889d70901",
     "cleanup_handoff_sha256": "e5dd668066b83ef6e565748ad99ff440ececacd45cf25705ae6ca38b4629a251",
     "cleanup_receipt_sha256": "4a19c3269e424d63a5687108edc54937faef9684eb797808ff41ecf88c3fd45a",
     "cleanup_resume_byte_identical": true,
@@ -474,14 +474,14 @@
     "essential_failures": {
       "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": {
         "completed": false,
-        "export_receipt_sha256": "3fe0fe4a2b9eb4bd759b92b23bfa12b28707919b99c29a1ec3d8005639b799dd",
+        "export_receipt_sha256": "860ce21187b24aa1334f346c77d805c93b7f112bb4038ca08dddb8f2604738ef",
         "export_resumed": false,
         "failure_class": "known-provider-error",
         "file_count": 7,
-        "held_artifact_binding_sha256": "07d7faeb1117ad86e8f1af659f73b2129242e688a9e0054ee96495194b4f1ccb",
-        "manifest_sha256": "92bd884e7d96852e11540e6355f585315b7366ee24c16f328d383dd86d9023bc",
+        "held_artifact_binding_sha256": "01196a1453a4db5df709052df5ec4812935f76904d008318f0e01bc6efee5038",
+        "manifest_sha256": "0bda0861918ac6bfdaf52a5e6f770bc48ef7fa6ebebdd4a8b8d698875a7c7643",
         "process_exit_code": null,
-        "receipt_sha256": "3d9bc82fa446873282e1b9e81c8d5a6346d9e007b12ff97fc4e35f48af035bcc",
+        "receipt_sha256": "dcdb37b3a5e1f1fdc8731219b6751168b0ce1affecac391635f0c5d9ed432461",
         "retry_count": 0,
         "total_bytes": 5917,
         "unknown_call_ids": [],
@@ -493,7 +493,7 @@
     "held_evidence": {
       "condition_bridge": {},
       "essential_failure": {
-        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "07d7faeb1117ad86e8f1af659f73b2129242e688a9e0054ee96495194b4f1ccb"
+        "RUN-T09-TASK-A-REACTIVE-AUTONOMOUS-0009": "01196a1453a4db5df709052df5ec4812935f76904d008318f0e01bc6efee5038"
       },
       "finalized": {},
       "raw": {},
@@ -510,16 +510,16 @@
       "runtime_identity_values_retained": false
     },
     "host_receipts": {
-      "frozen_manifest": "67a3b01744c1e3fe01e7ff94966a942bd3e69684a769056bd1e59b03885bfab3",
-      "postfreeze_validation": "4ac8ffe5ce439196a3183ddc65a75471189f9542e79a83e1280ea780b0e3e997",
-      "qualification": "127494a10aae12196c82bdf683a8773794f6967f4a67fe312f632a83e19e2eee"
+      "frozen_manifest": "b1965bee5213077457e34d48d21edde80f1bbf595309190251eefff8794cfff8",
+      "postfreeze_validation": "86e8eaf69685a1030ff98ad5f9dee93575008f8bd8c2629f405a588de3b644d9",
+      "qualification": "3fbeb6be125344174bde74495a52a4798c86b7f412f9e972a0b88787ca711c6b"
     },
     "host_transfers": {
       "1": {
         "archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8",
-        "host_acknowledgement_sha256": "3c69eddce04a5d0a04d975496a7e1e7cb6e1b238fa5802bf5df2dfc4cb0f5532",
+        "host_acknowledgement_sha256": "27b86e96cc45a4a1a6796296685584e535efd622680316663a8358da26c0e564",
         "member_manifest_sha256": "8fe2559a455ab4e87ebbd68b89b951fd878c2c82ac9da6acf7e8597ddba07fc6",
-        "receipt_sha256": "bc809ef634a1d414ddf1e7349eb0d317d2399bd8ad846d5a83e9547ade33efd8"
+        "receipt_sha256": "e3745434c0bf33d1b1f5e2c8bdba9853d6b62ac2dc720d94e3577ee4c7377687"
       }
     },
     "implementation_flavor": "production-wrapper",
@@ -534,7 +534,7 @@
       "execution_contract_sha256": "a2bb10017263b1d3aab09f22a35854d3d78362fec500fbcd49a3d5053336d72e",
       "package_source": "working-tree",
       "plan_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
-      "source_manifest_sha256": "b100bf13dc91157e14513af28ca3015cc428b66df7ce92c30b778ccafbb32c4d",
+      "source_manifest_sha256": "6c33dfa9e7f4260e036ef8b1545ec13b18d4070a713580584570e1f8b8f541b8",
       "tracked_only": true,
       "uploaded": false,
       "verification_archive_sha256": "3ba57ca8d257a46fc27e49abfac7ef3f30c5c7985654d6e107da1f814ffc07f8"
@@ -790,8 +790,8 @@
   },
   "projected_cost_usd": "0.00",
   "provider_contract_version": "V16",
-  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
-  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
+  "repository_commit": "d7af19004072a8154523e0c28f0c873865af8da2",
+  "repository_tree": "340e077f1ea30be134d92eb41481fc8170906321",
   "scenario": "known-provider-exception",
   "scenario_valid": true,
   "schema_version": "1.0.0",
@@ -802,7 +802,7 @@
     ]
   },
   "scientific_interpretation_allowed": false,
-  "semantic_sha256": "62bcccefbb4209c62e497a4f1fad2c411d019f75e42ca1b56d53777cf3c542b5",
+  "semantic_sha256": "7b9ebdd947bbea77fe894318a5a8a03d1f2c020dc7a50b10ee65e20b4afdafa5",
   "shadow_only": true,
   "stop_reason": "consumed condition stopped with reconstructable essential evidence",
   "terminal_state": "category3-shadow-stopped-cleanup-verified",

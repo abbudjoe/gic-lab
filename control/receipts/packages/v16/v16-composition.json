@@ -24,13 +24,13 @@
   "provider_profile_sha256": "80962bb30ed6aa879e4c1e8c7d7e25a119375c28e0897cd02e3ff1c0aa15b41a",
   "ready_for_authenticated_preflight": false,
   "ready_for_shadow": true,
-  "registry_receipt_sha256": "8922607f714d865919bfd96c61399b6f9a36714ad466571aefbce1c88bd92d62",
+  "registry_receipt_sha256": "b84b69532f8b7eecf3448e821db30f04a0c508a3a5eabe4954724673e945c527",
   "replacement_policy": "bounded-preflight",
-  "repository_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
-  "repository_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb",
+  "repository_commit": "d7af19004072a8154523e0c28f0c873865af8da2",
+  "repository_tree": "340e077f1ea30be134d92eb41481fc8170906321",
   "schema_version": "1.0.0",
-  "semantic_sha256": "0b6b400f42973ecf0ee64765bff48fad837132b7bdfe4063440dd41169e0d821",
+  "semantic_sha256": "aab72f665ca651ff8092d8024bd857f1ff22caea4851a3297c5be975f2c693e8",
   "static_composition_valid": true,
   "target_schema_sha256": "0337c5fdc1d1c87b3700575dd1261fdb91c1d847ccd7f53f69a59e4333eb32b1",
-  "version_lint_receipt_sha256": "6197fb96a089c5b7d2894f3a459895baddcdaa5a9d1b460d094c7e82a49708bd"
+  "version_lint_receipt_sha256": "dd3587869af5239bedf8be3c7b18c922754337e9723323dbb62ae86c7b9d1ccd"
 }
