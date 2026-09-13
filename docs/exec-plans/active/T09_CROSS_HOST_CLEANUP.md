@@ -37,8 +37,8 @@ unrun validation remains explicitly pending.
 | CH-E | Complete before/after; new/changed unadmitted member, omitted publication/member, duplicate/count/total/retirement/removal/delta errors, incomplete/entry/depth/frame caps; independent remote proof and separate export equality | remote census reconciliation; test_remote_cleanup.py | met |
 | CH-F | Joined success, denial, partial/disconnect, unadmitted growth, bounded resume, wrong binding/root, terminal ACK loss, exact zero/security/descriptors; preserve 53 rows and 37 joined parameters | production cleanup and retained offline effects; test_cross_host_cleanup_joined.py | partial |
 | CH-G | V3–V16 source-context validation; V16 disposition, no V17, local protocol compatibility, normal receipts, explicit dispatch | historical/control validation nodes | partial |
-| CH-08 | Non-circular frozen implementation/test ancestor and required receipt descendants | source identity and normal receipt generation | not-started |
-| CH-09 | Exact base/head pinned isolated local gate; five symmetric deselections, no regressions or weakened transitions; static/control/schema/receipt/privacy/site | make ci-check; full JUnit/per-node/parity | not-started |
+| CH-08 | Non-circular frozen implementation/test ancestor and required receipt descendants | source identity and normal receipt generation | partial |
+| CH-09 | Exact base/head pinned isolated local gate; five symmetric deselections, no regressions or weakened transitions; static/control/schema/receipt/privacy/site | make ci-check; full JUnit/per-node/parity | partial |
 | CH-10 | Verified export and exact-owned closeout; one draft PR and private read-back handoff | pinned publication/access/manifest checks | not-started |
 
 ## Evidence and decisions
@@ -88,6 +88,49 @@ unrun validation remains explicitly pending.
   Pre-freeze static validation therefore covers lint/types/site; receipt/control
   validation remains mandatory in the unchanged complete final gate.
 - Final-gate and scientific results are not claimed in this source-freeze record.
+
+## Exact-gate regression and renewed freeze
+
+Assembly status for CH-09: **scout-pending**; root-cause repair and review complete.
+The first frozen ancestor `d7af19004072a8154523e0c28f0c873865af8da2` and normal
+receipt descendant `71eeb39d136e31312c56573ac8a2d043a23dfe7f` remain immutable.
+An initial gate stopped on an unreproduced historical 90-second watchdog timeout;
+its unchanged three-case reproduction passed. Complete run
+`gic-pr15-ci-48dbd3524cc50952` then recorded all 115 new nodes passing, raw base
+2932 passed / 28 failed / 2 skipped and raw head 3048 passed / 27 failed / 2 skipped.
+It correctly failed parity for one newly failing historical offline-guard node:
+the base and head inherited the same `TMPDIR`, so the base's deliberately
+unregistered directory collided with the head before its guard assertion.
+All original outcomes and verified exports are retained; no exclusion changed.
+
+The parity launcher now allocates and validates a private temporary namespace for
+each sequential side, separate from pytest basetemp. The trusted parent narrows
+`TMPDIR`/`TMP`/`TEMP` and the tempfile cache before the unchanged guard propagates
+parent storage to descendants. Original parent state is restored on every exit;
+side allocations remain owned by enclosing evidence/runtime cleanup. Private
+execution records bind each namespace's path, device/inode, owner and mode.
+No image, guard permission, historical assertion, test selection or timeout changes.
+The regression runs the unchanged historical guard test twice and checks inherited
+storage, distinct identities, unsafe allocation rejection and restoration on errors.
+Mapped source: `src/giclab/ci_pytest_parity.py`; tests:
+`tests/test_ci_pytest_parity.py::test_sequential_parity_runs_own_temporary_storage_and_preserve_guard`,
+`test_parity_rejects_unsafe_temporary_namespace_before_child`, and
+`test_parity_restores_parent_storage_on_error_or_root_substitution`.
+Run `gic-pr15-ci-e12493ee017b9251` passed 83 CI ownership/guard tests. Review
+then identified initially-unset tempfile-cache restoration and failure-path evidence
+gaps; both were fixed and rereviewed without outstanding findings. Run
+`gic-pr15-ci-2f8db6d6027d70f2` passed all 426 expanded focused nodes in 58.561
+seconds, with zero failures, errors or skips. Additional regressions are
+`test_parity_restores_initially_unset_tempfile_cache` and
+`test_parity_retains_execution_evidence_on_launch_or_namespace_failure`.
+Pinned static run `gic-pr15-ci-8d37004d9094f469` passed type/site checks and
+rejected only new regression-fixture style errors. The literal concatenation and
+context-manager layout were corrected and rereviewed with no semantic concerns;
+exact-byte focused/static reruns are required before renewed freeze.
+A new normal implementation ancestor, normal receipt regeneration and the complete
+exact-base/head gate remain required. The original 115 new nodes, all 53 accepted
+rows and all 37 historical joined parameters passed in the retained red full run;
+that does not turn its failed parity result into a pass.
 
 ## Topology and next permitted phase
 
