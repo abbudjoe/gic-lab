@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import ast
+import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -362,6 +365,170 @@ def test_guarded_parity_explicitly_loads_the_child_denial_consumer(tmp_path, mon
     assert command[command.index("-p") + 1] == "offline_guard"
     monkeypatch.delenv("GICLAB_CI_GUARD_JOURNAL")
     assert "-p" not in build_pytest_command(tmp_path / "report.xml", tmp_path / "pytest")
+
+
+def test_sequential_parity_runs_own_temporary_storage_and_preserve_guard(tmp_path):
+    # Run the unchanged historical regression on both sides: its deliberately
+    # unregistered directory must remain evidence, never collide with the peer.
+    source = (Path(__file__).parent / "control/test_offline_effect_guard.py").read_text()
+    name = "test_legacy_conformance_git_requires_recorded_private_temp_allocation"
+    node = next(
+        n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == name
+    )
+    historical = ast.get_source_segment(source, node)
+    assert historical is not None
+    fixture = (
+        "import os, subprocess, pytest\n"
+        + historical
+        + """
+
+def test_descendant_inherits_parent_owned_temporary_storage():
+    import json, stat, sys, tempfile
+    from pathlib import Path
+    root = Path(os.environ["TMPDIR"])
+    assert tempfile.gettempdir() == str(root)
+    assert os.environ["TMP"] == os.environ["TEMP"] == str(root)
+    assert stat.S_IMODE(root.stat().st_mode) == 0o700
+    result = subprocess.run(
+        [sys.executable, "-c", "import os,json,tempfile; "
+         "print(json.dumps([os.environ[x] for x in ('TMPDIR','TMP','TEMP')]"
+         "+[tempfile.gettempdir()]))"],
+        env={"PATH": os.defpath, "TMPDIR": "/tmp", "TMP": "/tmp", "TEMP": "/tmp"},
+        capture_output=True, text=True, check=True, timeout=5,
+    )
+    assert json.loads(result.stdout) == [str(root)] * 4
+"""
+    )
+    previous = {k: os.environ.get(k) for k in ("TMPDIR", "TMP", "TEMP")}
+    previous_cache = tempfile.tempdir
+    records = []
+    for side in ("base", "head"):
+        repository = tmp_path / side
+        repository.mkdir()
+        (repository / "test_temporary.py").write_text(fixture)
+        report = tmp_path / f"{side}.xml"
+        outcome = ci_pytest_parity._run_pytest(repository, report, tmp_path / f"{side}-pytest")
+        assert outcome.total == outcome.passed == 2
+        assert {k: os.environ.get(k) for k in previous} == previous
+        assert tempfile.tempdir == previous_cache
+        record = json.loads(report.with_suffix(".execution.json").read_text())[
+            "temporary_namespace"
+        ]
+        root = Path(record["path"])
+        assert root.is_dir() and root.parent == Path(tempfile.gettempdir()).resolve()
+        assert list(root.glob("giclab-t09-live-conformance-*/repository"))
+        assert (record["device"], record["inode"]) == (root.stat().st_dev, root.stat().st_ino)
+        assert record["disposition"] == "retained"
+        records.append(record)
+    assert records[0]["path"] != records[1]["path"]
+    assert (records[0]["device"], records[0]["inode"]) != (
+        records[1]["device"],
+        records[1]["inode"],
+    )
+
+
+@pytest.mark.parametrize("fault", ["escaped", "symlink", "unsafe-mode", "non-directory"])
+def test_parity_rejects_unsafe_temporary_namespace_before_child(tmp_path, monkeypatch, fault):
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(parent))
+    root = parent / "allocation"
+    if fault == "escaped":
+        root = tmp_path / "outside"
+        root.mkdir(mode=0o700)
+    elif fault == "symlink":
+        target = parent / "target"
+        target.mkdir(mode=0o700)
+        root.symlink_to(target, target_is_directory=True)
+    elif fault == "non-directory":
+        root.write_text("not a directory")
+    else:
+        root.mkdir(mode=0o755)
+        root.chmod(0o755)
+    monkeypatch.setattr(tempfile, "mkdtemp", lambda **kwargs: str(root))
+    previous = {k: os.environ.get(k) for k in ("TMPDIR", "TMP", "TEMP")}
+    with (
+        pytest.raises(PytestParityError, match="temporary namespace"),
+        ci_pytest_parity._pytest_temporary_namespace(),
+    ):
+        pytest.fail("unsafe allocation reached child admission")
+    assert {k: os.environ.get(k) for k in previous} == previous
+    assert tempfile.tempdir == str(parent)
+
+
+@pytest.mark.parametrize("replace_root", [False, True])
+def test_parity_restores_parent_storage_on_error_or_root_substitution(
+    tmp_path, monkeypatch, replace_root
+):
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    previous = {k: os.environ.get(k) for k in ("TMPDIR", "TMP", "TEMP")}
+    with (
+        pytest.raises(PytestParityError if replace_root else RuntimeError),
+        ci_pytest_parity._pytest_temporary_namespace() as record,
+    ):
+        root = Path(record["path"])
+        if replace_root:
+            root.rename(root.with_name(root.name + "-retained"))
+            root.mkdir(mode=0o700)
+        else:
+            raise RuntimeError("child launch failure")
+    assert {k: os.environ.get(k) for k in previous} == previous
+    assert tempfile.tempdir == str(tmp_path)
+
+
+@pytest.mark.parametrize("invalid_allocation", [False, True])
+def test_parity_restores_initially_unset_tempfile_cache(tmp_path, monkeypatch, invalid_allocation):
+    monkeypatch.setenv("TMPDIR", str(tmp_path))
+    monkeypatch.setattr(tempfile, "tempdir", None)
+    if invalid_allocation:
+        root = tmp_path / "unsafe"
+        root.mkdir(mode=0o755)
+        root.chmod(0o755)
+        monkeypatch.setattr(tempfile, "mkdtemp", lambda **kwargs: str(root))
+        with (
+            pytest.raises(PytestParityError, match="privately owned"),
+            ci_pytest_parity._pytest_temporary_namespace(),
+        ):
+            pytest.fail("invalid allocation reached launch")
+    else:
+        with ci_pytest_parity._pytest_temporary_namespace():
+            assert tempfile.tempdir is not None
+    assert tempfile.tempdir is None
+    assert os.environ["TMPDIR"] == str(tmp_path)
+
+
+@pytest.mark.parametrize("substitute_root", [False, True])
+def test_parity_retains_execution_evidence_on_launch_or_namespace_failure(
+    tmp_path, monkeypatch, substitute_root
+):
+    previous = {k: os.environ.get(k) for k in ("TMPDIR", "TMP", "TEMP")}
+    previous_cache = tempfile.tempdir
+    report = tmp_path / "head.xml"
+
+    def failed_child(command, **kwargs):
+        staged = json.loads(report.with_suffix(".execution.json").read_text())
+        assert staged["execution_state"] == "launching"
+        assert staged["temporary_namespace"]["validation"] == "initial-verified"
+        assert staged["exit_code"] is None
+        if not substitute_root:
+            raise RuntimeError("injected child launch failure")
+        root = Path(kwargs["env"]["TMPDIR"])
+        root.rename(root.with_name(root.name + "-retained"))
+        root.mkdir(mode=0o700)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(ci_pytest_parity.subprocess, "run", failed_child)
+    with pytest.raises(PytestParityError if substitute_root else RuntimeError):
+        ci_pytest_parity._run_pytest(tmp_path, report, tmp_path / "pytest")
+    recorded = json.loads(report.with_suffix(".execution.json").read_text())
+    assert recorded["execution_state"] == "failed"
+    assert recorded["exit_code"] == (0 if substitute_root else None)
+    assert recorded["temporary_namespace"]["validation"] == (
+        "terminal-rejected" if substitute_root else "terminal-verified"
+    )
+    assert Path(recorded["temporary_namespace"]["path"]).is_dir()
+    assert {k: os.environ.get(k) for k in previous} == previous
+    assert tempfile.tempdir == previous_cache
 
 
 def test_simulated_deselection_of_previously_passing_base_node_fails_parity() -> None:

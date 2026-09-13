@@ -1,0 +1,801 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gic-lab.example/schemas/t09-remote-cleanup-protocol.schema.json",
+  "title": "T09 explicit cross-host cleanup protocol v1",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/frame"
+    },
+    {
+      "$ref": "#/$defs/response"
+    }
+  ],
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_contract_version",
+        "plan_id",
+        "host_run_id",
+        "source_commit",
+        "source_tree",
+        "candidate_sha256",
+        "provider_identity",
+        "launch_ordinal",
+        "transfer_sha256",
+        "entry_sha256",
+        "root",
+        "root_semantic_sha256",
+        "handoff_sha256",
+        "attempt",
+        "deadline",
+        "remaining_at_issue",
+        "nonce",
+        "helper_sha256",
+        "phase",
+        "protocol"
+      ],
+      "properties": {
+        "provider_contract_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "plan_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host_run_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "source_tree": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "candidate_sha256": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "provider_identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "transfer_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "entry_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "root": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "value"
+          ],
+          "properties": {
+            "value": {
+              "type": "string",
+              "minLength": 2,
+              "pattern": "^/(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000).+(?<!/)$"
+            }
+          }
+        },
+        "root_semantic_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "handoff_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deadline": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "remaining_at_issue": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "nonce": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{1,64}$"
+        },
+        "helper_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "phase": {
+          "const": "host-cleanup"
+        },
+        "protocol": {
+          "const": "cross-host-cleanup/1.0.0"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "inode",
+        "uid",
+        "mode",
+        "links",
+        "size",
+        "mtime_ns",
+        "ctime_ns"
+      ],
+      "properties": {
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "uid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mode": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "links": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mtime_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ctime_ns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "frame": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "hello"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "root"
+              ],
+              "properties": {
+                "root": {
+                  "$ref": "#/$defs/metadata"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "snapshot-start"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "root"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "before",
+                    "after"
+                  ]
+                },
+                "root": {
+                  "$ref": "#/$defs/metadata"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "snapshot-member"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "path",
+                "metadata"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "before",
+                    "after"
+                  ]
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000).*(?<!/)$"
+                },
+                "metadata": {
+                  "$ref": "#/$defs/metadata"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "snapshot-end"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "count",
+                "bytes",
+                "digest",
+                "complete"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "before",
+                    "after"
+                  ]
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 4096
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "digest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "complete": {
+                  "const": true
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "grant"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "role",
+                "operation",
+                "bytes",
+                "initial"
+              ],
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000).*(?<!/)$"
+                },
+                "role": {
+                  "enum": [
+                    "provider-record",
+                    "provider-journal",
+                    "retained-copy",
+                    "cleanup-journal",
+                    "cleanup-receipt",
+                    "host-control",
+                    "phase-control"
+                  ]
+                },
+                "operation": {
+                  "enum": [
+                    "create",
+                    "append",
+                    "replace",
+                    "remove"
+                  ]
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "initial": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/$defs/metadata"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "opened"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "lease",
+                "metadata"
+              ],
+              "properties": {
+                "lease": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16384
+                },
+                "metadata": {
+                  "$ref": "#/$defs/metadata"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "temporary"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "lease",
+                "path",
+                "metadata"
+              ],
+              "properties": {
+                "lease": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16384
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)(?!.*\\u0000).*(?<!/)$"
+                },
+                "metadata": {
+                  "$ref": "#/$defs/metadata"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "observe"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "lease",
+                "bytes"
+              ],
+              "properties": {
+                "lease": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16384
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "verify"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "lease",
+                "final",
+                "retired",
+                "retired_identity",
+                "time"
+              ],
+              "properties": {
+                "lease": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16384
+                },
+                "final": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/$defs/metadata"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "retired": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "retired_identity": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/$defs/metadata"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "time": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "close"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {}
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "binding",
+            "sequence",
+            "operation",
+            "payload"
+          ],
+          "properties": {
+            "binding": {
+              "$ref": "#/$defs/binding"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16384
+            },
+            "operation": {
+              "const": "acknowledged"
+            },
+            "payload": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reconciliation"
+              ],
+              "properties": {
+                "reconciliation": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding",
+        "sequence",
+        "accepted",
+        "result",
+        "remaining_seconds"
+      ],
+      "properties": {
+        "binding": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "result": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [],
+              "properties": {}
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "lease",
+                "bytes",
+                "deadline"
+              ],
+              "properties": {
+                "lease": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 16384
+                },
+                "bytes": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "deadline": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reconciliation"
+              ],
+              "properties": {
+                "reconciliation": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "reason"
+              ],
+              "properties": {
+                "reason": {
+                  "const": "aborted-unresolved"
+                }
+              }
+            }
+          ]
+        },
+        "remaining_seconds": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

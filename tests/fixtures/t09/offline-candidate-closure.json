@@ -746,6 +746,10 @@
       "role": "retained-resource"
     },
     {
+      "path": "schemas/t09-remote-cleanup-protocol.schema.json",
+      "role": "active-validation-input"
+    },
+    {
       "path": "schemas/t09-remote-execution-bridge-conformance.schema.json",
       "role": "retained-resource"
     },
@@ -1135,6 +1139,10 @@
     },
     {
       "path": "src/giclab/harness/regulation.py",
+      "role": "import-dependency"
+    },
+    {
+      "path": "src/giclab/harness/remote_cleanup.py",
       "role": "import-dependency"
     },
     {
