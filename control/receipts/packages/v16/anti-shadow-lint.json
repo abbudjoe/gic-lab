@@ -222,10 +222,10 @@
     "selected_receipt_root": "control/receipts/packages/v16",
     "selected_root_matches_version": true
   },
-  "repository_commit": "d7af19004072a8154523e0c28f0c873865af8da2",
-  "repository_tree": "340e077f1ea30be134d92eb41481fc8170906321",
+  "repository_commit": "27444ea18bb9218f82a3f61c201b394136538019",
+  "repository_tree": "38f8de6128fd383f2fe8c1254389e43e6d3f5b88",
   "schema_version": "4.0.0",
-  "semantic_sha256": "190c7c067af7d4e930c221e0e33eb00228fab5e549c059a0c329547354eabcbe",
+  "semantic_sha256": "a9bbc62e374036b5de9d71c4f33b2a23374cddce96581f658b058a4666af47af",
   "shared_effect_neutral_sources": [
     "src/giclab/control/adapters.py",
     "src/giclab/control/category3.py",

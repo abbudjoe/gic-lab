@@ -2440,8 +2440,8 @@
   ],
   "errors": [],
   "registry_source_sha256": "024dbcfa3c343539fafb474fe48ffcf0fd6b5012746919fd35df4f89fb71210c",
-  "repository_commit": "d7af19004072a8154523e0c28f0c873865af8da2",
-  "repository_tree": "340e077f1ea30be134d92eb41481fc8170906321",
+  "repository_commit": "27444ea18bb9218f82a3f61c201b394136538019",
+  "repository_tree": "38f8de6128fd383f2fe8c1254389e43e6d3f5b88",
   "schema_version": "1.0.0",
-  "semantic_sha256": "b84b69532f8b7eecf3448e821db30f04a0c508a3a5eabe4954724673e945c527"
+  "semantic_sha256": "a448764c9b432598ee54162553308b9ddfda59666d1d4c182652f65f04541e29"
 }
