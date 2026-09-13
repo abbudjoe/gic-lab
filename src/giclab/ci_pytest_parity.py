@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -384,19 +385,93 @@ def build_pytest_environment(repository: Path) -> dict[str, str]:
     return environment
 
 
+def _temporary_identity(root: Path, parent: Path) -> dict[str, int]:
+    """Validate one fresh side-owned namespace without following substitutions."""
+
+    if root.parent != parent or any(path.is_symlink() for path in (root, *root.parents)):
+        raise PytestParityError("pytest temporary namespace escaped its allocated parent")
+    metadata = root.lstat()
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or stat.S_IMODE(metadata.st_mode) != 0o700
+    ):
+        raise PytestParityError("pytest temporary namespace is not privately owned")
+    return {"device": metadata.st_dev, "inode": metadata.st_ino, "uid": metadata.st_uid}
+
+
+@contextmanager
+def _pytest_temporary_namespace(
+    observation: dict[str, object] | None = None,
+) -> Iterator[dict[str, object]]:
+    """Narrow the sequential launcher's storage before the guard inherits it.
+
+    The guard deliberately overrides child-supplied storage with parent storage.
+    Therefore the trusted launcher owns this scope, rather than asking a child to
+    override the guard. Retain each allocation until enclosing evidence/runtime
+    cleanup; neither another comparison side nor pytest's basetemp owns it.
+    """
+
+    variables = ("TMPDIR", "TMP", "TEMP")
+    previous = {name: os.environ.get(name) for name in variables}
+    previous_cache = tempfile.tempdir
+    namespace = observation if observation is not None else {}
+    try:
+        parent = Path(tempfile.gettempdir()).resolve(strict=True)
+        root = Path(tempfile.mkdtemp(prefix="giclab-parity-pytest-", dir=parent))
+        namespace.update(path=str(root), disposition="retained", validation="unvalidated")
+        identity = _temporary_identity(root, parent)
+        namespace.update(identity, mode="0700", validation="initial-verified")
+        os.environ.update(dict.fromkeys(variables, str(root)))
+        tempfile.tempdir = str(root)
+        try:
+            yield namespace
+        finally:
+            namespace["validation"] = "terminal-rejected"
+            if _temporary_identity(root, parent) != identity:
+                raise PytestParityError("pytest temporary namespace identity changed")
+            namespace["validation"] = "terminal-verified"
+    finally:
+        for name, value in previous.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+        tempfile.tempdir = previous_cache
+
+
 def _run_pytest(repository: Path, report: Path, basetemp: Path) -> PytestOutcome:
     command = build_pytest_command(report, basetemp)
-    completed = subprocess.run(
-        command,
-        cwd=repository,
-        env=build_pytest_environment(repository),
-        stdin=subprocess.DEVNULL,
-        check=False,
-    )
-    report.with_suffix(".execution.json").write_text(
-        json.dumps({"command": command, "exit_code": completed.returncode}, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    temporary_namespace: dict[str, object] = {}
+    execution: dict[str, object] = {
+        "command": command,
+        "exit_code": None,
+        "temporary_namespace": temporary_namespace,
+        "execution_state": "not-launched",
+    }
+
+    def record_execution() -> None:
+        report.with_suffix(".execution.json").write_text(
+            json.dumps(execution, sort_keys=True) + "\n", encoding="utf-8"
+        )
+
+    try:
+        with _pytest_temporary_namespace(temporary_namespace):
+            execution["execution_state"] = "launching"
+            record_execution()
+            completed = subprocess.run(
+                command,
+                cwd=repository,
+                env=build_pytest_environment(repository),
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
+            execution.update(exit_code=completed.returncode, execution_state="child-returned")
+    except BaseException as error:
+        execution.update(execution_state="failed", error_type=type(error).__name__)
+        raise
+    finally:
+        record_execution()
     if completed.returncode not in {0, 1} or not report.is_file():
         raise PytestParityError(
             f"pytest did not produce a comparable report (exit {completed.returncode})"

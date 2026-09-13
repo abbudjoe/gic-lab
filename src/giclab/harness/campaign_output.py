@@ -394,6 +394,12 @@ def replace_campaign_write(
     os.replace(temporary, path)
 
 
+class CleanupChannelBinding(Protocol):
+    def validate(self) -> None: ...
+
+    def document(self) -> dict[str, object]: ...
+
+
 class CleanupOutputChannel:
     """Cleanup-specific messages over the existing nonblocking bridge I/O primitives.
 
@@ -407,7 +413,7 @@ class CleanupOutputChannel:
     def __init__(
         self,
         fd: int,
-        binding: CleanupOutputBinding,
+        binding: CleanupChannelBinding,
         deadline: float,
         *,
         write_fd: int | None = None,
@@ -564,13 +570,17 @@ class CleanupOutputChannel:
             self.closed = True
 
 
-def cleanup_output_inventory(root: Path) -> dict[str, tuple[int, ...]]:
+def cleanup_output_inventory(
+    root: Path, *, check_deadline: Callable[[], None] | None = None
+) -> dict[str, tuple[int, ...]]:
     """Bounded metadata-only census of the exact owned cleanup transaction.
 
     Read no file payloads. In particular this is not a credential scan. Existing
     immutable inputs remain in the comparison; they are not silently dropped to
     make the writer sum agree. Never descend through links or another filesystem.
     """
+    if check_deadline is not None:
+        check_deadline()
     result: dict[str, tuple[int, ...]] = {}
     descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     device = os.fstat(descriptor).st_dev
@@ -582,6 +592,8 @@ def cleanup_output_inventory(root: Path) -> dict[str, tuple[int, ...]]:
             raise RuntimeError("cleanup output census depth limit")
         with os.scandir(fd) as entries:
             for entry in entries:
+                if check_deadline is not None:
+                    check_deadline()
                 entries_seen += 1
                 if entries_seen > 4096:
                     raise RuntimeError("cleanup output census entry limit")
@@ -615,6 +627,8 @@ def cleanup_output_inventory(root: Path) -> dict[str, tuple[int, ...]]:
         visit(descriptor, "", 0)
     finally:
         os.close(descriptor)
+    if check_deadline is not None:
+        check_deadline()
     return result
 
 

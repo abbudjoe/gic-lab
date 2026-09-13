@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import secrets
 import stat
 import subprocess
 import tarfile
@@ -20,7 +21,7 @@ import threading
 from collections import Counter
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
-from dataclasses import asdict, replace
+from dataclasses import asdict, fields, replace
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path, PurePosixPath
@@ -79,6 +80,8 @@ from giclab.control.effects import (
     ConditionProcessOutcome,
     ConditionResponseAccountingIncomplete,
     ConditionSend,
+    CrossHostCleanupExecutionReceipt,
+    CrossHostCleanupExecutionRequest,
     EffectAuthorityGrant,
     EffectAuthorityKind,
     EffectAuthorizationContext,
@@ -139,8 +142,23 @@ from giclab.harness.campaign_output import (
     CampaignWriterRole,
     CleanupOutputAuthority,
     CleanupOutputBinding,
+    _campaign_file_identity,
     campaign_cleanup_active,
     campaign_output_scope,
+    cleanup_output_inventory,
+    reconcile_cleanup_output,
+    verify_campaign_write,
+)
+from giclab.harness.remote_cleanup import (
+    PROTOCOL as REMOTE_CLEANUP_PROTOCOL,
+)
+from giclab.harness.remote_cleanup import (
+    Disposition as RemoteCleanupDisposition,
+)
+from giclab.harness.remote_cleanup import (
+    RemoteCleanupAuthority,
+    RemoteCleanupBinding,
+    RemoteRoot,
 )
 from giclab.harness.sira_gate_a import (
     ImmutableModelRouting,
@@ -822,9 +840,15 @@ class ProductionCategory3World:
         held_transaction_root: HeldTransactionRoot,
         held_effect_source: HeldEffectSource | None,
         source_inputs: CandidateSourceSnapshot | None = None,
+        offline_provider_namespaces: Mapping[int, RemoteRoot] | None = None,
     ) -> None:
         self.repository = repository.resolve(strict=True)
         self.source_inputs = source_inputs
+        if offline_provider_namespaces and source_inputs is None:
+            raise ValueError("offline provider namespace requires a bound offline candidate")
+        self._offline_provider_namespaces = dict(offline_provider_namespaces or {})
+        self._remote_cleanup_sessions: dict[int, RemoteCleanupAuthority] = {}
+        self._remote_cleanup_local_results: dict[int, dict[str, object]] = {}
         self.contract = contract
         self.low_level_effects = low_level_effects
         self.authorization_context = authorization_context
@@ -835,6 +859,17 @@ class ProductionCategory3World:
         self.clock = _ValidatedRuntimeClock(low_level_effects.runtime_clock())
         held_transaction_root.revalidate()
         self.root = held_transaction_root.path
+        for ordinal, namespace in self._offline_provider_namespaces.items():
+            if (
+                type(ordinal) is not int
+                or not 1 <= ordinal <= contract.max_launch_count
+                or not isinstance(namespace, RemoteRoot)
+                or PurePosixPath(namespace.value).is_relative_to(self.root.as_posix())
+                or PurePosixPath(self.root.as_posix()).is_relative_to(namespace.value)
+                or self.authorization_context.execution_mode
+                is not EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+            ):
+                raise ValueError("offline provider namespace must be explicit and separate")
         if low_level_effects.transaction_root() != self.root:
             raise ValueError("effect transaction root differs from the shared-held root")
         self._root_identity_mismatch = False
@@ -890,6 +925,7 @@ class ProductionCategory3World:
         self._aggregate_observed_usage = ProviderBudgetUsage()
         self._campaign_output_boundary: ProviderBudgetBoundary | None = None
         self._campaign_cleanup_remaining: int | None = None
+        self._campaign_cleanup_lock = threading.Lock()
         self._campaign_writes: list[CampaignWriteAllowance] = []
         self._campaign_admission_blocked = False
         self._evaluations: dict[str, dict[str, object]] = {}
@@ -901,6 +937,7 @@ class ProductionCategory3World:
         self._cleanup_handoff_bytes: bytes | None = None
         self._cleanup_receipt: CleanupExecutionReceipt | None = None
         self._cleanup_calls = 0
+        self._cleanup_original_deadline: float | None = None
         self._cleanup_started_after_campaign_deadline = False
         self._authority_launch_consumed = False
         self._package_assembly_evidence: dict[str, object] | None = None
@@ -1995,7 +2032,9 @@ class ProductionCategory3World:
                 source_commit=commit,
                 source_tree=tree,
                 remote_root=(
-                    self.contract.remote_root
+                    self._offline_provider_namespaces[handle.launch_ordinal].value
+                    if handle.launch_ordinal in self._offline_provider_namespaces
+                    else self.contract.remote_root
                     if self.source_inputs is None
                     else (self.root / f"offline-remote-{handle.launch_ordinal}").as_posix()
                 ),
@@ -2665,6 +2704,143 @@ class ProductionCategory3World:
         self._aggregate_usage = pilot.usage_from_document(upper["aggregate"])
         self._aggregate_observed_usage = pilot.usage_from_document(lower["aggregate"])
 
+    def _reserve_cleanup_publication(self, size: int) -> None:
+        """One namespace-independent finite grant from the parent cleanup reserve."""
+        if type(size) is not int or size < 0:
+            raise AdapterFailure("cleanup writer has invalid output size")
+        self._campaign_accountant()
+        with self._campaign_cleanup_lock:
+            remaining = self._campaign_cleanup_remaining
+            if remaining is None or size > remaining:
+                self._campaign_admission_blocked = True
+                raise ProviderBudgetExceeded("bounded campaign cleanup output exhausted")
+            self._campaign_cleanup_remaining = remaining - size
+
+    def _remote_cleanup_authority(
+        self, handle: ProviderHandle | None, handoff_sha256: str, deadline: float
+    ) -> RemoteCleanupAuthority | None:
+        """Derive the namespace only from controller-accepted entry/transfer state.
+
+        Historical deterministic local-carrier effects retain their local protocol.
+        External effects and explicitly separate offline namespaces require remote
+        reconciliation; their effects cannot select a fallback after transfer.
+        """
+        if handle is None or handle.launch_ordinal not in self._host_transfers:
+            return None
+        if (
+            self.authorization_context.execution_mode
+            is EffectExecutionMode.DETERMINISTIC_NO_NETWORK
+            and handle.launch_ordinal not in self._offline_provider_namespaces
+        ):
+            return None
+        transfer = self._host_transfers[handle.launch_ordinal]
+        accepted = transfer.binding
+        commit, tree = self._source_identity()
+        expected_root = (
+            self._offline_provider_namespaces[handle.launch_ordinal].value
+            if handle.launch_ordinal in self._offline_provider_namespaces
+            else self.contract.remote_root
+        )
+        if (
+            accepted.provider_handle_identity != handle.opaque_identity
+            or accepted.provider_launch_ordinal != handle.launch_ordinal
+            or accepted.remote_root != expected_root
+            or accepted.plan_id != self.contract.plan_id
+            or accepted.host_run_id != self.contract.host_run_id
+            or accepted.source_commit != commit
+            or accepted.source_tree != tree
+            or accepted.provider_contract_version != self.contract.version
+            or accepted.candidate_source_binding_sha256
+            != (self.source_inputs.digest if self.source_inputs is not None else None)
+            or transfer.receipt_sha256 != self._transfer_receipt_identity(transfer)
+        ):
+            raise AdapterFailure("accepted remote cleanup transfer identity drift")
+        existing = self._remote_cleanup_sessions.get(handle.launch_ordinal)
+        if existing is not None:
+            if existing.disposition == RemoteCleanupDisposition.UNRESOLVED:
+                raise AdapterFailure("remote cleanup session remains unresolved")
+            if (
+                existing.binding.handoff_sha256 != handoff_sha256
+                or existing.binding.transfer_sha256 != transfer.receipt_sha256
+                or existing.binding.deadline != deadline
+            ):
+                raise AdapterFailure("remote cleanup resume binding changed")
+            return existing
+        source_root = self.source_inputs.root if self.source_inputs is not None else self.repository
+        helper_relative = "src/giclab/harness/remote_cleanup.py"
+        if self.source_inputs is not None:
+            helper_sha256 = self.source_inputs.source_sha256(source_root, helper_relative)
+        else:
+            source_blob = subprocess.run(
+                ["git", "-C", str(self.repository), "show", f"{commit}:{helper_relative}"],
+                env={
+                    "PATH": os.defpath,
+                    "GIT_CONFIG_NOSYSTEM": "1",
+                    "GIT_CONFIG_GLOBAL": "/dev/null",
+                },
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=True,
+                timeout=10,
+            ).stdout
+            helper_sha256 = hashlib.sha256(source_blob).hexdigest()
+            if _file_sha256(source_root / helper_relative) != helper_sha256:
+                raise AdapterFailure("remote helper differs from accepted source commit")
+        binding = RemoteCleanupBinding(
+            provider_contract_version=self.contract.version,
+            plan_id=self.contract.plan_id,
+            host_run_id=self.contract.host_run_id,
+            source_commit=commit,
+            source_tree=tree,
+            candidate_sha256=self.source_inputs.digest if self.source_inputs is not None else None,
+            provider_identity=handle.opaque_identity,
+            launch_ordinal=handle.launch_ordinal,
+            transfer_sha256=transfer.receipt_sha256,
+            entry_sha256=accepted.provider_entry_receipt_sha256,
+            root=RemoteRoot(accepted.remote_root),
+            root_semantic_sha256=_identity(accepted.to_document()),
+            handoff_sha256=handoff_sha256,
+            attempt=self._cleanup_calls,
+            deadline=deadline,
+            remaining_at_issue=deadline - self.clock.monotonic(),
+            nonce=secrets.token_hex(32),
+            helper_sha256=helper_sha256,
+        )
+        boundary = self._campaign_accountant()
+        authority = RemoteCleanupAuthority(
+            binding,
+            reserve=self._reserve_cleanup_publication,
+            observe=boundary.observe_campaign_output_bytes,
+            monotonic=self.clock.monotonic,
+        )
+        self._remote_cleanup_sessions[handle.launch_ordinal] = authority
+        return authority
+
+    def remote_cleanup_control_evidence(self) -> dict[str, object]:
+        """Public control projection; runtime topology and inode inventory stay private."""
+        return {
+            str(slot): {
+                "protocol": session.binding.protocol,
+                "disposition": session.disposition.value,
+                "reconciliation_sha256": (
+                    session.require_reconciled()
+                    if session.disposition == RemoteCleanupDisposition.RECONCILED
+                    else None
+                ),
+                "local_reconciliation_sha256": (
+                    _identity(self._remote_cleanup_local_results[slot])
+                    if slot in self._remote_cleanup_local_results
+                    else None
+                ),
+                "granted_bytes": sum(x.granted for x in session.leases.values()),
+                "observed_bytes": sum(x.actual for x in session.leases.values()),
+                "unresolved_leases": sum(not x.verified for x in session.leases.values()),
+                "grant_refunds": 0,
+                "remote_attestation": False,
+            }
+            for slot, session in sorted(self._remote_cleanup_sessions.items())
+        }
+
     @contextmanager
     def _campaign_writer_scope(self, *, cleanup: bool = False) -> Iterator[None]:
         boundary = self._campaign_accountant()
@@ -2711,12 +2887,11 @@ class ProductionCategory3World:
                 ):
                     raise AdapterFailure("campaign writer target is not an exact regular file")
             if cleanup or campaign_cleanup_active():
-                remaining = self._campaign_cleanup_remaining
-                if remaining is None or size > remaining:
+                try:
+                    self._reserve_cleanup_publication(size)
+                except ProviderBudgetExceeded:
                     denied_here = True
-                    self._campaign_admission_blocked = True
-                    raise ProviderBudgetExceeded("bounded campaign cleanup output exhausted")
-                self._campaign_cleanup_remaining = remaining - size
+                    raise
             else:
                 if self._campaign_admission_blocked:
                     raise ProviderBudgetExceeded("campaign output admission is already blocked")
@@ -2748,6 +2923,11 @@ class ProductionCategory3World:
 
     def _condition_accountant(self, run_id: str) -> _AccountingObserver:
         """Establish the one condition accountant before its first control write."""
+        if any(
+            session.disposition == RemoteCleanupDisposition.UNRESOLVED
+            for session in self._remote_cleanup_sessions.values()
+        ):
+            raise ProviderBudgetExceeded("condition entry follows unresolved remote cleanup")
         existing = self._condition_observers.get(run_id)
         if existing is not None:
             if existing._failure_output_remaining is None:
@@ -6030,6 +6210,9 @@ class ProductionCategory3World:
         self._cleanup_calls += 1
         execution = self._execution_contract
         interrupted = False
+        remote_authority: RemoteCleanupAuthority | None = None
+        local_before: dict[str, tuple[int, ...]] | None = None
+        local_first_lease = len(self._campaign_writes)
         try:
             state: dict[str, object]
             if self._root_identity_mismatch:
@@ -6089,6 +6272,9 @@ class ProductionCategory3World:
                     reserve_seconds,
                     label="cleanup",
                 )
+            if self._cleanup_original_deadline is None:
+                self._cleanup_original_deadline = cleanup_deadline
+            cleanup_deadline = self._cleanup_original_deadline
             request = CleanupExecutionRequest(
                 provider_contract_version=self.contract.version,
                 plan_id=self.contract.plan_id,
@@ -6172,9 +6358,86 @@ class ProductionCategory3World:
                     monotonic=self.clock.monotonic,
                 )
                 try:
-                    receipt = self.low_level_effects.cleanup_transaction(
-                        replace(request, output_authority=output_authority)
+                    request = replace(request, output_authority=output_authority)
+                    remote_authority = self._remote_cleanup_authority(
+                        handle, handoff_sha, cleanup_deadline
                     )
+
+                    def check_cleanup_deadline() -> None:
+                        if self.clock.monotonic() >= cleanup_deadline:
+                            raise AdapterFailure(
+                                "controller cleanup reconciliation deadline expired"
+                            )
+
+                    local_before = (
+                        cleanup_output_inventory(self.root, check_deadline=check_cleanup_deadline)
+                        if remote_authority is not None
+                        else None
+                    )
+                    local_first_lease = len(self._campaign_writes)
+                    if remote_authority is not None:
+                        request = CrossHostCleanupExecutionRequest(
+                            **{
+                                field.name: getattr(request, field.name)
+                                for field in fields(request)
+                            },
+                            remote_output_authority=remote_authority,
+                        )
+                    receipt = self.low_level_effects.cleanup_transaction(request)
+                    if remote_authority is not None and (
+                        not isinstance(receipt, CrossHostCleanupExecutionReceipt)
+                        or receipt.cleanup_protocol != REMOTE_CLEANUP_PROTOCOL
+                        or receipt.remote_reconciliation_sha256
+                        != remote_authority.require_reconciled()
+                    ):
+                        raise AdapterFailure("cleanup lacks controller-reconciled remote proof")
+                    if remote_authority is not None and local_before is not None:
+                        local_leases = tuple(self._campaign_writes[local_first_lease:])
+                        terminal: dict[Path, CampaignWriteAllowance] = {}
+                        for lease in local_leases:
+                            check_cleanup_deadline()
+                            previous = terminal.get(lease.path)
+                            if previous is not None:
+                                if (
+                                    previous.final_identity is None
+                                    or lease.initial_identity != previous.final_identity
+                                ):
+                                    raise AdapterFailure("local cleanup publication chain changed")
+                            else:
+                                initial = lease.initial_identity
+                                identity = (
+                                    tuple(asdict(initial).values()) if initial is not None else None
+                                )
+                                if identity != local_before.get(
+                                    str(lease.path.relative_to(self.root))
+                                ):
+                                    raise AdapterFailure(
+                                        "local cleanup publication baseline changed"
+                                    )
+                            terminal[lease.path] = lease
+                        for lease in terminal.values():
+                            check_cleanup_deadline()
+                            if lease.final_identity is None:
+                                verify_campaign_write(lease, lease.path)
+                            elif _campaign_file_identity(lease.path) != lease.final_identity:
+                                raise AdapterFailure(
+                                    "local cleanup publication changed after verification"
+                                )
+                        local_result = reconcile_cleanup_output(
+                            local_before,
+                            cleanup_output_inventory(
+                                self.root, check_deadline=check_cleanup_deadline
+                            ),
+                            output_authority,
+                            parent_leases=tuple(
+                                lease
+                                for lease in local_leases
+                                if all(lease is not owned for owned in output_authority.leases)
+                            ),
+                        )
+                        self._remote_cleanup_local_results[
+                            remote_authority.binding.launch_ordinal
+                        ] = local_result
                 finally:
                     output_authority.close()
             returned_wall = self.clock.wall_time()
@@ -6193,14 +6456,47 @@ class ProductionCategory3World:
                 or receipt.completed_monotonic < started_monotonic
                 or receipt.completed_monotonic > returned_monotonic
                 or receipt.completed_monotonic > cleanup_deadline
+                or (remote_authority is not None and returned_monotonic > cleanup_deadline)
                 or receipt.receipt_sha256 != self._cleanup_receipt_identity(receipt)
             ):
                 raise AdapterFailure("cleanup receipt did not reach exact zero/security state")
         except CleanupInterrupted:
+            if remote_authority is not None:
+                # A new local baseline must never legitimize bytes left by an
+                # interrupted effect. Resume only a pristine local namespace.
+                local_pristine = False
+                try:
+                    local_pristine = (
+                        local_before is not None
+                        and len(self._campaign_writes) == local_first_lease
+                        and cleanup_output_inventory(
+                            self.root, check_deadline=check_cleanup_deadline
+                        )
+                        == local_before
+                    )
+                except Exception:
+                    local_pristine = False
+                finally:
+                    if not local_pristine or (
+                        remote_authority.sequence > 0
+                        and remote_authority.disposition != RemoteCleanupDisposition.RECONCILED
+                    ):
+                        remote_authority.disposition = RemoteCleanupDisposition.UNRESOLVED
+                        self._campaign_admission_blocked = True
             interrupted = True
-            self._record(operation, subject, "interrupted-resumable")
+            self._record(
+                operation,
+                subject,
+                "failed"
+                if remote_authority is not None
+                and remote_authority.disposition == RemoteCleanupDisposition.UNRESOLVED
+                else "interrupted-resumable",
+            )
             raise
         except BaseException as exc:
+            if remote_authority is not None:
+                remote_authority.disposition = RemoteCleanupDisposition.UNRESOLVED
+                self._campaign_admission_blocked = True
             if isinstance(self.authority, ValidatedLiveEffectAuthority):
                 with suppress(ValueError):
                     self.authority.terminal_failed_nonreplayable()
@@ -6635,6 +6931,11 @@ class ProductionCategory3World:
             ),
             "cleanup_used_held_root_after_path_mismatch": (
                 self._root_identity_mismatch and self._cleanup_receipt is not None
+            ),
+            **(
+                {"cross_host_cleanup": self.remote_cleanup_control_evidence()}
+                if self._remote_cleanup_sessions
+                else {}
             ),
         }
 

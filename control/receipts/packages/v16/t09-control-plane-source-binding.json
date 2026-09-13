@@ -82,9 +82,9 @@
       "sha256": "11091738583b1df60a4949e4aba206861549aed6412a503e0a747c5157fec7bf"
     },
     {
-      "bytes": 95639,
+      "bytes": 96233,
       "path": "src/giclab/control/effects.py",
-      "sha256": "ad59ce2b49b917c497f9f62093f9167c738f0f843b2db75c4fbb2924c2075985"
+      "sha256": "980b485c3b80ab24d98686e095c0d934b5c58ecfc244ba182602ee5541ece274"
     },
     {
       "bytes": 6947,
@@ -102,9 +102,9 @@
       "sha256": "c81decb3e1c2de723c872a0a346a3f2e802816f10f3e34c1f310ccdc76970056"
     },
     {
-      "bytes": 326920,
+      "bytes": 342441,
       "path": "src/giclab/control/production.py",
-      "sha256": "81267712b8b4a3a7d38289f23d0311661b9dd64d854f8ad3fb1c35b9bbf3bd70"
+      "sha256": "a659d046278926f479859d09fd98742deebfcf655c44ef1d81c23700c1fad10f"
     },
     {
       "bytes": 78987,
@@ -157,9 +157,9 @@
       "sha256": "811dd05fbd49c7b63977d22de4bc6f5c3332a28bfb44fe45bc4b94e8eeb2b920"
     },
     {
-      "bytes": 27368,
+      "bytes": 27759,
       "path": "src/giclab/harness/campaign_output.py",
-      "sha256": "231bb155619e5a2f97a7404cad63a27f1fb9e7574f1f0fe2bb13cad98f308759"
+      "sha256": "06e887539fe21da95b6b244d491004689cca94bfb6d4357a8415d70ea9c0a957"
     },
     {
       "bytes": 13269,
@@ -262,7 +262,7 @@
   "schema_version": "4.0.0",
   "scientific_contract_changed": false,
   "scope": "shared-control-plane-only",
-  "semantic_sha256": "2edd545571a201fdd56dea4b50c64f7b4cad92556d6cfb85cd4e07d5d3aaeb18",
-  "source_commit": "e4e30d3648b5373a193002ec7cacc6d04f4ea887",
-  "source_tree": "22405739ff7ae390c8225b65929b7f8c5b88f9eb"
+  "semantic_sha256": "63d82ce83ed4ecba15e9a6efcbeaa920a35a9354cc7ddb8b849891aeea52ec6d",
+  "source_commit": "27444ea18bb9218f82a3f61c201b394136538019",
+  "source_tree": "38f8de6128fd383f2fe8c1254389e43e6d3f5b88"
 }

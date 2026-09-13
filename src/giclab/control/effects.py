@@ -36,6 +36,7 @@ from giclab.harness.t09_model_metadata_receipt import ModelMetadataResponse
 if TYPE_CHECKING:
     from giclab.harness import t09_pragmatic_provider as provider
     from giclab.harness.campaign_output import CleanupOutputAuthority
+    from giclab.harness.remote_cleanup import RemoteCleanupAuthority
     from giclab.harness.t09_provider_contracts import T09ProviderContract
 
 
@@ -2182,6 +2183,20 @@ class CleanupExecutionReceipt:
     started_monotonic: float
     completed_monotonic: float
     receipt_sha256: str
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CrossHostCleanupExecutionRequest(CleanupExecutionRequest):
+    """Explicit cleanup extension; legacy request and receipt documents are unchanged."""
+
+    remote_output_authority: RemoteCleanupAuthority
+    cleanup_protocol: str = "cross-host-cleanup/1.0.0"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CrossHostCleanupExecutionReceipt(CleanupExecutionReceipt):
+    remote_reconciliation_sha256: str
+    cleanup_protocol: str = "cross-host-cleanup/1.0.0"
 
 
 class LowLevelEffects(Protocol):

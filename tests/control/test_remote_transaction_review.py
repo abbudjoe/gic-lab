@@ -13,6 +13,7 @@ import signal
 import socket
 import sys
 import tempfile
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
@@ -2262,8 +2263,10 @@ def test_r6_shared_pilot_entry_establishes_and_reuses_one_accountant(tmp_path):
     world.root = tmp_path
     world._pilot_state = tmp_path / "pilot-state.json"
     world._condition_observers = {}
+    world._remote_cleanup_sessions = {}
     world._campaign_output_boundary = None
     world._campaign_cleanup_remaining = None
+    world._campaign_cleanup_lock = threading.Lock()
     world._campaign_admission_blocked = False
     # This primitive invokes the real production failure reservation. Its
     # allowance comes from the unchanged pinned execution contract, rather than
@@ -2367,8 +2370,10 @@ def test_r6_failed_initial_control_reserve_cannot_be_reused(tmp_path):
     boundary, template = conformance._observer_for(_binding())
     world = object.__new__(ProductionCategory3World)
     world._condition_observers = {}
+    world._remote_cleanup_sessions = {}
     world._campaign_output_boundary = None
     world._campaign_cleanup_remaining = None
+    world._campaign_cleanup_lock = threading.Lock()
     world._campaign_admission_blocked = False
     world._runtime_budget = SimpleNamespace(
         condition_caps={template.run_id: boundary.condition_caps},
@@ -2483,11 +2488,13 @@ def _campaign_writer_world(root):
     world._aggregate_observed_usage = boundary.aggregate_observed_usage
     world._campaign_output_boundary = None
     world._campaign_cleanup_remaining = None
+    world._campaign_cleanup_lock = threading.Lock()
     world._campaign_writes = []
     world._campaign_admission_blocked = False
     world._campaign_started_monotonic = None
     world._campaign_deadline_monotonic = None
     world._condition_observers = {}
+    world._remote_cleanup_sessions = {}
     world._seen_call_ids = set()
     world._seen_logical_call_ids = set()
     world._accounting = {}
